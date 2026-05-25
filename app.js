@@ -777,12 +777,17 @@ function escapeAttr(s) {
 
 function renderExerciseLog(ex, units) {
   if (!session) return "";
+  if (workoutReadOnly) return "";
   if (!isTrackable(ex.name)) return "";
 
   const usesWeight = exerciseUsesWeight(ex.name);
   const suggestion = getSuggestion(session.username, ex.name, ex, ex.pattern);
   const last = suggestion.last;
   const next = suggestion.next;
+  // If the user already logged this exercise during the current viewing
+  // pass, pre-fill with what they just entered (so 'edit' restores their
+  // values rather than jumping to the next-session progression suggestion).
+  const justLogged = recentlyLogged[ex.name];
 
   // Last-session pill
   let pill = "";
@@ -798,9 +803,13 @@ function renderExerciseLog(ex, units) {
             }</span>`;
   }
 
-  // Pre-filled inputs (suggested next)
-  const suggestedWeight = next ? toDisplay(next.weightKg, units) : "";
-  const suggestedReps = next ? next.reps : parseRepRange(ex.reps)[0];
+  // Pre-filled inputs — prefer just-logged values over progression suggestion
+  const suggestedWeight = justLogged
+    ? toDisplay(justLogged.weightKg, units)
+    : (next ? toDisplay(next.weightKg, units) : "");
+  const suggestedReps = justLogged
+    ? justLogged.reps
+    : (next ? next.reps : parseRepRange(ex.reps)[0]);
 
   const weightField = usesWeight ? `
     <label class="log-field">
@@ -865,9 +874,9 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
               </div>
               <div class="exercise-prescription">
                 ${ex.sets} × ${ex.reps}<br />
-                <span class="exercise-rest">rest ${ex.rest}s<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button></span>
+                <span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>
               </div>
-              <button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>
+              ${workoutReadOnly ? "" : `<button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>`}
             </div>
             ${renderExerciseLog(ex, units)}
           </div>
@@ -914,6 +923,8 @@ el.generateBtn.addEventListener("click", () => {
     style: formState.style || "standard",
   });
   workoutIsSaved = false;
+  workoutReadOnly = false;
+  recentlyLogged = {};
 
   if (!currentWorkout.exercises.length) {
     el.formError.textContent = "No matching exercises. Try adding more equipment or a different target.";
@@ -932,6 +943,12 @@ el.generateBtn.addEventListener("click", () => {
 });
 
 let workoutIsSaved = false;
+// Track exercises logged during the current viewing pass so the "edit" affordance
+// restores the values the user just entered (instead of the progression suggestion
+// for next session).
+let recentlyLogged = {};
+// Whether the currently displayed workout is read-only (e.g. viewing from history).
+let workoutReadOnly = false;
 
 function attachWorkoutActions() {
   const saveBtn = document.getElementById("saveBtn");
@@ -1034,6 +1051,7 @@ function attachWorkoutActions() {
       const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
 
       logExercise(session.username, exName, { weightKg, reps });
+      recentlyLogged[exName] = { weightKg, reps };
 
       // Auto-start the rest timer using this exercise's prescribed rest.
       const ex = currentWorkout?.exercises.find(x => x.name === exName);
@@ -1100,6 +1118,9 @@ function renderHistory() {
       const workout = getWorkouts(session.username).find(w => w.id === id);
       if (!workout) return;
       currentWorkout = workout;
+      workoutIsSaved = true;
+      workoutReadOnly = true;
+      recentlyLogged = {};
       showApp("generator");
       el.workoutResult.classList.remove("hidden");
       renderWorkout(workout, el.workoutResult, { showSave: false });
@@ -1149,6 +1170,11 @@ function startGuidedMode() {
   guided.active = true;
   guided.exIdx = 0;
   guided.set = 1;
+  // Starting a guided session is "doing the workout now" — clear any
+  // read-only flag so logs apply to today's stats.
+  workoutReadOnly = false;
+  workoutIsSaved = false;
+  recentlyLogged = {};
   showApp("guided");
   renderGuided();
 }
