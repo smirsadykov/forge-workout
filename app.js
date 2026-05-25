@@ -863,7 +863,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
               </div>
               <div class="exercise-prescription">
                 ${ex.sets} × ${ex.reps}<br />
-                <span class="exercise-rest">rest ${ex.rest}s</span>
+                <span class="exercise-rest">rest ${ex.rest}s<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button></span>
               </div>
               <button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>
             </div>
@@ -949,6 +949,16 @@ function attachWorkoutActions() {
     });
   }
 
+  // ─── MANUAL REST TIMER START ───────────────────────────────────────────
+  document.querySelectorAll("[data-action='start-rest']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const seconds = parseInt(btn.dataset.rest, 10) || 60;
+      const exName = btn.dataset.name || "Rest";
+      startRestTimer(seconds, `Rest — ${exName}`);
+    });
+  });
+
   // ─── SWAP BUTTONS ──────────────────────────────────────────────────────
   document.querySelectorAll("[data-action='swap']").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -1017,6 +1027,10 @@ function attachWorkoutActions() {
       const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
 
       logExercise(session.username, exName, { weightKg, reps });
+
+      // Auto-start the rest timer using this exercise's prescribed rest.
+      const ex = currentWorkout?.exercises.find(x => x.name === exName);
+      if (ex && ex.rest > 0) startRestTimer(ex.rest, `Rest — ${exName}`);
 
       // Swap the form for a logged badge so user has visual confirmation.
       const w = weightKg ? `${toDisplay(weightKg, units)} ${units} × ${reps}` : `${reps} reps`;
@@ -1118,6 +1132,131 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const saved = document.getElementById("settingsSaved");
   saved.classList.remove("hidden");
   setTimeout(() => saved.classList.add("hidden"), 1800);
+});
+
+// ─── REST TIMER ──────────────────────────────────────────────────────────
+const restTimer = {
+  total: 0,
+  remaining: 0,
+  intervalId: null,
+  paused: false,
+};
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function startRestTimer(seconds, label = "Rest") {
+  stopRestTimer(true);
+  restTimer.total = seconds;
+  restTimer.remaining = seconds;
+  restTimer.paused = false;
+
+  const root = document.getElementById("restTimer");
+  root.classList.remove("hidden", "urgent", "done");
+  document.getElementById("restTimerLabel").textContent = label;
+  document.getElementById("restTimerTotal").textContent = formatTime(seconds);
+  updateRestTimerUI();
+
+  const pauseBtn = document.getElementById("restPauseBtn");
+  pauseBtn.textContent = "Pause";
+  pauseBtn.classList.add("primary");
+
+  restTimer.intervalId = setInterval(tickRestTimer, 1000);
+}
+
+function tickRestTimer() {
+  if (restTimer.paused) return;
+  restTimer.remaining -= 1;
+  if (restTimer.remaining <= 0) {
+    restTimer.remaining = 0;
+    finishRestTimer();
+  }
+  updateRestTimerUI();
+}
+
+function updateRestTimerUI() {
+  const root = document.getElementById("restTimer");
+  const remaining = Math.max(0, restTimer.remaining);
+  const total = Math.max(1, restTimer.total);
+  document.getElementById("restTimerTime").textContent = formatTime(remaining);
+  document.getElementById("restTimerTotal").textContent = formatTime(restTimer.total);
+  document.getElementById("restTimerFill").style.width = `${(remaining / total) * 100}%`;
+  // Urgent style in final 10s
+  root.classList.toggle("urgent", remaining > 0 && remaining <= 10);
+}
+
+function finishRestTimer() {
+  clearInterval(restTimer.intervalId);
+  restTimer.intervalId = null;
+  const root = document.getElementById("restTimer");
+  root.classList.remove("urgent");
+  root.classList.add("done");
+  playChime();
+  // Auto-hide after a few seconds
+  setTimeout(() => {
+    if (restTimer.remaining === 0) stopRestTimer(false);
+  }, 4000);
+}
+
+function stopRestTimer(immediate) {
+  if (restTimer.intervalId) clearInterval(restTimer.intervalId);
+  restTimer.intervalId = null;
+  const root = document.getElementById("restTimer");
+  if (immediate) {
+    root.classList.add("hidden");
+    root.classList.remove("urgent", "done");
+  } else {
+    root.classList.add("hidden");
+    root.classList.remove("urgent", "done");
+  }
+}
+
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const playTone = (freq, when, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0, ctx.currentTime + when);
+      gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + when + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + dur);
+      osc.start(ctx.currentTime + when);
+      osc.stop(ctx.currentTime + when + dur + 0.05);
+    };
+    playTone(660, 0,    0.18);
+    playTone(880, 0.2,  0.25);
+  } catch {}
+}
+
+document.querySelectorAll("[data-rest-action]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const action = btn.dataset.restAction;
+    if (action === "skip") return stopRestTimer(true);
+    if (action === "plus") {
+      restTimer.total += 15;
+      restTimer.remaining += 15;
+      return updateRestTimerUI();
+    }
+    if (action === "minus") {
+      restTimer.remaining = Math.max(0, restTimer.remaining - 15);
+      if (restTimer.remaining === 0) return finishRestTimer();
+      return updateRestTimerUI();
+    }
+    if (action === "pause") {
+      restTimer.paused = !restTimer.paused;
+      const pauseBtn = document.getElementById("restPauseBtn");
+      pauseBtn.textContent = restTimer.paused ? "Resume" : "Pause";
+    }
+  });
 });
 
 // ─── INIT ────────────────────────────────────────────────────────────────

@@ -597,6 +597,149 @@ input {
 
 .intensity-flag::before { content: "⚡"; }
 
+/* ─── REST TIMER (floating) ──────────────────────────────────────────── */
+.rest-timer {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 640px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  overflow: hidden;
+  animation: slideUpTimer 0.25s ease-out;
+}
+
+@keyframes slideUpTimer {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.rest-timer-bar {
+  height: 4px;
+  background: var(--bg);
+  position: relative;
+}
+
+.rest-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear, background 0.2s;
+  width: 100%;
+}
+
+.rest-timer.urgent .rest-timer-fill { background: var(--danger); }
+.rest-timer.done .rest-timer-fill { background: var(--success); }
+.rest-timer.done { animation: pulseDone 0.6s ease-out 2; }
+
+@keyframes pulseDone {
+  0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
+  100% { box-shadow: 0 0 0 24px rgba(74, 222, 128, 0); }
+}
+
+.rest-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rest-timer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rest-timer-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+.rest-timer-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.rest-timer-time {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+.rest-timer-total {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.rest-timer.urgent .rest-timer-time { color: var(--accent); }
+.rest-timer.done .rest-timer-time { color: var(--success); }
+
+.rest-timer-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rest-ctrl {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+
+.rest-ctrl:hover { background: var(--bg-card-hover); border-color: var(--border-strong); }
+.rest-ctrl.primary { background: var(--accent); color: #1a1500; border-color: var(--accent); }
+.rest-ctrl.primary:hover { background: var(--accent-hover); }
+.rest-ctrl.ghost { color: var(--text-dim); }
+.rest-ctrl.ghost:hover { color: var(--danger); }
+
+/* Small inline "start rest" button on each exercise's rest line */
+.start-rest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0 0 0 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.start-rest-btn:hover { color: var(--accent); }
+
+@media (max-width: 700px) {
+  .rest-timer { bottom: 8px; padding: 0; }
+  .rest-timer-row { padding: 10px 12px; }
+  .rest-timer-time { font-size: 20px; }
+  .rest-ctrl { padding: 6px 10px; font-size: 12px; }
+}
+
 /* ─── EXERCISE LOG / PROGRESSION ─────────────────────────────────────── */
 .exercise {
   flex-direction: column;

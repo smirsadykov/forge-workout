@@ -6,7 +6,7 @@
   <meta http-equiv="cache-control" content="no-cache, must-revalidate" />
   <meta http-equiv="pragma" content="no-cache" />
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
 </head>
 <body>
   <header class="topbar">
@@ -193,7 +193,26 @@
     </section>
   </main>
 
-  <script src="exercises.js?v=9"></script>
-  <script src="app.js?v=9"></script>
+  <div id="restTimer" class="rest-timer hidden">
+    <div class="rest-timer-bar"><div id="restTimerFill" class="rest-timer-fill"></div></div>
+    <div class="rest-timer-row">
+      <div class="rest-timer-info">
+        <span class="rest-timer-icon">⏱</span>
+        <div>
+          <div class="rest-timer-label" id="restTimerLabel">Rest</div>
+          <div class="rest-timer-time"><span id="restTimerTime">0:00</span> <span class="rest-timer-total">/ <span id="restTimerTotal">0:00</span></span></div>
+        </div>
+      </div>
+      <div class="rest-timer-actions">
+        <button class="rest-ctrl" data-rest-action="minus">−15s</button>
+        <button class="rest-ctrl primary" id="restPauseBtn" data-rest-action="pause">Pause</button>
+        <button class="rest-ctrl" data-rest-action="plus">+15s</button>
+        <button class="rest-ctrl ghost" data-rest-action="skip">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="exercises.js?v=10"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
