@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORGE — Workout Generator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <span class="brand-name">FORGE</span>
+    </div>
+    <nav id="nav" class="nav hidden">
+      <button class="nav-btn active" data-view="generator">Generator</button>
+      <button class="nav-btn" data-view="history">History</button>
+      <span class="user-chip">
+        <span id="userLabel"></span>
+        <button id="logoutBtn" class="link-btn">Logout</button>
+      </span>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- AUTH VIEW -->
+    <section id="authView" class="view auth-view">
+      <div class="auth-card">
+        <h1 class="auth-title">Forge your next workout.</h1>
+        <p class="auth-sub">Select your goal, equipment, target, and duration. Get a custom session in seconds.</p>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Log in</button>
+          <button class="auth-tab" data-tab="signup">Sign up</button>
+        </div>
+
+        <form id="authForm" class="auth-form">
+          <label>
+            Username
+            <input type="text" id="username" autocomplete="username" required minlength="3" maxlength="20" />
+          </label>
+          <label>
+            Password
+            <input type="password" id="password" autocomplete="current-password" required minlength="6" />
+          </label>
+          <p id="authError" class="error" aria-live="polite"></p>
+          <button type="submit" id="authSubmit" class="primary-btn">Log in</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- GENERATOR VIEW -->
+    <section id="generatorView" class="view hidden">
+      <div class="container">
+        <h1 class="view-title">Build your workout</h1>
+        <p class="view-sub">Pick what you want, what you have, and how long you've got.</p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="group-label">Goal</label>
+            <div class="chip-row" data-field="goal" data-multi="false">
+              <button class="chip" data-value="strength">Strength</button>
+              <button class="chip" data-value="hypertrophy">Hypertrophy</button>
+              <button class="chip" data-value="fat_loss">Fat Loss</button>
+              <button class="chip" data-value="endurance">Endurance</button>
+              <button class="chip" data-value="mobility">Mobility</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">Equipment (select all you have)</label>
+            <div class="chip-row" data-field="equipment" data-multi="true">
+              <button class="chip" data-value="bodyweight">Bodyweight</button>
+              <button class="chip" data-value="dumbbells">Dumbbells</button>
+              <button class="chip" data-value="barbell">Barbell</button>
+              <button class="chip" data-value="kettlebell">Kettlebell</button>
+              <button class="chip" data-value="bands">Resistance Bands</button>
+              <button class="chip" data-value="machine">Machines / Cable</button>
+              <button class="chip" data-value="cardio_machine">Cardio Machine</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">Target</label>
+            <div class="chip-row" data-field="target" data-multi="false">
+              <button class="chip" data-value="full_body">Full Body</button>
+              <button class="chip" data-value="upper">Upper Body</button>
+              <button class="chip" data-value="lower">Lower Body</button>
+              <button class="chip" data-value="push">Push</button>
+              <button class="chip" data-value="pull">Pull</button>
+              <button class="chip" data-value="legs">Legs</button>
+              <button class="chip" data-value="core">Core</button>
+              <button class="chip" data-value="cardio">Cardio</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">Duration</label>
+            <div class="chip-row" data-field="duration" data-multi="false">
+              <button class="chip" data-value="15">15 min</button>
+              <button class="chip" data-value="30">30 min</button>
+              <button class="chip" data-value="45">45 min</button>
+              <button class="chip" data-value="60">60 min</button>
+              <button class="chip" data-value="90">90 min</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">Difficulty</label>
+            <div class="chip-row" data-field="difficulty" data-multi="false">
+              <button class="chip" data-value="beginner">Beginner</button>
+              <button class="chip" data-value="intermediate">Intermediate</button>
+              <button class="chip" data-value="advanced">Advanced</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="generate-row">
+          <button id="generateBtn" class="primary-btn big">Generate Workout</button>
+          <p id="formError" class="error"></p>
+        </div>
+
+        <div id="workoutResult" class="workout-result hidden"></div>
+      </div>
+    </section>
+
+    <!-- HISTORY VIEW -->
+    <section id="historyView" class="view hidden">
+      <div class="container">
+        <h1 class="view-title">Your workout history</h1>
+        <p class="view-sub">Every session you've generated and saved.</p>
+        <div id="historyList" class="history-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="exercises.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
