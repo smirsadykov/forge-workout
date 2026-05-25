@@ -525,7 +525,106 @@ input {
   font-weight: 700;
   font-size: 16px;
   color: var(--text);
+}
+
+.exercise-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 4px;
+}
+
+.ex-icon-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ex-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.ex-icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ex-icon-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.form-cues {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  animation: slideUp 0.2s ease-out;
+}
+
+.form-cues h4 {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.form-cues ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.form-cues li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.form-cues li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.form-cues li:last-child { margin-bottom: 0; }
+
+.guided-icon-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.guided-card .form-cues {
+  text-align: left;
+  margin: 0 auto 20px;
+  max-width: 420px;
 }
 
 .exercise-info {

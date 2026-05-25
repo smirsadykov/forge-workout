@@ -865,12 +865,16 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
           <div class="exercise" data-name="${escapeAttr(ex.name)}">
             <div class="exercise-row">
               <div class="exercise-main">
-                <div class="exercise-name">${ex.name}</div>
+                <div class="exercise-name-row">
+                  <div class="exercise-name">${ex.name}</div>
+                  ${renderExerciseExtras(ex.name)}
+                </div>
                 <div class="exercise-info">${ex.muscle.map(m => m.replace("_"," ")).join(" · ")}</div>
                 ${ex.technique ? `
                   <div class="technique-badge">${ex.technique.name}</div>
                   <div class="technique-note">${ex.technique.note}</div>
                 ` : ""}
+                ${renderFormCues(ex.name)}
               </div>
               <div class="exercise-prescription">
                 ${ex.sets} × ${ex.reps}<br />
@@ -972,6 +976,17 @@ function attachWorkoutActions() {
       el.generateBtn.click();
     });
   }
+
+  // ─── FORM CUES TOGGLE ──────────────────────────────────────────────────
+  document.querySelectorAll("[data-action='toggle-cues']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const container = btn.closest(".exercise, .guided-card");
+      const panel = container?.querySelector(".form-cues");
+      if (panel) panel.classList.toggle("hidden");
+      btn.classList.toggle("active");
+    });
+  });
 
   // ─── MANUAL REST TIMER START ───────────────────────────────────────────
   document.querySelectorAll("[data-action='start-rest']").forEach(btn => {
@@ -1162,6 +1177,168 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   setTimeout(() => saved.classList.add("hidden"), 1800);
 });
 
+// ─── EXERCISE FORM CUES + EXTERNAL VIDEO LINKS ───────────────────────────
+// Each cue set is keyed by movement pattern. The matcher picks the most
+// specific applicable pattern for an exercise's name.
+const FORM_CUES = {
+  squat: [
+    "Knees track over toes — push them out, not in",
+    "Chest up, ribcage stacked over pelvis — don't fold forward",
+    "Descend to at least parallel; drive through midfoot to stand",
+  ],
+  hinge: [
+    "Push hips back first — knees bend only as much as needed",
+    "Flat back, lats engaged, weight close to the body",
+    "Squeeze glutes hard at the top — don't hyperextend the lower back",
+  ],
+  lunge: [
+    "Step long enough that the front shin stays near vertical at the bottom",
+    "Drive through the front heel to stand; torso stays upright",
+    "Front knee tracks over toes — controlled descent, no crash",
+  ],
+  horizPress: [
+    "Shoulders back and down — pinch the shoulder blades together",
+    "Lower under control to mid-chest; elbows tucked ~45° to torso",
+    "Drive feet into the floor for full-body tension",
+  ],
+  vertPress: [
+    "Brace core hard — ribs down, glutes squeezed, no lumbar arch",
+    "Bar/dumbbells travel in a straight line over mid-foot",
+    "Shrug shoulders up at the top — full lockout",
+  ],
+  horizPull: [
+    "Pull elbows back, not up — drive them past your ribs",
+    "Squeeze shoulder blades together at the top",
+    "Torso braced — no yanking with the lower back",
+  ],
+  vertPull: [
+    "Start with shoulders depressed — initiate from the lats, not biceps",
+    "Drive elbows down toward your hips; chest leads to the bar",
+    "Control the descent — full dead hang at the bottom",
+  ],
+  curl: [
+    "Keep elbows pinned at your sides — no swinging",
+    "Squeeze biceps hard at the top, brief pause",
+    "Full extension at the bottom — don't cheat the range",
+  ],
+  triExt: [
+    "Lock elbows in place; only the forearm moves",
+    "Squeeze triceps at full extension",
+    "Slow the eccentric — feel the stretch under the elbow",
+  ],
+  ballistic: [
+    "Power comes from the hips — explosive snap, not a curl or squat",
+    "Maximum acceleration on the concentric phase",
+    "Reset position fully between reps — no flow-through cheating",
+  ],
+  carry: [
+    "Brace 360° core — pretend someone's about to punch you",
+    "Walk tall — don't lean toward the loaded side (suitcase) or hunch",
+    "Smooth, controlled breathing — no breath-holding",
+  ],
+  coreAntiExt: [
+    "Squeeze glutes and quads — body is one rigid plank",
+    "Posterior tilt the pelvis (tailbone tucked under)",
+    "Don't let hips sag or pike up — keep the line",
+  ],
+  coreFlex: [
+    "Focus on the contraction — exhale at the top of the rep",
+    "Don't pull on your neck; keep chin neutral",
+    "Slow the eccentric — control all the way back",
+  ],
+  coreRot: [
+    "Rotate through the rib cage, not the lumbar spine",
+    "Hips and pelvis stay stable — only the upper body turns",
+    "Controlled tempo — speed comes from the obliques, not momentum",
+  ],
+  mobility: [
+    "Breathe into the stretch — exhale to deepen",
+    "Hold without bouncing — at least 30 sec for tissue change",
+    "Maintain alignment — quality over depth",
+  ],
+  shoulderIso: [
+    "Lead with the elbow — wrist follows the elbow",
+    "Stop just shy of full lockout to keep tension on the muscle",
+    "Slow eccentrics — most growth happens on the lowering phase",
+  ],
+  calf: [
+    "Full range — stretch down at the bottom, peak contraction up top",
+    "Pause 1 sec at full plantarflexion (toes pointed)",
+    "Don't bounce — control the descent",
+  ],
+  tgu: [
+    "Eyes on the bell the entire movement",
+    "Locked-out elbow stays vertical at every transition",
+    "Slow and deliberate — never rush a transition",
+  ],
+  windmill: [
+    "Hinge at the hip, not the spine — push hips back and away",
+    "Top arm stays vertical; eyes lock on the weight",
+    "Lower only as far as your hip and hamstring mobility allow",
+  ],
+  kbCircles: [
+    "Initiate from the shoulders — keep the core braced",
+    "Smooth, controlled tempo — no momentum-flinging",
+    "Light grip — let the bell hang naturally",
+  ],
+  generic: [
+    "Move with intent and control — every rep is practice",
+    "Full range of motion — partials only when used deliberately",
+    "Breathe steadily — exhale on effort, inhale on return",
+  ],
+};
+
+function getFormCues(name) {
+  const n = String(name).toLowerCase();
+  // most specific first
+  if (/turkish|get[-\s]?up/.test(n)) return FORM_CUES.tgu;
+  if (/windmill/.test(n)) return FORM_CUES.windmill;
+  if (/halo|figure 8|around-the-world/.test(n)) return FORM_CUES.kbCircles;
+  if (/swing|snatch|clean|jerk|thruster|plyo|jump|high pull/.test(n)) return FORM_CUES.ballistic;
+  if (/carry|farmer|march/.test(n)) return FORM_CUES.carry;
+  if (/plank|dead bug|hollow|bird dog|superman/.test(n)) return FORM_CUES.coreAntiExt;
+  if (/crunch|sit-?up|v-?up|leg raise|toes-to-bar|knee raise|flutter|scissor|toe touch/.test(n)) return FORM_CUES.coreFlex;
+  if (/russian twist|wood chop|side bend/.test(n)) return FORM_CUES.coreRot;
+  if (/stretch|pose|fold|cobra|cat-cow|spinal|dislocate|wall angel|scapular/.test(n)) return FORM_CUES.mobility;
+  if (/curl/.test(n)) return FORM_CUES.curl;
+  if (/extension|kickback|skull|pushdown|tate press/.test(n)) return FORM_CUES.triExt;
+  if (/pull-?up|chin-?up|lat pulldown|muscle-up/.test(n)) return FORM_CUES.vertPull;
+  if (/\brow\b|face pull|pull-?through/.test(n)) return FORM_CUES.horizPull;
+  if (/overhead press|push press|z-?press|arnold|pike push|see-saw|cuban|handstand/.test(n)) return FORM_CUES.vertPress;
+  if (/bench press|floor press|push-?up|fly|crush press|dip|chest press|pec deck|crossover/.test(n)) return FORM_CUES.horizPress;
+  if (/deadlift|rdl|romanian|good morning|hip thrust|glute bridge|hyperextension|rack pull/.test(n)) return FORM_CUES.hinge;
+  if (/lunge|step-?up|split squat|cossack/.test(n)) return FORM_CUES.lunge;
+  if (/squat|wall sit|sissy/.test(n)) return FORM_CUES.squat;
+  if (/shrug|upright row|lateral raise|front raise|reverse fly|y-raise|pull-apart/.test(n)) return FORM_CUES.shoulderIso;
+  if (/calf/.test(n)) return FORM_CUES.calf;
+  return FORM_CUES.generic;
+}
+
+function exerciseSearchUrl(name) {
+  const q = encodeURIComponent(`how to ${name} form`);
+  return `https://www.youtube.com/results?search_query=${q}`;
+}
+
+function renderExerciseExtras(name) {
+  const url = exerciseSearchUrl(name);
+  return `
+    <span class="ex-icon-row">
+      <a class="ex-icon-btn" href="${url}" target="_blank" rel="noopener noreferrer" title="Watch demo on YouTube" aria-label="Watch demo">▶</a>
+      <button class="ex-icon-btn" data-action="toggle-cues" title="Form cues" aria-label="Toggle form cues">ⓘ</button>
+    </span>
+  `;
+}
+
+function renderFormCues(name) {
+  const cues = getFormCues(name);
+  return `
+    <div class="form-cues hidden">
+      <h4>Form cues</h4>
+      <ul>${cues.map(c => `<li>${c}</li>`).join("")}</ul>
+    </div>
+  `;
+}
+
 // ─── GUIDED MODE ─────────────────────────────────────────────────────────
 const guided = { active: false, exIdx: 0, set: 1 };
 
@@ -1263,6 +1440,8 @@ function renderGuided() {
     <div class="guided-section-badge">${getSection(ex.pattern)}</div>
     <h2 class="guided-exercise-name">${ex.name}</h2>
     <div class="guided-muscle">${muscleStr}</div>
+    <div class="guided-icon-row">${renderExerciseExtras(ex.name)}</div>
+    ${renderFormCues(ex.name)}
     ${techHtml}
 
     <div class="guided-set-block">
@@ -1285,6 +1464,15 @@ function renderGuided() {
 
   document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
   document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
+  // Wire form-cues toggle inside the guided card
+  document.querySelectorAll("#guidedContent [data-action='toggle-cues']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const panel = btn.closest(".guided-card")?.querySelector(".form-cues");
+      if (panel) panel.classList.toggle("hidden");
+      btn.classList.toggle("active");
+    });
+  });
 }
 
 function onDoneSet() {
