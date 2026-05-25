@@ -1,0 +1,20 @@
+{
+  "name": "FORGE — Workout Generator",
+  "short_name": "FORGE",
+  "description": "Generate smart workouts with progressive overload, intensity techniques, and a built-in rest timer.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f15",
+  "theme_color": "#ffd633",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

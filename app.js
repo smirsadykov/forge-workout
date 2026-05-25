@@ -1470,6 +1470,31 @@ function renderFormCues(name) {
   `;
 }
 
+// ─── WAKE LOCK ───────────────────────────────────────────────────────────
+// Keep the screen on during Guided Mode so the phone doesn't lock mid-set.
+let wakeLockSentinel = null;
+
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; });
+  } catch { /* permission denied or unsupported context — ignore */ }
+}
+
+async function releaseWakeLock() {
+  if (!wakeLockSentinel) return;
+  try { await wakeLockSentinel.release(); } catch {}
+  wakeLockSentinel = null;
+}
+
+// Reacquire if the tab returned to the foreground while guided mode is active.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && guided.active && !wakeLockSentinel) {
+    acquireWakeLock();
+  }
+});
+
 // ─── GUIDED MODE ─────────────────────────────────────────────────────────
 const guided = { active: false, exIdx: 0, set: 1 };
 const guidedSession = {
@@ -1501,6 +1526,7 @@ function startGuidedMode() {
   workoutIsSaved = false;
   recentlyLogged = {};
   resetGuidedSession();
+  acquireWakeLock();
   showApp("guided");
   renderGuided();
 }
@@ -1508,6 +1534,7 @@ function startGuidedMode() {
 function exitGuided() {
   guided.active = false;
   stopRestTimer(true);
+  releaseWakeLock();
   showApp("generator");
 }
 
@@ -1897,4 +1924,15 @@ if (session && getUsers()[session.username]) {
   session = null;
   localStorage.removeItem(STORAGE_KEYS.session);
   showAuth();
+}
+
+// ─── SERVICE WORKER REGISTRATION ────────────────────────────────────────
+// Enables PWA install + offline support. SW won't register on file:// — only
+// http(s) — so local double-click of index.html silently skips this.
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // Registration may fail in unsupported environments — ignore.
+    });
+  });
 }
