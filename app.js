@@ -196,6 +196,44 @@ function exerciseUsesWeight(name) {
   return ex.equipment.some(e => e !== "bodyweight");
 }
 
+// Find a replacement for an exercise within the same form inputs. Tiers from
+// strict (same primary muscle + pattern) to loose (anything matching the
+// workout's filters) so swap almost always succeeds.
+function findAlternativeExercise(currentName, inputs, excludeNames) {
+  const current = EXERCISES.find(e => e.name === currentName);
+  if (!current) return null;
+  const exclude = new Set([currentName, ...(excludeNames || [])]);
+
+  const baseCandidates = EXERCISES.filter(ex => {
+    if (exclude.has(ex.name)) return false;
+    const equipOk = ex.equipment.some(e => inputs.equipment.includes(e));
+    const diffOk = matchesDifficulty(ex.difficulty, inputs.difficulty);
+    const targetOk = matchesTarget(ex, inputs.target);
+    return equipOk && diffOk && targetOk;
+  });
+  if (!baseCandidates.length) return null;
+
+  const pickRandom = (arr) => arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
+
+  // Tier 1: exact primary muscle + same pattern
+  let pool = baseCandidates.filter(e => e.muscle[0] === current.muscle[0] && e.pattern === current.pattern);
+  if (pool.length) return pickRandom(pool);
+
+  // Tier 2: same pattern, any muscle overlap
+  pool = baseCandidates.filter(e => e.pattern === current.pattern && e.muscle.some(m => current.muscle.includes(m)));
+  if (pool.length) return pickRandom(pool);
+
+  // Tier 3: same pattern, anything
+  pool = baseCandidates.filter(e => e.pattern === current.pattern);
+  if (pool.length) return pickRandom(pool);
+
+  // Tier 4: same primary muscle, any pattern
+  pool = baseCandidates.filter(e => e.muscle[0] === current.muscle[0]);
+  if (pool.length) return pickRandom(pool);
+
+  return null;
+}
+
 function isTrackable(name) {
   // Mobility / cardio machine work isn't logged with reps the same way.
   const ex = EXERCISES.find(e => e.name === name);
@@ -827,6 +865,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
                 ${ex.sets} × ${ex.reps}<br />
                 <span class="exercise-rest">rest ${ex.rest}s</span>
               </div>
+              <button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>
             </div>
             ${renderExerciseLog(ex, units)}
           </div>
@@ -909,6 +948,55 @@ function attachWorkoutActions() {
       el.generateBtn.click();
     });
   }
+
+  // ─── SWAP BUTTONS ──────────────────────────────────────────────────────
+  document.querySelectorAll("[data-action='swap']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!currentWorkout) return;
+      const exEl = btn.closest(".exercise");
+      if (!exEl) return;
+      const exName = exEl.dataset.name;
+      const idx = currentWorkout.exercises.findIndex(x => x.name === exName);
+      if (idx === -1) return;
+
+      const excludeNames = currentWorkout.exercises.map(x => x.name);
+      const alt = findAlternativeExercise(exName, currentWorkout.inputs, excludeNames);
+
+      if (!alt) {
+        // No replacement found — pulse the card so the user knows.
+        exEl.style.transition = "none";
+        exEl.style.borderColor = "var(--danger)";
+        setTimeout(() => {
+          exEl.style.transition = "border-color 0.4s";
+          exEl.style.borderColor = "";
+        }, 50);
+        return;
+      }
+
+      const inputs = currentWorkout.inputs;
+      const newEx = {
+        name: alt.name,
+        muscle: alt.muscle,
+        pattern: alt.pattern,
+        ...pickPrescription(inputs.goal, inputs.difficulty, alt, inputs.style || "standard"),
+      };
+      currentWorkout.exercises[idx] = newEx;
+
+      // Re-order in case the swap crossed pattern buckets.
+      const orderKey = (x) => {
+        if (x.pattern === "mobility") return 0;
+        if (x.pattern === "ballistic") return 1;
+        if (x.pattern === "compound") return 2;
+        if (x.pattern === "isolation") return 3;
+        return 4;
+      };
+      currentWorkout.exercises.sort((a, b) => orderKey(a) - orderKey(b));
+
+      renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
+      attachWorkoutActions();
+    });
+  });
 
   // ─── EXERCISE LOG BUTTONS ──────────────────────────────────────────────
   document.querySelectorAll("[data-action='log-set']").forEach(btn => {

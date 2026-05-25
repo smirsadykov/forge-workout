@@ -611,6 +611,32 @@ input {
   gap: 16px;
 }
 
+.swap-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 18px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.3s ease;
+}
+
+.swap-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1500;
+  transform: rotate(180deg);
+}
+
+.swap-btn:active { transform: rotate(360deg); }
+
 .exercise-log {
   display: flex;
   align-items: center;
