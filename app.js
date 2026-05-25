@@ -70,21 +70,41 @@ function getStats(userId) {
 function getExerciseStat(userId, exName) {
   return getStats(userId)[exName] || null;
 }
+// Epley estimated 1-rep max — captures both rep PRs and load PRs in one number.
+function calculateE1RM(weightKg, reps) {
+  if (weightKg <= 0 || reps <= 0) return 0;
+  if (reps === 1) return weightKg;
+  return weightKg * (1 + reps / 30);
+}
+
+function isPR(weightKg, reps, history) {
+  if (!history || history.length === 0) return false; // baseline is not a PR
+  if (weightKg > 0) {
+    const newE1 = calculateE1RM(weightKg, reps);
+    const bestE1 = history.reduce((m, h) => Math.max(m, calculateE1RM(h.weightKg, h.reps)), 0);
+    return newE1 > bestE1 + 0.01; // small epsilon to avoid float ties
+  }
+  const bestReps = history.reduce((m, h) => Math.max(m, h.reps || 0), 0);
+  return reps > bestReps;
+}
+
 function logExercise(userId, exName, { weightKg, reps }) {
   const all = load(STORAGE_KEYS.stats, {});
   if (!all[userId]) all[userId] = {};
+  const existing = all[userId][exName] || { history: [] };
+  const pr = isPR(Number(weightKg) || 0, Number(reps) || 0, existing.history);
   const entry = {
     weightKg: Number(weightKg) || 0,
     reps: Number(reps) || 0,
     date: Date.now(),
   };
-  const existing = all[userId][exName] || { history: [] };
   existing.weightKg = entry.weightKg;
   existing.reps = entry.reps;
   existing.date = entry.date;
   existing.history = (existing.history || []).concat([entry]).slice(-30);
   all[userId][exName] = existing;
   save(STORAGE_KEYS.stats, all);
+  return { pr };
 }
 
 function getPrefs(userId) {
@@ -1065,7 +1085,7 @@ function attachWorkoutActions() {
       const weightDisplay = weightInput ? Number(weightInput.value) : 0;
       const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
 
-      logExercise(session.username, exName, { weightKg, reps });
+      const result = logExercise(session.username, exName, { weightKg, reps });
       recentlyLogged[exName] = { weightKg, reps };
 
       // Auto-start the rest timer using this exercise's prescribed rest.
@@ -1074,8 +1094,9 @@ function attachWorkoutActions() {
 
       // Swap the form for a logged badge so user has visual confirmation.
       const w = weightKg ? `${toDisplay(weightKg, units)} ${units} × ${reps}` : `${reps} reps`;
+      const prBadge = result.pr ? `<span class="pr-celebrate">🏆 NEW PR</span>` : "";
       logEl.innerHTML = `
-        <span class="logged-badge">✓ Logged ${w}
+        <span class="logged-badge">✓ Logged ${w}${prBadge}
           <span class="edit-link" data-action="edit-log">edit</span>
         </span>
       `;
@@ -1341,6 +1362,23 @@ function renderFormCues(name) {
 
 // ─── GUIDED MODE ─────────────────────────────────────────────────────────
 const guided = { active: false, exIdx: 0, set: 1 };
+const guidedSession = {
+  startTime: 0,
+  setsDone: 0,
+  setsSkipped: 0,
+  exercisesCompleted: 0,
+  volumeKg: 0,
+  prs: [],
+};
+
+function resetGuidedSession() {
+  guidedSession.startTime = Date.now();
+  guidedSession.setsDone = 0;
+  guidedSession.setsSkipped = 0;
+  guidedSession.exercisesCompleted = 0;
+  guidedSession.volumeKg = 0;
+  guidedSession.prs = [];
+}
 
 function startGuidedMode() {
   if (!currentWorkout || !currentWorkout.exercises.length) return;
@@ -1352,6 +1390,7 @@ function startGuidedMode() {
   workoutReadOnly = false;
   workoutIsSaved = false;
   recentlyLogged = {};
+  resetGuidedSession();
   showApp("guided");
   renderGuided();
 }
@@ -1494,9 +1533,19 @@ function onDoneSet() {
     if (reps > 0) {
       const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
       const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
-      logExercise(session.username, ex.name, { weightKg, reps });
+      const result = logExercise(session.username, ex.name, { weightKg, reps });
+      if (result.pr) {
+        guidedSession.prs.push({ name: ex.name, weightKg, reps });
+      }
+      // Approximate session volume: assume all sets matched the working set.
+      if (weightKg > 0) {
+        guidedSession.volumeKg += weightKg * reps * ex.sets;
+      }
     }
   }
+
+  guidedSession.setsDone += 1;
+  if (isLastSet) guidedSession.exercisesCompleted += 1;
 
   // Start rest timer after every set (including the last one before next exercise)
   if (ex.rest > 0) startRestTimer(ex.rest, `Rest — ${ex.name}`);
@@ -1517,6 +1566,7 @@ function onSkipSet() {
   if (!ex) return finishGuidedWorkout();
   const isLastSet = guided.set >= ex.sets;
   const isLastExercise = guided.exIdx >= currentWorkout.exercises.length - 1;
+  guidedSession.setsSkipped += 1;
   if (isLastSet) {
     if (isLastExercise) return finishGuidedWorkout();
     guided.exIdx += 1;
@@ -1529,17 +1579,61 @@ function onSkipSet() {
 
 function finishGuidedWorkout() {
   stopRestTimer(true);
-  // Auto-save once when finishing
   if (!workoutIsSaved && session && currentWorkout) {
     addWorkout(session.username, currentWorkout);
     workoutIsSaved = true;
   }
   document.getElementById("guidedProgressFill").style.width = "100%";
+
+  const durationSec = Math.max(1, Math.round((Date.now() - guidedSession.startTime) / 1000));
+  const minutes = Math.floor(durationSec / 60);
+  const seconds = durationSec % 60;
+  const durationStr = `${minutes}:${String(seconds).padStart(2, "0")}`;
+
+  const units = getPrefs(session.username).units;
+  const totalEx = currentWorkout.exercises.length;
+  const volumeDisplay = guidedSession.volumeKg > 0
+    ? `${Math.round(toDisplay(guidedSession.volumeKg, units)).toLocaleString()} ${units}`
+    : "—";
+
+  const prsHtml = guidedSession.prs.length ? `
+    <h3 class="summary-prs-title">🏆 New Personal Records</h3>
+    <ul class="summary-prs">
+      ${guidedSession.prs.map(pr => {
+        const w = pr.weightKg > 0
+          ? `${toDisplay(pr.weightKg, units)} ${units} × ${pr.reps}`
+          : `${pr.reps} reps`;
+        return `<li><strong>${pr.name}</strong> — ${w}</li>`;
+      }).join("")}
+    </ul>` : "";
+
   document.getElementById("guidedContent").innerHTML = `
     <div class="guided-celebration">
       <div class="guided-celebration-icon">🏆</div>
       <h2 class="guided-exercise-name">Workout Complete</h2>
-      <div class="guided-muscle">Great session. Logged and saved to history.</div>
+      <div class="guided-muscle">Logged and saved to history.</div>
+
+      <div class="summary-stats">
+        <div class="summary-stat">
+          <div class="summary-stat-label">Duration</div>
+          <div class="summary-stat-value">${durationStr}</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-label">Exercises</div>
+          <div class="summary-stat-value">${guidedSession.exercisesCompleted}<span class="summary-stat-sub">/${totalEx}</span></div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-label">Sets</div>
+          <div class="summary-stat-value">${guidedSession.setsDone}${guidedSession.setsSkipped ? `<span class="summary-stat-sub"> (+${guidedSession.setsSkipped} skipped)</span>` : ""}</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-label">Volume</div>
+          <div class="summary-stat-value">${volumeDisplay}</div>
+        </div>
+      </div>
+
+      ${prsHtml}
+
       <div class="guided-actions">
         <button class="primary-btn big" id="guidedFinishBtn">Done</button>
       </div>
