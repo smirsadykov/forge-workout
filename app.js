@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   users: "forge:users",
   session: "forge:session",
   workouts: "forge:workouts",
+  stats: "forge:stats",   // per-user, per-exercise logs (always stored in kg)
+  prefs: "forge:prefs",   // per-user preferences (units, etc.)
 };
 
 // ─── STORAGE HELPERS ─────────────────────────────────────────────────────
@@ -58,6 +60,126 @@ function deleteWorkout(userId, workoutId) {
   save(STORAGE_KEYS.workouts, all);
 }
 
+// ─── PROGRESSION: stats + prefs ──────────────────────────────────────────
+// Stats are always stored in kg internally. UI converts at render time.
+function getStats(userId) {
+  const all = load(STORAGE_KEYS.stats, {});
+  return all[userId] || {};
+}
+function getExerciseStat(userId, exName) {
+  return getStats(userId)[exName] || null;
+}
+function logExercise(userId, exName, { weightKg, reps }) {
+  const all = load(STORAGE_KEYS.stats, {});
+  if (!all[userId]) all[userId] = {};
+  const entry = {
+    weightKg: Number(weightKg) || 0,
+    reps: Number(reps) || 0,
+    date: Date.now(),
+  };
+  const existing = all[userId][exName] || { history: [] };
+  existing.weightKg = entry.weightKg;
+  existing.reps = entry.reps;
+  existing.date = entry.date;
+  existing.history = (existing.history || []).concat([entry]).slice(-30);
+  all[userId][exName] = existing;
+  save(STORAGE_KEYS.stats, all);
+}
+
+function getPrefs(userId) {
+  const all = load(STORAGE_KEYS.prefs, {});
+  return all[userId] || { units: "kg" };
+}
+function setPrefs(userId, prefs) {
+  const all = load(STORAGE_KEYS.prefs, {});
+  all[userId] = { ...getPrefs(userId), ...prefs };
+  save(STORAGE_KEYS.prefs, all);
+}
+
+// ─── UNIT CONVERSION ─────────────────────────────────────────────────────
+function kgToLb(kg) { return Math.round(kg * 2.20462 * 2) / 2; }
+function lbToKg(lb) { return Math.round((lb / 2.20462) * 4) / 4; }
+function toDisplay(kg, units) {
+  if (kg == null || isNaN(kg)) return 0;
+  return units === "lb" ? kgToLb(kg) : roundHalf(kg);
+}
+function fromDisplay(val, units) {
+  const n = Number(val);
+  if (!isFinite(n)) return 0;
+  return units === "lb" ? lbToKg(n) : n;
+}
+function roundHalf(x) { return Math.round(x * 2) / 2; }
+
+// ─── PROGRESSION ALGORITHM (double progression) ──────────────────────────
+// If user hit top of rep range → add weight (or reps for bodyweight).
+// If user was inside rep range → same weight, push for one more rep.
+// If user fell below bottom of range → suggest a deload.
+function parseRepRange(repsStr) {
+  if (typeof repsStr !== "string") return [8, 12];
+  if (/sec/i.test(repsStr)) return [0, 0]; // time-based; no rep progression
+  const m = repsStr.match(/(\d+)[^\d]+(\d+)/);
+  if (m) return [parseInt(m[1], 10), parseInt(m[2], 10)];
+  const single = repsStr.match(/(\d+)/);
+  if (single) return [parseInt(single[1], 10), parseInt(single[1], 10)];
+  return [8, 12];
+}
+
+function progressionIncrementKg(pattern) {
+  return pattern === "isolation" ? 1.25 : 2.5;
+}
+
+function exerciseUsesWeight(name) {
+  const ex = EXERCISES.find(e => e.name === name);
+  if (!ex) return false;
+  if (ex.pattern === "mobility") return false;
+  return ex.equipment.some(e => e !== "bodyweight");
+}
+
+function isTrackable(name) {
+  // Mobility / cardio machine work isn't logged with reps the same way.
+  const ex = EXERCISES.find(e => e.name === name);
+  if (!ex) return false;
+  if (ex.pattern === "mobility") return false;
+  if (ex.equipment.length === 1 && ex.equipment[0] === "cardio_machine") return false;
+  return true;
+}
+
+function getSuggestion(userId, exerciseName, prescription, pattern) {
+  const stat = getExerciseStat(userId, exerciseName);
+  if (!stat) return { last: null, next: null, trend: null };
+
+  const [lo, hi] = parseRepRange(prescription.reps);
+  const usesWeight = exerciseUsesWeight(exerciseName);
+  const inc = progressionIncrementKg(pattern);
+
+  const lastReps = stat.reps;
+  const lastKg = stat.weightKg;
+
+  let nextKg = lastKg;
+  let nextReps = lastReps;
+  let trend = "same";
+
+  if (lo > 0 && lastReps >= hi) {
+    if (usesWeight) { nextKg = lastKg + inc; nextReps = lo; }
+    else { nextReps = lastReps + 1; }
+    trend = "up";
+  } else if (lo > 0 && lastReps < lo) {
+    if (usesWeight) { nextKg = Math.max(0, lastKg - inc); nextReps = Math.round((lo + hi) / 2); }
+    else { nextReps = Math.max(1, lastReps - 1); }
+    trend = "down";
+  } else {
+    // In range or time-based — push for one more rep at same weight.
+    if (lo > 0) nextReps = Math.min(hi, Math.max(lo, lastReps + 1));
+    trend = "same";
+  }
+
+  return {
+    last: { weightKg: lastKg, reps: lastReps, date: stat.date },
+    next: { weightKg: nextKg, reps: nextReps },
+    trend,
+  };
+}
+
 // ─── DOM ─────────────────────────────────────────────────────────────────
 const el = {
   nav: document.getElementById("nav"),
@@ -88,6 +210,7 @@ function showApp(view = "generator") {
   el.nav.classList.remove("hidden");
   el.authView.classList.add("hidden");
   el.userLabel.textContent = session.username;
+  applyUnitsButtons();
   document.querySelectorAll(".nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.view === view);
   });
@@ -98,6 +221,27 @@ function showApp(view = "generator") {
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", () => showApp(btn.dataset.view));
+});
+
+// ─── UNITS TOGGLE ────────────────────────────────────────────────────────
+function applyUnitsButtons() {
+  if (!session) return;
+  const u = getPrefs(session.username).units;
+  document.querySelectorAll(".units-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.units === u);
+  });
+}
+document.querySelectorAll(".units-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (!session) return;
+    setPrefs(session.username, { units: btn.dataset.units });
+    applyUnitsButtons();
+    // Re-render the visible workout so weights convert immediately.
+    if (currentWorkout && !el.workoutResult.classList.contains("hidden")) {
+      renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
+      attachWorkoutActions();
+    }
+  });
 });
 
 // ─── AUTH TABS ───────────────────────────────────────────────────────────
@@ -387,9 +531,67 @@ const EQUIP_LABELS = {
   cardio_machine: "Cardio Machine",
 };
 
+function escapeAttr(s) {
+  return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function renderExerciseLog(ex, units) {
+  if (!session) return "";
+  if (!isTrackable(ex.name)) return "";
+
+  const usesWeight = exerciseUsesWeight(ex.name);
+  const suggestion = getSuggestion(session.username, ex.name, ex, ex.pattern);
+  const last = suggestion.last;
+  const next = suggestion.next;
+
+  // Last-session pill
+  let pill = "";
+  if (last) {
+    const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
+    const trendArrow = suggestion.trend === "up" ? "↑" : suggestion.trend === "down" ? "↓" : "·";
+    const trendClass = suggestion.trend === "up" ? "up" : suggestion.trend === "down" ? "down" : "";
+    pill = `<span class="last-pill">${usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`}</span>
+            <span class="progress-hint ${trendClass}">${trendArrow} ${
+              suggestion.trend === "up" ? "progress" :
+              suggestion.trend === "down" ? "deload" :
+              "push reps"
+            }</span>`;
+  }
+
+  // Pre-filled inputs (suggested next)
+  const suggestedWeight = next ? toDisplay(next.weightKg, units) : "";
+  const suggestedReps = next ? next.reps : parseRepRange(ex.reps)[0];
+
+  const weightField = usesWeight ? `
+    <label class="log-field">
+      <input type="number" inputmode="decimal" step="${units === "lb" ? 5 : 2.5}" min="0" data-log="weight"
+             placeholder="weight" value="${suggestedWeight || ""}" />
+      <span class="log-field-suffix">${units}</span>
+    </label>` : "";
+
+  const repsField = `
+    <label class="log-field">
+      <input type="number" inputmode="numeric" step="1" min="0" data-log="reps"
+             placeholder="reps" value="${suggestedReps || ""}" />
+      <span class="log-field-suffix">reps</span>
+    </label>`;
+
+  return `
+    <div class="exercise-log" data-exercise="${escapeAttr(ex.name)}">
+      ${pill}
+      <div class="log-form">
+        ${weightField}
+        ${repsField}
+        <button class="log-btn" data-action="log-set">✓ Log</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderWorkout(workout, container, { showSave = true } = {}) {
   const { inputs, exercises } = workout;
   const dateStr = new Date(workout.createdAt).toLocaleString();
+  const units = session ? getPrefs(session.username).units : "kg";
 
   const tags = [
     GOAL_LABELS[inputs.goal],
@@ -410,15 +612,18 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
       <h3 class="section-header">${title}</h3>
       <div class="exercise-list">
         ${list.map(ex => `
-          <div class="exercise">
-            <div class="exercise-main">
-              <div class="exercise-name">${ex.name}</div>
-              <div class="exercise-info">${ex.muscle.map(m => m.replace("_"," ")).join(" · ")}</div>
+          <div class="exercise" data-name="${escapeAttr(ex.name)}">
+            <div class="exercise-row">
+              <div class="exercise-main">
+                <div class="exercise-name">${ex.name}</div>
+                <div class="exercise-info">${ex.muscle.map(m => m.replace("_"," ")).join(" · ")}</div>
+              </div>
+              <div class="exercise-prescription">
+                ${ex.sets} × ${ex.reps}<br />
+                <span class="exercise-rest">rest ${ex.rest}s</span>
+              </div>
             </div>
-            <div class="exercise-prescription">
-              ${ex.sets} × ${ex.reps}<br />
-              <span class="exercise-rest">rest ${ex.rest}s</span>
-            </div>
+            ${renderExerciseLog(ex, units)}
           </div>
         `).join("")}
       </div>
@@ -457,6 +662,7 @@ el.generateBtn.addEventListener("click", () => {
     duration: parseInt(duration, 10),
     difficulty,
   });
+  workoutIsSaved = false;
 
   if (!currentWorkout.exercises.length) {
     el.formError.textContent = "No matching exercises. Try adding more equipment or a different target.";
@@ -474,6 +680,8 @@ el.generateBtn.addEventListener("click", () => {
   el.workoutResult.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
+let workoutIsSaved = false;
+
 function attachWorkoutActions() {
   const saveBtn = document.getElementById("saveBtn");
   const regenBtn = document.getElementById("regenBtn");
@@ -483,11 +691,50 @@ function attachWorkoutActions() {
       addWorkout(session.username, currentWorkout);
       saveBtn.textContent = "Saved ✓";
       saveBtn.disabled = true;
+      workoutIsSaved = true;
     });
   }
   if (regenBtn) {
-    regenBtn.addEventListener("click", () => el.generateBtn.click());
+    regenBtn.addEventListener("click", () => {
+      workoutIsSaved = false;
+      el.generateBtn.click();
+    });
   }
+
+  // ─── EXERCISE LOG BUTTONS ──────────────────────────────────────────────
+  document.querySelectorAll("[data-action='log-set']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const logEl = btn.closest(".exercise-log");
+      if (!logEl) return;
+      const exName = logEl.dataset.exercise;
+      const weightInput = logEl.querySelector("[data-log='weight']");
+      const repsInput = logEl.querySelector("[data-log='reps']");
+      const reps = Number(repsInput?.value);
+      if (!reps || reps <= 0) {
+        repsInput?.focus();
+        return;
+      }
+      const units = getPrefs(session.username).units;
+      const weightDisplay = weightInput ? Number(weightInput.value) : 0;
+      const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
+
+      logExercise(session.username, exName, { weightKg, reps });
+
+      // Swap the form for a logged badge so user has visual confirmation.
+      const w = weightKg ? `${toDisplay(weightKg, units)} ${units} × ${reps}` : `${reps} reps`;
+      logEl.innerHTML = `
+        <span class="logged-badge">✓ Logged ${w}
+          <span class="edit-link" data-action="edit-log">edit</span>
+        </span>
+      `;
+      logEl.querySelector("[data-action='edit-log']").addEventListener("click", () => {
+        // Re-render the whole workout so the new "last" data flows through suggestions.
+        renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
+        attachWorkoutActions();
+      });
+    });
+  });
 }
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────
