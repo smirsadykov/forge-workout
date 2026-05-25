@@ -895,6 +895,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
                   <div class="technique-note">${ex.technique.note}</div>
                 ` : ""}
                 ${renderFormCues(ex.name)}
+                ${renderProgressChart(ex.name)}
               </div>
               <div class="exercise-prescription">
                 ${ex.sets} × ${ex.reps}<br />
@@ -1003,6 +1004,17 @@ function attachWorkoutActions() {
       e.preventDefault();
       const container = btn.closest(".exercise, .guided-card");
       const panel = container?.querySelector(".form-cues");
+      if (panel) panel.classList.toggle("hidden");
+      btn.classList.toggle("active");
+    });
+  });
+
+  // ─── PROGRESS CHART TOGGLE ─────────────────────────────────────────────
+  document.querySelectorAll("[data-action='toggle-progress']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const container = btn.closest(".exercise, .guided-card");
+      const panel = container?.querySelector(".progress-panel");
       if (panel) panel.classList.toggle("hidden");
       btn.classList.toggle("active");
     });
@@ -1346,7 +1358,105 @@ function renderExerciseExtras(name) {
     <span class="ex-icon-row">
       <a class="ex-icon-btn" href="${url}" target="_blank" rel="noopener noreferrer" title="Watch demo on YouTube" aria-label="Watch demo">▶</a>
       <button class="ex-icon-btn" data-action="toggle-cues" title="Form cues" aria-label="Toggle form cues">ⓘ</button>
+      <button class="ex-icon-btn" data-action="toggle-progress" title="Progress chart" aria-label="Toggle progress chart">📈</button>
     </span>
+  `;
+}
+
+// Render a small inline SVG chart of weight × reps over time, plotted as
+// estimated 1RM for weighted exercises or reps for bodyweight.
+function renderProgressChart(exerciseName) {
+  if (!session) return "";
+  const stat = getExerciseStat(session.username, exerciseName);
+  const history = stat?.history || [];
+
+  if (history.length === 0) {
+    return `
+      <div class="progress-panel hidden">
+        <div class="progress-empty">No log yet for this exercise — hit ✓ Log to start tracking progress.</div>
+      </div>
+    `;
+  }
+
+  const usesWeight = exerciseUsesWeight(exerciseName);
+  const units = getPrefs(session.username).units;
+
+  // Raw values (kg-based for e1RM, integer reps for bodyweight)
+  const rawValues = usesWeight
+    ? history.map(h => calculateE1RM(h.weightKg, h.reps))
+    : history.map(h => h.reps || 0);
+
+  if (rawValues.every(v => v === 0)) {
+    return `
+      <div class="progress-panel hidden">
+        <div class="progress-empty">Log weight + reps to start seeing your trend.</div>
+      </div>
+    `;
+  }
+
+  // Display-units values (lb conversion for weighted)
+  const displayValues = usesWeight
+    ? rawValues.map(v => Number(toDisplay(v, units).toFixed(1)))
+    : rawValues;
+
+  const W = 320, H = 100, P = 10;
+  const maxV = Math.max(...displayValues);
+  const minV = Math.min(...displayValues);
+  const range = (maxV - minV) || maxV || 1;
+  const n = displayValues.length;
+
+  const points = displayValues.map((v, i) => {
+    const x = n === 1 ? W / 2 : P + (i / (n - 1)) * (W - 2 * P);
+    const y = H - P - ((v - minV) / range) * (H - 2 * P);
+    return [x, y];
+  });
+
+  const polyline = points.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const areaPath = n === 1
+    ? ""
+    : `M${points[0][0]},${H} ` +
+      points.map(p => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") +
+      ` L${points[n-1][0]},${H} Z`;
+
+  const dots = points.map((p, i) => {
+    const h = history[i];
+    const dateStr = new Date(h.date).toLocaleDateString();
+    const tooltip = usesWeight
+      ? `${toDisplay(h.weightKg, units)} ${units} × ${h.reps}  ·  e1RM ${displayValues[i]}  ·  ${dateStr}`
+      : `${h.reps} reps  ·  ${dateStr}`;
+    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--accent)"><title>${escapeAttr(tooltip)}</title></circle>`;
+  }).join("");
+
+  const valueLabel = usesWeight ? `Est. 1RM (${units})` : "Max reps";
+  const bestStr = usesWeight ? `Best: ${maxV} ${units}` : `Best: ${maxV} reps`;
+  const first = displayValues[0];
+  const last = displayValues[n - 1];
+  const trend = n > 1 ? ((last - first) / Math.max(first, 1)) * 100 : 0;
+  const trendCls = trend > 0.5 ? "up" : trend < -0.5 ? "down" : "";
+  const trendStr = n < 2
+    ? "log again for trend"
+    : trend >= 0 ? `↑ +${trend.toFixed(1)}%` : `↓ ${trend.toFixed(1)}%`;
+  const dateRange = n > 1
+    ? `${new Date(history[0].date).toLocaleDateString()} → ${new Date(history[n-1].date).toLocaleDateString()}`
+    : new Date(history[0].date).toLocaleDateString();
+
+  return `
+    <div class="progress-panel hidden">
+      <div class="progress-header">
+        <span class="progress-label">${valueLabel}</span>
+        <span class="progress-best">${bestStr}</span>
+      </div>
+      <svg class="progress-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Progress chart">
+        ${areaPath ? `<path d="${areaPath}" fill="var(--accent-soft)" />` : ""}
+        ${n > 1 ? `<polyline points="${polyline}" fill="none" stroke="var(--accent)" stroke-width="2"/>` : ""}
+        ${dots}
+      </svg>
+      <div class="progress-stats">
+        <span class="progress-stat">${n} session${n > 1 ? "s" : ""}</span>
+        <span class="progress-stat ${trendCls}">${trendStr}</span>
+        <span class="progress-stat dim">${dateRange}</span>
+      </div>
+    </div>
   `;
 }
 
@@ -1481,6 +1591,7 @@ function renderGuided() {
     <div class="guided-muscle">${muscleStr}</div>
     <div class="guided-icon-row">${renderExerciseExtras(ex.name)}</div>
     ${renderFormCues(ex.name)}
+    ${renderProgressChart(ex.name)}
     ${techHtml}
 
     <div class="guided-set-block">
@@ -1503,11 +1614,19 @@ function renderGuided() {
 
   document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
   document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
-  // Wire form-cues toggle inside the guided card
+  // Wire form-cues + progress chart toggles inside the guided card
   document.querySelectorAll("#guidedContent [data-action='toggle-cues']").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const panel = btn.closest(".guided-card")?.querySelector(".form-cues");
+      if (panel) panel.classList.toggle("hidden");
+      btn.classList.toggle("active");
+    });
+  });
+  document.querySelectorAll("#guidedContent [data-action='toggle-progress']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const panel = btn.closest(".guided-card")?.querySelector(".progress-panel");
       if (panel) panel.classList.toggle("hidden");
       btn.classList.toggle("active");
     });
