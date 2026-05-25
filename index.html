@@ -6,7 +6,7 @@
   <meta http-equiv="cache-control" content="no-cache, must-revalidate" />
   <meta http-equiv="pragma" content="no-cache" />
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <header class="topbar">
@@ -120,6 +120,15 @@
               <button class="chip" data-value="advanced">Advanced</button>
             </div>
           </div>
+
+          <div class="form-group">
+            <label class="group-label">Style</label>
+            <div class="chip-row" data-field="style" data-multi="false">
+              <button class="chip selected" data-value="standard">Standard</button>
+              <button class="chip" data-value="intensity">Intensity ⚡</button>
+            </div>
+            <p class="form-hint">Intensity adds tempo work and pause reps. Great when your equipment is too light for max-effort strength — slow eccentrics and pauses create real tension at any load.</p>
+          </div>
         </div>
 
         <div id="loadWarning" class="load-warning hidden"></div>
@@ -184,7 +193,7 @@
     </section>
   </main>
 
-  <script src="exercises.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="exercises.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

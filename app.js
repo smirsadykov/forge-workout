@@ -115,9 +115,11 @@ function setLoads(userId, loads) {
 //
 // Returns null if everything is fine, otherwise an object describing the
 // mismatch (used to render the warning banner).
-function checkLoadAdequacy({ goal, equipment, difficulty }, loads) {
+function checkLoadAdequacy({ goal, equipment, difficulty, style }, loads) {
   if (goal !== "strength") return null;
   if (difficulty === "beginner") return null;
+  // Intensity Mode solves the light-load problem — no warning needed.
+  if (style === "intensity") return null;
 
   // "Heavy" sources of resistance: loaded barbell, gym machines.
   const hasHeavyBarbell = equipment.includes("barbell") && loads.hasHeavyBarbell;
@@ -375,7 +377,7 @@ el.logoutBtn.addEventListener("click", () => {
 });
 
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
-const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null };
+const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard" };
 
 document.querySelectorAll(".chip-row").forEach(row => {
   const field = row.dataset.field;
@@ -407,21 +409,24 @@ function resetForm() {
   formState.target = null;
   formState.duration = null;
   formState.difficulty = null;
+  formState.style = "standard";
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
+  const standardChip = document.querySelector('.chip[data-value="standard"]');
+  if (standardChip) standardChip.classList.add("selected");
   refreshLoadWarning();
 }
 
 // ─── LOAD WARNING ────────────────────────────────────────────────────────
 function refreshLoadWarning() {
   if (!session || !el.loadWarning) return;
-  const { goal, equipment, difficulty } = formState;
+  const { goal, equipment, difficulty, style } = formState;
   if (!goal || !equipment.length || !difficulty) {
     el.loadWarning.classList.add("hidden");
     el.loadWarning.innerHTML = "";
     return;
   }
   const loads = getLoads(session.username);
-  const issue = checkLoadAdequacy({ goal, equipment, difficulty }, loads);
+  const issue = checkLoadAdequacy({ goal, equipment, difficulty, style }, loads);
   if (!issue) {
     el.loadWarning.classList.add("hidden");
     el.loadWarning.innerHTML = "";
@@ -430,15 +435,20 @@ function refreshLoadWarning() {
   el.loadWarning.classList.remove("hidden");
   el.loadWarning.innerHTML = `
     <div class="load-warning-title">Equipment may be too light for ${difficulty} strength</div>
-    <div class="load-warning-body">${issue.reason} ${issue.recommendation}</div>
+    <div class="load-warning-body">${issue.reason} ${issue.recommendation} <strong>Or use Intensity Mode</strong> — tempo and pause reps create real strength stimulus even at lighter loads.</div>
     <div class="load-warning-actions">
       <button class="primary-btn" data-warn-action="switch-goal" data-goal="${issue.suggestedGoal}">Switch to ${GOAL_LABELS[issue.suggestedGoal]}</button>
+      <button class="secondary-btn" data-warn-action="use-intensity">Use Intensity Mode ⚡</button>
       <button class="secondary-btn" data-warn-action="open-settings">Open Settings</button>
     </div>
   `;
   el.loadWarning.querySelector("[data-warn-action='switch-goal']").addEventListener("click", (e) => {
     const newGoal = e.target.dataset.goal;
     const chip = document.querySelector(`.chip[data-value="${newGoal}"]`);
+    if (chip) chip.click();
+  });
+  el.loadWarning.querySelector("[data-warn-action='use-intensity']").addEventListener("click", () => {
+    const chip = document.querySelector('.chip[data-value="intensity"]');
     if (chip) chip.click();
   });
   el.loadWarning.querySelector("[data-warn-action='open-settings']").addEventListener("click", () => {
@@ -462,10 +472,41 @@ function roundRest(s) {
   return Math.round(s / 15) * 15;
 }
 
-function pickPrescription(goal, difficulty, exercise) {
+// Pick an intensity technique appropriate to the movement pattern.
+// Returns null when techniques don't apply (ballistic, mobility, conditioning).
+function getIntensityTechnique(exercise) {
+  if (!exercise) return null;
+  if (exercise.pattern === "ballistic" ||
+      exercise.pattern === "mobility" ||
+      exercise.pattern === "conditioning") {
+    return null;
+  }
+
+  const name = exercise.name;
+  const isSquatHinge = /squat|deadlift|rdl|romanian|lunge|step-up|hip thrust|glute bridge|wall sit|cossack/i.test(name);
+  const isPress = /press|push-up|push up|bench|dip|push press|fly/i.test(name);
+  const isPull = /row|pull|chin|curl|pulldown|face pull/i.test(name);
+
+  if (isSquatHinge) {
+    return { name: "Tempo 3-1-1", note: "3-sec descent, 1-sec pause at bottom, 1-sec drive up" };
+  }
+  if (isPress) {
+    return { name: "Pause 2s at bottom", note: "Lower under control, hold 2 sec, then press explosively" };
+  }
+  if (isPull) {
+    return { name: "Tempo 3-0-1", note: "3-sec lowering phase, no pause, 1-sec pull" };
+  }
+  if (exercise.pattern === "isolation") {
+    return { name: "Tempo 2-1-2", note: "Slow eccentric, 1-sec squeeze, controlled return" };
+  }
+  return { name: "Tempo 3-1-1", note: "Slow eccentric for max time-under-tension" };
+}
+
+function pickPrescription(goal, difficulty, exercise, style = "standard") {
   const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
+  const intensity = style === "intensity";
 
   // Ballistic / explosive movements (KB swings, jumps, plyos) follow their own
   // template: moderate reps with explosive intent, generous rest for power
@@ -504,7 +545,40 @@ function pickPrescription(goal, difficulty, exercise) {
     const time = difficulty === "advanced" ? "40–60 sec" : difficulty === "beginner" ? "20–30 sec" : "30–45 sec";
     reps = time;
   }
-  return { sets, reps, rest: roundRest(rest) };
+
+  // Intensity techniques: each rep is much harder due to tempo/pause, so reduce
+  // reps and extend rest. Only applies to compound/isolation lifts (ballistic
+  // / mobility / conditioning already returned above).
+  let technique = null;
+  if (intensity && (exercise.pattern === "compound" || exercise.pattern === "isolation")) {
+    technique = getIntensityTechnique(exercise);
+    if (technique) {
+      // Pull reps down and rest up to reflect the longer time-under-tension.
+      if (goal === "strength") {
+        // Strength at light load: 4-5 × 5-8 reps becomes the sweet spot
+        const lo = isIso ? 6 : 5;
+        const hi = isIso ? 8 : 8;
+        reps = `${lo}–${hi}`;
+        rest = isIso ? 75 : 120;
+      } else if (goal === "hypertrophy") {
+        // Hypertrophy: keep middle of range, longer rest for slow reps
+        const lo = isIso ? 8 : 6;
+        const hi = isIso ? 10 : 8;
+        reps = `${lo}–${hi}`;
+        rest = isIso ? 75 : 90;
+      } else if (goal === "fat_loss" || goal === "endurance") {
+        // Higher rep goals: trim top end so the slow reps stay feasible
+        const lo = isIso ? 10 : 8;
+        const hi = isIso ? 12 : 10;
+        reps = `${lo}–${hi}`;
+        rest = 60;
+      }
+      // Sets: keep similar to non-intensity, advanced gets one more.
+      // (Sets were already adjusted by difficulty above.)
+    }
+  }
+
+  return { sets, reps, rest: roundRest(rest), technique };
 }
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -536,7 +610,7 @@ let lastPickedNames = new Set();
 
 const DIFF_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
 
-function generateWorkout({ goal, equipment, target, duration, difficulty }) {
+function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard" }) {
   const count = COUNT_BY_DURATION[duration] || 6;
   const targetDiff = DIFF_ORDER[difficulty];
 
@@ -618,13 +692,13 @@ function generateWorkout({ goal, equipment, target, duration, difficulty }) {
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
-    ...pickPrescription(goal, difficulty, ex),
+    ...pickPrescription(goal, difficulty, ex, style),
   }));
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal, equipment, target, duration, difficulty },
+    inputs: { goal, equipment, target, duration, difficulty, style },
     exercises,
   };
 }
@@ -744,6 +818,10 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
               <div class="exercise-main">
                 <div class="exercise-name">${ex.name}</div>
                 <div class="exercise-info">${ex.muscle.map(m => m.replace("_"," ")).join(" · ")}</div>
+                ${ex.technique ? `
+                  <div class="technique-badge">${ex.technique.name}</div>
+                  <div class="technique-note">${ex.technique.note}</div>
+                ` : ""}
               </div>
               <div class="exercise-prescription">
                 ${ex.sets} × ${ex.reps}<br />
@@ -756,11 +834,14 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
       </div>
     `).join("");
 
+  const intensityFlag = inputs.style === "intensity"
+    ? `<span class="intensity-flag">Intensity Mode</span>` : "";
+
   container.innerHTML = `
     <div class="workout-header">
       <div>
         <div class="workout-title">${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}</div>
-        <div class="workout-meta">${tags}</div>
+        <div class="workout-meta">${tags} ${intensityFlag}</div>
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
@@ -788,6 +869,7 @@ el.generateBtn.addEventListener("click", () => {
     goal, equipment, target,
     duration: parseInt(duration, 10),
     difficulty,
+    style: formState.style || "standard",
   });
   workoutIsSaved = false;
 

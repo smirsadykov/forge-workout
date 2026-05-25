@@ -385,6 +385,14 @@ input {
   gap: 10px;
 }
 
+.form-hint {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-top: 4px;
+  max-width: 60ch;
+}
+
 .chip {
   padding: 11px 18px;
   background: var(--bg-card);
@@ -540,6 +548,54 @@ input {
   font-weight: 500;
   font-size: 12px;
 }
+
+.technique-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 214, 51, 0.1);
+  border: 1px solid rgba(255, 214, 51, 0.3);
+  color: var(--accent);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.technique-badge::before {
+  content: "⚡";
+  font-size: 11px;
+}
+
+.technique-note {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  font-style: italic;
+  margin-top: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.intensity-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--accent);
+  color: #1a1500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.intensity-flag::before { content: "⚡"; }
 
 /* ─── EXERCISE LOG / PROGRESSION ─────────────────────────────────────── */
 .exercise {
