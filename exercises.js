@@ -35,7 +35,7 @@ const EXERCISES = [
   { name: "Dips", muscle: ["chest","triceps"], equipment: ["bodyweight"], group: ["push","upper"], pattern: "compound", difficulty: "intermediate" },
   { name: "Weighted Dips", muscle: ["chest","triceps"], equipment: ["bodyweight","dumbbells"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
   { name: "Archer Push-Ups", muscle: ["chest","triceps"], equipment: ["bodyweight"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
-  { name: "Plyo Push-Ups", muscle: ["chest","shoulders"], equipment: ["bodyweight"], group: ["push","upper","cardio"], pattern: "compound", difficulty: "advanced" },
+  { name: "Plyo Push-Ups", muscle: ["chest","shoulders"], equipment: ["bodyweight"], group: ["push","upper","cardio"], pattern: "ballistic", difficulty: "advanced" },
   { name: "One-Arm Push-Ups", muscle: ["chest","triceps","core"], equipment: ["bodyweight"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
   { name: "Push Press", muscle: ["shoulders","triceps"], equipment: ["barbell","dumbbells"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
   { name: "Arnold Press", muscle: ["shoulders","triceps"], equipment: ["dumbbells"], group: ["push","upper"], pattern: "compound", difficulty: "intermediate" },
@@ -68,12 +68,12 @@ const EXERCISES = [
   { name: "Cable Bicep Curl", muscle: ["biceps"], equipment: ["machine"], group: ["pull","upper"], pattern: "isolation", difficulty: "beginner" },
   { name: "Banded Row", muscle: ["back","biceps"], equipment: ["bands"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
   { name: "Banded Pull-Apart", muscle: ["shoulders","back"], equipment: ["bands"], group: ["pull","upper"], pattern: "isolation", difficulty: "beginner" },
-  { name: "Kettlebell Swing", muscle: ["back","glutes","hamstrings"], equipment: ["kettlebell"], group: ["pull","cardio","full_body"], pattern: "compound", difficulty: "intermediate" },
-  { name: "Kettlebell High Pull", muscle: ["back","shoulders"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "intermediate" },
+  { name: "Kettlebell Swing", muscle: ["back","glutes","hamstrings"], equipment: ["kettlebell"], group: ["pull","cardio","full_body"], pattern: "ballistic", difficulty: "intermediate" },
+  { name: "Kettlebell High Pull", muscle: ["back","shoulders"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "ballistic", difficulty: "intermediate" },
 
   // ─── LEGS ───────────────────────────────────────────────────────────────
   { name: "Bodyweight Squat", muscle: ["quads","glutes"], equipment: ["bodyweight"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
-  { name: "Jump Squat", muscle: ["quads","glutes","calves"], equipment: ["bodyweight"], group: ["legs","lower","cardio"], pattern: "compound", difficulty: "intermediate" },
+  { name: "Jump Squat", muscle: ["quads","glutes","calves"], equipment: ["bodyweight"], group: ["legs","lower","cardio"], pattern: "ballistic", difficulty: "intermediate" },
   { name: "Walking Lunges", muscle: ["quads","glutes","hamstrings"], equipment: ["bodyweight"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
   { name: "Reverse Lunges", muscle: ["quads","glutes"], equipment: ["bodyweight"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
   { name: "Bulgarian Split Squat", muscle: ["quads","glutes"], equipment: ["bodyweight"], group: ["legs","lower"], pattern: "compound", difficulty: "intermediate" },
@@ -103,7 +103,6 @@ const EXERCISES = [
   { name: "Seated Calf Raise", muscle: ["calves"], equipment: ["machine"], group: ["legs","lower"], pattern: "isolation", difficulty: "beginner" },
   { name: "Banded Squat", muscle: ["quads","glutes"], equipment: ["bands"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
   { name: "Banded Glute Bridge", muscle: ["glutes"], equipment: ["bands"], group: ["legs","lower"], pattern: "isolation", difficulty: "beginner" },
-  { name: "Kettlebell Goblet Squat", muscle: ["quads","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
 
   // ─── CORE ───────────────────────────────────────────────────────────────
   { name: "Plank", muscle: ["core"], equipment: ["bodyweight"], group: ["core"], pattern: "isolation", difficulty: "beginner" },
@@ -129,7 +128,7 @@ const EXERCISES = [
   { name: "Jumping Jacks", muscle: ["full_body"], equipment: ["bodyweight"], group: ["cardio"], pattern: "conditioning", difficulty: "beginner" },
   { name: "High Knees", muscle: ["full_body"], equipment: ["bodyweight"], group: ["cardio"], pattern: "conditioning", difficulty: "beginner" },
   { name: "Burpees", muscle: ["full_body"], equipment: ["bodyweight"], group: ["cardio","full_body"], pattern: "conditioning", difficulty: "intermediate" },
-  { name: "Box Jumps", muscle: ["quads","glutes","calves"], equipment: ["bodyweight"], group: ["cardio","legs"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Box Jumps", muscle: ["quads","glutes","calves"], equipment: ["bodyweight"], group: ["cardio","legs"], pattern: "ballistic", difficulty: "intermediate" },
   { name: "Skater Hops", muscle: ["quads","glutes"], equipment: ["bodyweight"], group: ["cardio","legs"], pattern: "conditioning", difficulty: "beginner" },
   { name: "Shadow Boxing", muscle: ["full_body"], equipment: ["bodyweight"], group: ["cardio"], pattern: "conditioning", difficulty: "beginner" },
   { name: "Jump Rope", muscle: ["calves","shoulders"], equipment: ["bodyweight"], group: ["cardio"], pattern: "conditioning", difficulty: "beginner" },

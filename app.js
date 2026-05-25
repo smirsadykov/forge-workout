@@ -351,25 +351,43 @@ function shuffle(arr) {
   return a;
 }
 
+// Round rest periods to clean numbers: nearest 5s when short, nearest 15s otherwise.
+function roundRest(s) {
+  if (s <= 45) return Math.round(s / 5) * 5;
+  return Math.round(s / 15) * 15;
+}
+
 function pickPrescription(goal, difficulty, exercise) {
   const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
 
+  // Ballistic / explosive movements (KB swings, jumps, plyos) follow their own
+  // template: moderate reps with explosive intent, generous rest for power
+  // output. The strength rep scheme of "3-4 reps" is wrong here — swings are
+  // about hip drive, not 1RM strength.
+  if (exercise.pattern === "ballistic") {
+    sets = difficulty === "beginner" ? 3 : difficulty === "advanced" ? 5 : 4;
+    let reps;
+    if (goal === "endurance") reps = "20–30";
+    else if (goal === "fat_loss") reps = "15–25";
+    else if (goal === "strength") reps = "5–8";   // heavy/explosive doubles up
+    else reps = "10–15";                          // hypertrophy / power default
+    return { sets, reps, rest: roundRest(90) };
+  }
+
   // Difficulty scales volume + rest.
   if (difficulty === "beginner") {
     sets = Math.max(2, sets - 1);
-    rest = Math.round(rest * 1.2); // a bit more rest while learning
+    rest = rest * 1.2;
   } else if (difficulty === "advanced") {
     sets = sets + 1;
-    rest = Math.max(20, Math.round(rest * 0.85)); // tighter rest, more intensity
+    rest = Math.max(20, rest * 0.85);
   }
 
   const isIso = exercise.pattern === "isolation";
   let repsRange = isIso ? p.isoReps : p.reps;
 
-  // Advanced gets harder rep schemes for compounds (lower-end strength bias on
-  // strength goal, drop sets implied on hypertrophy via higher reps).
   if (difficulty === "advanced" && !isIso) {
     if (goal === "strength") repsRange = [Math.max(3, repsRange[0] - 1), repsRange[0]];
     if (goal === "hypertrophy") repsRange = [repsRange[0], repsRange[1] + 3];
@@ -381,7 +399,7 @@ function pickPrescription(goal, difficulty, exercise) {
     const time = difficulty === "advanced" ? "40–60 sec" : difficulty === "beginner" ? "20–30 sec" : "30–45 sec";
     reps = time;
   }
-  return { sets, reps, rest };
+  return { sets, reps, rest: roundRest(rest) };
 }
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -439,8 +457,9 @@ function generateWorkout({ goal, equipment, target, duration, difficulty }) {
     // Goal-pattern bias
     if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "compound") score += 6;
     if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "isolation") score += 2;
+    if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "ballistic") score += 3;
     if ((goal === "fat_loss" || goal === "endurance") &&
-        (ex.pattern === "compound" || ex.pattern === "conditioning")) score += 6;
+        (ex.pattern === "compound" || ex.pattern === "conditioning" || ex.pattern === "ballistic")) score += 6;
     if (goal === "mobility" && ex.pattern === "mobility") score += 10;
 
     // Anti-repeat penalty for exercises from the previous workout.
@@ -476,12 +495,14 @@ function generateWorkout({ goal, equipment, target, duration, difficulty }) {
     }
   }
 
-  // Re-order: mobility → compound → isolation → conditioning
+  // Re-order: warm-up → power → main → accessories → finisher.
+  // Ballistic (explosive) work goes early when the nervous system is fresh.
   const orderKey = (e) => {
     if (e.pattern === "mobility") return 0;
-    if (e.pattern === "compound") return 1;
-    if (e.pattern === "isolation") return 2;
-    return 3;
+    if (e.pattern === "ballistic") return 1;
+    if (e.pattern === "compound") return 2;
+    if (e.pattern === "isolation") return 3;
+    return 4;
   };
   picked.sort((a, b) => orderKey(a) - orderKey(b));
 
@@ -602,6 +623,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
 
   const sections = {
     "Warm-up / Mobility": exercises.filter(e => e.pattern === "mobility"),
+    "Power / Ballistic": exercises.filter(e => e.pattern === "ballistic"),
     "Main Work": exercises.filter(e => e.pattern === "compound" || e.pattern === "isolation"),
     "Conditioning / Finisher": exercises.filter(e => e.pattern === "conditioning"),
   };
