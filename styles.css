@@ -597,6 +597,234 @@ input {
 
 .intensity-flag::before { content: "⚡"; }
 
+/* ─── GUIDED MODE ────────────────────────────────────────────────────── */
+.guided-container {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 8px 16px 120px;
+}
+
+.guided-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.guided-topbar .link-btn {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.guided-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.guided-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+  width: 0%;
+}
+
+.guided-progress-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.guided-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  animation: slideUp 0.25s ease-out;
+}
+
+.guided-section-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 18px;
+}
+
+.guided-exercise-name {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.guided-muscle {
+  color: var(--text-dim);
+  font-size: 15px;
+  text-transform: capitalize;
+  margin-bottom: 24px;
+}
+
+.guided-technique-badge {
+  background: var(--accent-soft);
+  border: 1px solid rgba(255, 214, 51, 0.3);
+  color: var(--accent);
+  padding: 6px 14px;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.guided-technique-note {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: 10px auto 24px;
+  font-style: italic;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.guided-set-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 20px;
+  margin: 24px 0;
+}
+
+.guided-set-num {
+  font-size: 16px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+
+.guided-set-label {
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.guided-set-big {
+  font-size: 72px;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.guided-set-of {
+  font-weight: 600;
+}
+
+.guided-target {
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.guided-target strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.guided-last {
+  margin: 16px auto;
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 400px;
+  font-weight: 500;
+}
+
+.guided-last strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.guided-log-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+
+.guided-log-row .log-field input {
+  font-size: 22px;
+  width: 90px;
+  text-align: center;
+  padding: 14px 0;
+  font-weight: 700;
+}
+
+.guided-log-row .log-field-suffix {
+  font-size: 13px;
+}
+
+.guided-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.guided-actions .primary-btn.big {
+  width: 100%;
+  max-width: 380px;
+  padding: 18px 24px;
+  font-size: 17px;
+}
+
+.ghost-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ghost-btn:hover { color: var(--text); }
+
+.guided-celebration {
+  text-align: center;
+  padding: 32px 12px;
+}
+
+.guided-celebration-icon {
+  font-size: 76px;
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 18px var(--accent-glow));
+}
+
+@media (max-width: 700px) {
+  .guided-container { padding: 4px 12px 120px; }
+  .guided-card { padding: 28px 18px; }
+  .guided-exercise-name { font-size: 26px; }
+  .guided-set-big { font-size: 56px; }
+  .guided-log-row .log-field input { font-size: 20px; width: 78px; padding: 12px 0; }
+}
+
 /* ─── REST TIMER (floating) ──────────────────────────────────────────── */
 .rest-timer {
   position: fixed;

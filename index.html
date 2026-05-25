@@ -6,7 +6,7 @@
   <meta http-equiv="cache-control" content="no-cache, must-revalidate" />
   <meta http-equiv="pragma" content="no-cache" />
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
   <header class="topbar">
@@ -142,6 +142,22 @@
       </div>
     </section>
 
+    <!-- GUIDED MODE VIEW -->
+    <section id="guidedView" class="view hidden">
+      <div class="guided-container">
+        <div class="guided-topbar">
+          <button id="guidedExitBtn" class="link-btn">← Exit</button>
+          <div class="guided-progress-bar">
+            <div id="guidedProgressFill" class="guided-progress-fill"></div>
+          </div>
+          <div class="guided-progress-text">
+            <span id="guidedExNum">1</span> / <span id="guidedExTotal">1</span>
+          </div>
+        </div>
+        <div id="guidedContent" class="guided-card"></div>
+      </div>
+    </section>
+
     <!-- SETTINGS VIEW -->
     <section id="settingsView" class="view hidden">
       <div class="container">
@@ -212,7 +228,7 @@
     </div>
   </div>
 
-  <script src="exercises.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="exercises.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

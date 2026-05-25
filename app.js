@@ -288,6 +288,7 @@ const el = {
   generatorView: document.getElementById("generatorView"),
   historyView: document.getElementById("historyView"),
   settingsView: document.getElementById("settingsView"),
+  guidedView: document.getElementById("guidedView"),
   loadWarning: document.getElementById("loadWarning"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
@@ -308,7 +309,7 @@ function showAuth() {
   el.historyView.classList.add("hidden");
 }
 function showApp(view = "generator") {
-  el.nav.classList.remove("hidden");
+  el.nav.classList.toggle("hidden", view === "guided");
   el.authView.classList.add("hidden");
   el.userLabel.textContent = session.username;
   applyUnitsButtons();
@@ -318,6 +319,7 @@ function showApp(view = "generator") {
   el.generatorView.classList.toggle("hidden", view !== "generator");
   el.historyView.classList.toggle("hidden", view !== "history");
   el.settingsView.classList.toggle("hidden", view !== "settings");
+  el.guidedView.classList.toggle("hidden", view !== "guided");
   if (view === "history") renderHistory();
   if (view === "settings") renderSettings();
   if (view === "generator") refreshLoadWarning();
@@ -884,6 +886,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
+        <button class="primary-btn" id="startWorkoutBtn">▶ Start Workout</button>
         ${showSave ? `<button class="secondary-btn" id="saveBtn">Save</button>` : ""}
         <button class="secondary-btn" id="regenBtn">Regenerate</button>
       </div>
@@ -933,6 +936,10 @@ let workoutIsSaved = false;
 function attachWorkoutActions() {
   const saveBtn = document.getElementById("saveBtn");
   const regenBtn = document.getElementById("regenBtn");
+  const startBtn = document.getElementById("startWorkoutBtn");
+  if (startBtn) {
+    startBtn.addEventListener("click", () => startGuidedMode());
+  }
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
       if (!currentWorkout || !session) return;
@@ -1132,6 +1139,203 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const saved = document.getElementById("settingsSaved");
   saved.classList.remove("hidden");
   setTimeout(() => saved.classList.add("hidden"), 1800);
+});
+
+// ─── GUIDED MODE ─────────────────────────────────────────────────────────
+const guided = { active: false, exIdx: 0, set: 1 };
+
+function startGuidedMode() {
+  if (!currentWorkout || !currentWorkout.exercises.length) return;
+  guided.active = true;
+  guided.exIdx = 0;
+  guided.set = 1;
+  showApp("guided");
+  renderGuided();
+}
+
+function exitGuided() {
+  guided.active = false;
+  stopRestTimer(true);
+  showApp("generator");
+}
+
+function getSection(pattern) {
+  if (pattern === "mobility") return "WARM-UP / MOBILITY";
+  if (pattern === "ballistic") return "POWER / BALLISTIC";
+  if (pattern === "conditioning") return "CONDITIONING / FINISHER";
+  return "MAIN WORK";
+}
+
+function renderGuided() {
+  if (!currentWorkout) return exitGuided();
+  const total = currentWorkout.exercises.length;
+  if (guided.exIdx >= total) return finishGuidedWorkout();
+
+  const ex = currentWorkout.exercises[guided.exIdx];
+  const isLastSet = guided.set >= ex.sets;
+  const isLastExercise = guided.exIdx >= total - 1;
+  const trackable = isTrackable(ex.name);
+  const usesWeight = exerciseUsesWeight(ex.name);
+  const units = getPrefs(session.username).units;
+  const suggestion = trackable
+    ? getSuggestion(session.username, ex.name, ex, ex.pattern)
+    : { last: null, next: null, trend: null };
+
+  // Update top progress bar
+  const progress = ((guided.exIdx + (guided.set - 1) / Math.max(1, ex.sets)) / total) * 100;
+  document.getElementById("guidedExNum").textContent = guided.exIdx + 1;
+  document.getElementById("guidedExTotal").textContent = total;
+  document.getElementById("guidedProgressFill").style.width = `${Math.min(100, progress)}%`;
+
+  // Last-session line
+  let lastLine = "";
+  if (suggestion.last) {
+    const w = suggestion.last.weightKg
+      ? `${toDisplay(suggestion.last.weightKg, units)} ${units}` : "bw";
+    const trendLabel = suggestion.trend === "up" ? "↑ progress"
+      : suggestion.trend === "down" ? "↓ deload" : "· push reps";
+    lastLine = `<div class="guided-last">Last: <strong>${
+      usesWeight ? `${w} × ${suggestion.last.reps}` : `${suggestion.last.reps} reps`
+    }</strong> &nbsp;${trendLabel}</div>`;
+  }
+
+  // Inputs (only on last set; intermediate sets just advance + timer)
+  let inputsHtml = "";
+  if (trackable && isLastSet) {
+    const sugW = suggestion.next ? toDisplay(suggestion.next.weightKg, units) : "";
+    const sugR = suggestion.next ? suggestion.next.reps : parseRepRange(ex.reps)[0];
+    inputsHtml = `
+      <div class="guided-log-row">
+        ${usesWeight ? `
+          <label class="log-field">
+            <input type="number" id="guidedWeight" min="0" step="${units === "lb" ? 5 : 2.5}" value="${sugW || ""}" placeholder="weight"/>
+            <span class="log-field-suffix">${units}</span>
+          </label>` : ""}
+        <label class="log-field">
+          <input type="number" id="guidedReps" min="0" step="1" value="${sugR || ""}" placeholder="reps"/>
+          <span class="log-field-suffix">reps</span>
+        </label>
+      </div>
+    `;
+  }
+
+  // Technique badge
+  let techHtml = "";
+  if (ex.technique) {
+    techHtml = `
+      <div class="guided-technique-badge">⚡ ${ex.technique.name.toUpperCase()}</div>
+      <div class="guided-technique-note">${ex.technique.note}</div>
+    `;
+  }
+
+  const muscleStr = ex.muscle.map(m => m.replace("_", " ")).join(" · ");
+  const doneLabel = isLastSet
+    ? (isLastExercise ? "✓ Finish Workout" : "✓ Done Set — Next Exercise →")
+    : "✓ Done Set";
+
+  document.getElementById("guidedContent").innerHTML = `
+    <div class="guided-section-badge">${getSection(ex.pattern)}</div>
+    <h2 class="guided-exercise-name">${ex.name}</h2>
+    <div class="guided-muscle">${muscleStr}</div>
+    ${techHtml}
+
+    <div class="guided-set-block">
+      <div class="guided-set-num">
+        <span class="guided-set-label">Set</span>
+        <span class="guided-set-big">${guided.set}</span>
+        <span class="guided-set-of">of ${ex.sets}</span>
+      </div>
+      <div class="guided-target"><strong>${ex.reps}</strong> reps · rest <strong>${ex.rest}s</strong></div>
+    </div>
+
+    ${lastLine}
+    ${inputsHtml}
+
+    <div class="guided-actions">
+      <button class="primary-btn big" data-guided-action="done">${doneLabel}</button>
+      <button class="ghost-btn" data-guided-action="skip">Skip ${isLastSet ? "Exercise" : "Set"}</button>
+    </div>
+  `;
+
+  document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
+  document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
+}
+
+function onDoneSet() {
+  if (!currentWorkout) return;
+  const ex = currentWorkout.exercises[guided.exIdx];
+  if (!ex) return finishGuidedWorkout();
+
+  const isLastSet = guided.set >= ex.sets;
+  const isLastExercise = guided.exIdx >= currentWorkout.exercises.length - 1;
+  const trackable = isTrackable(ex.name);
+  const usesWeight = exerciseUsesWeight(ex.name);
+  const units = getPrefs(session.username).units;
+
+  // Log only on the working (last) set
+  if (trackable && isLastSet) {
+    const rEl = document.getElementById("guidedReps");
+    const wEl = document.getElementById("guidedWeight");
+    const reps = Number(rEl?.value || 0);
+    if (reps > 0) {
+      const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
+      const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
+      logExercise(session.username, ex.name, { weightKg, reps });
+    }
+  }
+
+  // Start rest timer after every set (including the last one before next exercise)
+  if (ex.rest > 0) startRestTimer(ex.rest, `Rest — ${ex.name}`);
+
+  if (isLastSet) {
+    if (isLastExercise) return finishGuidedWorkout();
+    guided.exIdx += 1;
+    guided.set = 1;
+  } else {
+    guided.set += 1;
+  }
+  renderGuided();
+}
+
+function onSkipSet() {
+  if (!currentWorkout) return;
+  const ex = currentWorkout.exercises[guided.exIdx];
+  if (!ex) return finishGuidedWorkout();
+  const isLastSet = guided.set >= ex.sets;
+  const isLastExercise = guided.exIdx >= currentWorkout.exercises.length - 1;
+  if (isLastSet) {
+    if (isLastExercise) return finishGuidedWorkout();
+    guided.exIdx += 1;
+    guided.set = 1;
+  } else {
+    guided.set += 1;
+  }
+  renderGuided();
+}
+
+function finishGuidedWorkout() {
+  stopRestTimer(true);
+  // Auto-save once when finishing
+  if (!workoutIsSaved && session && currentWorkout) {
+    addWorkout(session.username, currentWorkout);
+    workoutIsSaved = true;
+  }
+  document.getElementById("guidedProgressFill").style.width = "100%";
+  document.getElementById("guidedContent").innerHTML = `
+    <div class="guided-celebration">
+      <div class="guided-celebration-icon">🏆</div>
+      <h2 class="guided-exercise-name">Workout Complete</h2>
+      <div class="guided-muscle">Great session. Logged and saved to history.</div>
+      <div class="guided-actions">
+        <button class="primary-btn big" id="guidedFinishBtn">Done</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("guidedFinishBtn").addEventListener("click", exitGuided);
+}
+
+document.getElementById("guidedExitBtn").addEventListener("click", () => {
+  if (confirm("Exit the workout? Your progress so far is saved.")) exitGuided();
 });
 
 // ─── REST TIMER ──────────────────────────────────────────────────────────
