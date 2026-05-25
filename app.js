@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   workouts: "forge:workouts",
   stats: "forge:stats",   // per-user, per-exercise logs (always stored in kg)
   prefs: "forge:prefs",   // per-user preferences (units, etc.)
+  loads: "forge:loads",   // per-user available equipment loads (kg)
 };
 
 // ─── STORAGE HELPERS ─────────────────────────────────────────────────────
@@ -94,6 +95,64 @@ function setPrefs(userId, prefs) {
   const all = load(STORAGE_KEYS.prefs, {});
   all[userId] = { ...getPrefs(userId), ...prefs };
   save(STORAGE_KEYS.prefs, all);
+}
+
+// ─── EQUIPMENT LOADS ─────────────────────────────────────────────────────
+// All loads stored in kg internally.
+function getLoads(userId) {
+  const all = load(STORAGE_KEYS.loads, {});
+  return all[userId] || { maxDumbbellKg: 0, maxKettlebellKg: 0, hasHeavyBarbell: false };
+}
+function setLoads(userId, loads) {
+  const all = load(STORAGE_KEYS.loads, {});
+  all[userId] = { ...getLoads(userId), ...loads };
+  save(STORAGE_KEYS.loads, all);
+}
+
+// Decide whether the user's available equipment can support the chosen goal +
+// difficulty. Strength training needs near-maximal loads; with a single light
+// kettlebell or just bodyweight, it's mostly impossible past beginner.
+//
+// Returns null if everything is fine, otherwise an object describing the
+// mismatch (used to render the warning banner).
+function checkLoadAdequacy({ goal, equipment, difficulty }, loads) {
+  if (goal !== "strength") return null;
+  if (difficulty === "beginner") return null;
+
+  // "Heavy" sources of resistance: loaded barbell, gym machines.
+  const hasHeavyBarbell = equipment.includes("barbell") && loads.hasHeavyBarbell;
+  const hasMachine = equipment.includes("machine");
+  if (hasHeavyBarbell || hasMachine) return null;
+
+  // Thresholds for strength training (single-implement, near-max load needed).
+  // Intermediate strength: need at least a 20kg DB or 20kg KB.
+  // Advanced strength:     need at least a 30kg DB or 28kg KB.
+  const need = difficulty === "advanced"
+    ? { db: 30, kb: 28 }
+    : { db: 20, kb: 20 };
+
+  const maxDB = equipment.includes("dumbbells") ? (loads.maxDumbbellKg || 0) : 0;
+  const maxKB = equipment.includes("kettlebell") ? (loads.maxKettlebellKg || 0) : 0;
+
+  if (maxDB >= need.db || maxKB >= need.kb) return null;
+
+  // Mismatch — figure out the best summary line.
+  let reason;
+  if (maxDB === 0 && maxKB === 0 && !equipment.includes("barbell") && !hasMachine) {
+    reason = "You haven't selected any equipment that can be loaded heavy (barbell, dumbbells, kettlebell, or machine).";
+  } else if (maxDB === 0 && maxKB === 0) {
+    reason = "You haven't told us how heavy your dumbbells / kettlebells go. Set this in Settings for accurate recommendations.";
+  } else {
+    const units = session ? getPrefs(session.username).units : "kg";
+    const limit = Math.max(maxDB, maxKB);
+    reason = `Your heaviest available weight (${toDisplay(limit, units)} ${units}) is too light for ${difficulty} strength training.`;
+  }
+
+  return {
+    reason,
+    recommendation: "Switch to Hypertrophy or Endurance — with limited load, high-volume training is where you'll actually grow.",
+    suggestedGoal: "hypertrophy",
+  };
 }
 
 // ─── UNIT CONVERSION ─────────────────────────────────────────────────────
@@ -188,6 +247,8 @@ const el = {
   authView: document.getElementById("authView"),
   generatorView: document.getElementById("generatorView"),
   historyView: document.getElementById("historyView"),
+  settingsView: document.getElementById("settingsView"),
+  loadWarning: document.getElementById("loadWarning"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
   authError: document.getElementById("authError"),
@@ -216,7 +277,10 @@ function showApp(view = "generator") {
   });
   el.generatorView.classList.toggle("hidden", view !== "generator");
   el.historyView.classList.toggle("hidden", view !== "history");
+  el.settingsView.classList.toggle("hidden", view !== "settings");
   if (view === "history") renderHistory();
+  if (view === "settings") renderSettings();
+  if (view === "generator") refreshLoadWarning();
 }
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
@@ -241,6 +305,10 @@ document.querySelectorAll(".units-btn").forEach(btn => {
       renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
       attachWorkoutActions();
     }
+    // If the settings view is showing, re-render so units + values update.
+    if (!el.settingsView.classList.contains("hidden")) renderSettings();
+    // Refresh the warning banner too (weight thresholds get re-stringified).
+    refreshLoadWarning();
   });
 });
 
@@ -328,6 +396,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
         formState[field] = value;
       }
       el.formError.textContent = "";
+      refreshLoadWarning();
     });
   });
 });
@@ -339,6 +408,42 @@ function resetForm() {
   formState.duration = null;
   formState.difficulty = null;
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
+  refreshLoadWarning();
+}
+
+// ─── LOAD WARNING ────────────────────────────────────────────────────────
+function refreshLoadWarning() {
+  if (!session || !el.loadWarning) return;
+  const { goal, equipment, difficulty } = formState;
+  if (!goal || !equipment.length || !difficulty) {
+    el.loadWarning.classList.add("hidden");
+    el.loadWarning.innerHTML = "";
+    return;
+  }
+  const loads = getLoads(session.username);
+  const issue = checkLoadAdequacy({ goal, equipment, difficulty }, loads);
+  if (!issue) {
+    el.loadWarning.classList.add("hidden");
+    el.loadWarning.innerHTML = "";
+    return;
+  }
+  el.loadWarning.classList.remove("hidden");
+  el.loadWarning.innerHTML = `
+    <div class="load-warning-title">Equipment may be too light for ${difficulty} strength</div>
+    <div class="load-warning-body">${issue.reason} ${issue.recommendation}</div>
+    <div class="load-warning-actions">
+      <button class="primary-btn" data-warn-action="switch-goal" data-goal="${issue.suggestedGoal}">Switch to ${GOAL_LABELS[issue.suggestedGoal]}</button>
+      <button class="secondary-btn" data-warn-action="open-settings">Open Settings</button>
+    </div>
+  `;
+  el.loadWarning.querySelector("[data-warn-action='switch-goal']").addEventListener("click", (e) => {
+    const newGoal = e.target.dataset.goal;
+    const chip = document.querySelector(`.chip[data-value="${newGoal}"]`);
+    if (chip) chip.click();
+  });
+  el.loadWarning.querySelector("[data-warn-action='open-settings']").addEventListener("click", () => {
+    showApp("settings");
+  });
 }
 
 // ─── WORKOUT GENERATION ──────────────────────────────────────────────────
@@ -812,6 +917,38 @@ function renderHistory() {
     });
   });
 }
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────
+function renderSettings() {
+  if (!session) return;
+  const units = getPrefs(session.username).units;
+  const loads = getLoads(session.username);
+
+  document.querySelectorAll("[data-unit-label]").forEach(s => s.textContent = units);
+
+  const dbInput = document.getElementById("maxDumbbell");
+  const kbInput = document.getElementById("maxKettlebell");
+  const bbCheck = document.getElementById("hasHeavyBarbell");
+
+  dbInput.value = loads.maxDumbbellKg ? toDisplay(loads.maxDumbbellKg, units) : "";
+  kbInput.value = loads.maxKettlebellKg ? toDisplay(loads.maxKettlebellKg, units) : "";
+  bbCheck.checked = !!loads.hasHeavyBarbell;
+}
+
+document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+  if (!session) return;
+  const units = getPrefs(session.username).units;
+  const dbVal = Number(document.getElementById("maxDumbbell").value) || 0;
+  const kbVal = Number(document.getElementById("maxKettlebell").value) || 0;
+  setLoads(session.username, {
+    maxDumbbellKg: dbVal ? fromDisplay(dbVal, units) : 0,
+    maxKettlebellKg: kbVal ? fromDisplay(kbVal, units) : 0,
+    hasHeavyBarbell: document.getElementById("hasHeavyBarbell").checked,
+  });
+  const saved = document.getElementById("settingsSaved");
+  saved.classList.remove("hidden");
+  setTimeout(() => saved.classList.add("hidden"), 1800);
+});
 
 // ─── INIT ────────────────────────────────────────────────────────────────
 if (session && getUsers()[session.username]) {
