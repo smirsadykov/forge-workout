@@ -207,16 +207,37 @@ function shuffle(arr) {
   return a;
 }
 
-function pickPrescription(goal, exercise) {
+function pickPrescription(goal, difficulty, exercise) {
   const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
-  const sets = randInt(p.sets[0], p.sets[1]);
+  let sets = randInt(p.sets[0], p.sets[1]);
+  let rest = p.rest;
+
+  // Difficulty scales volume + rest.
+  if (difficulty === "beginner") {
+    sets = Math.max(2, sets - 1);
+    rest = Math.round(rest * 1.2); // a bit more rest while learning
+  } else if (difficulty === "advanced") {
+    sets = sets + 1;
+    rest = Math.max(20, Math.round(rest * 0.85)); // tighter rest, more intensity
+  }
+
   const isIso = exercise.pattern === "isolation";
-  const repsRange = isIso ? p.isoReps : p.reps;
+  let repsRange = isIso ? p.isoReps : p.reps;
+
+  // Advanced gets harder rep schemes for compounds (lower-end strength bias on
+  // strength goal, drop sets implied on hypertrophy via higher reps).
+  if (difficulty === "advanced" && !isIso) {
+    if (goal === "strength") repsRange = [Math.max(3, repsRange[0] - 1), repsRange[0]];
+    if (goal === "hypertrophy") repsRange = [repsRange[0], repsRange[1] + 3];
+  }
+
   let reps = `${repsRange[0]}–${repsRange[1]}`;
-  // Mobility / conditioning use time instead of reps
   if (exercise.pattern === "mobility") reps = "30–60 sec";
-  if (exercise.pattern === "conditioning" && goal !== "strength") reps = "30–45 sec";
-  return { sets, reps, rest: p.rest };
+  if (exercise.pattern === "conditioning" && goal !== "strength") {
+    const time = difficulty === "advanced" ? "40–60 sec" : difficulty === "beginner" ? "20–30 sec" : "30–45 sec";
+    reps = time;
+  }
+  return { sets, reps, rest };
 }
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -242,49 +263,59 @@ function matchesDifficulty(exDiff, target) {
   return order[exDiff] <= order[target];
 }
 
+// Anti-repeat memory: exercises picked in the immediately previous workout
+// get penalized so Regenerate produces visibly different sessions.
+let lastPickedNames = new Set();
+
+const DIFF_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
+
 function generateWorkout({ goal, equipment, target, duration, difficulty }) {
   const count = COUNT_BY_DURATION[duration] || 6;
+  const targetDiff = DIFF_ORDER[difficulty];
 
-  // Filter by equipment + difficulty + target
-  let candidates = EXERCISES.filter(ex => {
+  // Filter by equipment + difficulty cap + target
+  const candidates = EXERCISES.filter(ex => {
     const equipOk = ex.equipment.some(e => equipment.includes(e));
     const diffOk = matchesDifficulty(ex.difficulty, difficulty);
     const targetOk = matchesTarget(ex, target);
     return equipOk && diffOk && targetOk;
   });
 
-  // Mobility goal: prefer mobility-pattern exercises
-  if (goal === "mobility") {
-    const mob = candidates.filter(e => e.pattern === "mobility");
-    if (mob.length >= count) candidates = mob;
-    else candidates = mob.concat(candidates.filter(e => e.pattern !== "mobility"));
-  }
+  // Score each candidate. Higher = preferred.
+  const scored = candidates.map(ex => {
+    let score = 0;
+    const exDiff = DIFF_ORDER[ex.difficulty];
 
-  // Fat loss / endurance: prefer compounds + conditioning
-  if (goal === "fat_loss" || goal === "endurance") {
-    candidates.sort((a, b) => {
-      const score = (e) => (e.pattern === "compound" ? 2 : 0) + (e.pattern === "conditioning" ? 2 : 0);
-      return score(b) - score(a);
-    });
-  }
+    // Strong bias toward exercises matching the chosen difficulty.
+    const diffGap = targetDiff - exDiff;       // 0 = exact, 1 = one below, 2 = two below
+    if (diffGap === 0) score += 12;
+    else if (diffGap === 1) score += 5;
+    else if (diffGap === 2) score += 1;
 
-  // Strength / hypertrophy: prefer compounds first, isolations after
-  if (goal === "strength" || goal === "hypertrophy") {
-    candidates.sort((a, b) => {
-      const score = (e) => (e.pattern === "compound" ? 2 : e.pattern === "isolation" ? 1 : 0);
-      return score(b) - score(a);
-    });
-  }
+    // Goal-pattern bias
+    if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "compound") score += 6;
+    if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "isolation") score += 2;
+    if ((goal === "fat_loss" || goal === "endurance") &&
+        (ex.pattern === "compound" || ex.pattern === "conditioning")) score += 6;
+    if (goal === "mobility" && ex.pattern === "mobility") score += 10;
 
-  // De-duplicate by primary muscle to avoid an all-chest workout
-  const picked = [];
-  const muscleCount = {};
+    // Anti-repeat penalty for exercises from the previous workout.
+    if (lastPickedNames.has(ex.name)) score -= 9;
+
+    // Random jitter so equal-scored items shuffle naturally on each regen.
+    score += Math.random() * 4;
+
+    return { ex, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  // De-dup by primary muscle so we don't get an all-chest workout.
   const maxPerMuscle = duration >= 60 ? 3 : 2;
+  const muscleCount = {};
+  const picked = [];
 
-  // Take top half by sort order, then shuffle within that pool for variety
-  const pool = shuffle(candidates.slice(0, Math.max(count * 3, candidates.length)));
-
-  for (const ex of pool) {
+  for (const { ex } of scored) {
     if (picked.length >= count) break;
     const primary = ex.muscle[0];
     muscleCount[primary] = muscleCount[primary] || 0;
@@ -293,15 +324,15 @@ function generateWorkout({ goal, equipment, target, duration, difficulty }) {
     muscleCount[primary]++;
   }
 
-  // If we still don't have enough, fill from leftovers
+  // Fill from leftovers if muscle cap left us short.
   if (picked.length < count) {
-    for (const ex of pool) {
+    for (const { ex } of scored) {
       if (picked.length >= count) break;
       if (!picked.includes(ex)) picked.push(ex);
     }
   }
 
-  // Re-order: warmup-ish (mobility) first, compounds, isolations, conditioning/finishers last
+  // Re-order: mobility → compound → isolation → conditioning
   const orderKey = (e) => {
     if (e.pattern === "mobility") return 0;
     if (e.pattern === "compound") return 1;
@@ -310,12 +341,14 @@ function generateWorkout({ goal, equipment, target, duration, difficulty }) {
   };
   picked.sort((a, b) => orderKey(a) - orderKey(b));
 
-  // Build prescriptions
+  // Update anti-repeat memory with this workout's exercises.
+  lastPickedNames = new Set(picked.map(e => e.name));
+
   const exercises = picked.map(ex => ({
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
-    ...pickPrescription(goal, ex),
+    ...pickPrescription(goal, difficulty, ex),
   }));
 
   return {
@@ -434,6 +467,10 @@ el.generateBtn.addEventListener("click", () => {
   el.workoutResult.classList.remove("hidden");
   renderWorkout(currentWorkout, el.workoutResult);
   attachWorkoutActions();
+  // re-trigger slide-up animation on regenerate
+  el.workoutResult.style.animation = "none";
+  void el.workoutResult.offsetWidth;
+  el.workoutResult.style.animation = "";
   el.workoutResult.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
