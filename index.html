@@ -17,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <header class="topbar">
@@ -137,8 +137,10 @@
             <div class="chip-row" data-field="style" data-multi="false">
               <button class="chip selected" data-value="standard">Standard</button>
               <button class="chip" data-value="intensity">Intensity ⚡</button>
+              <button class="chip" data-value="supersets">Supersets</button>
+              <button class="chip" data-value="circuits">Circuits</button>
             </div>
-            <p class="form-hint">Intensity adds tempo work and pause reps. Great when your equipment is too light for max-effort strength — slow eccentrics and pauses create real tension at any load.</p>
+            <p class="form-hint"><strong>Intensity</strong> adds tempo + pause reps for real strength stimulus at any load. <strong>Supersets</strong> pair exercises with no rest between. <strong>Circuits</strong> chain 3 exercises and rest after the cycle — burns more calories per minute.</p>
           </div>
         </div>
 
@@ -239,9 +241,9 @@
     </div>
   </div>
 
-  <script src="config.js?v=17"></script>
+  <script src="config.js?v=18"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="exercises.js?v=17"></script>
-  <script src="app.js?v=17"></script>
+  <script src="exercises.js?v=18"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>

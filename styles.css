@@ -493,10 +493,155 @@ input {
   flex-wrap: wrap;
 }
 
+.workout-notes {
+  margin-bottom: 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.workout-notes summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  list-style: none;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.workout-notes summary::-webkit-details-marker { display: none; }
+.workout-notes summary::marker { content: ""; }
+
+.workout-notes summary:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.workout-notes[open] summary {
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.notes-input {
+  width: 100%;
+  background: var(--bg);
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+}
+
+.notes-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.notes-status {
+  padding: 0 16px 10px;
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 600;
+  min-height: 16px;
+}
+
 .exercise-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ─── EXERCISE GROUPS (Supersets / Circuits) ────────────────────────── */
+.exercise-group {
+  background: rgba(255, 214, 51, 0.04);
+  border: 1px solid rgba(255, 214, 51, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  position: relative;
+}
+
+.exercise-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exercise-group-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.exercise-group-prescription {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exercise-group-prescription strong {
+  color: var(--text);
+}
+
+.exercise-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exercise.in-group {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+
+.exercise.in-group .exercise-prescription {
+  font-size: 14px;
+  color: var(--accent);
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.group-position-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #1a1500;
+  font-weight: 800;
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.guided-group-context {
+  display: inline-block;
+  background: rgba(255, 214, 51, 0.12);
+  border: 1px solid rgba(255, 214, 51, 0.4);
+  color: var(--accent);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
 }
 
 .exercise {

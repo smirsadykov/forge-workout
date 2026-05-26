@@ -88,6 +88,17 @@ function deleteWorkout(userId, workoutId) {
   cloudPush(() => sb.from("workouts").delete().eq("id", workoutId));
 }
 
+// Update arbitrary fields on an existing saved workout (notes, etc.).
+function updateWorkout(userId, workoutId, partial) {
+  const all = load(STORAGE_KEYS.workouts, {});
+  if (!all[userId]) return;
+  const w = all[userId].find(x => x.id === workoutId);
+  if (!w) return;
+  Object.assign(w, partial);
+  save(STORAGE_KEYS.workouts, all);
+  cloudPush(() => sb.from("workouts").update({ data: w }).eq("id", workoutId));
+}
+
 // ─── PROGRESSION: stats + prefs ──────────────────────────────────────────
 // Stats are always stored in kg internally. UI converts at render time.
 function getStats(userId) {
@@ -828,12 +839,81 @@ let lastPickedNames = new Set();
 
 const DIFF_ORDER = { beginner: 0, intermediate: 1, advanced: 2 };
 
+// Which muscles a chosen target touches — used to bias warm-up selection
+// toward joints / tissues you're actually about to work.
+const TARGET_MUSCLES = {
+  legs:      ["quads", "glutes", "hamstrings", "calves"],
+  lower:     ["quads", "glutes", "hamstrings", "calves"],
+  upper:     ["chest", "back", "shoulders", "biceps", "triceps"],
+  push:      ["chest", "shoulders", "triceps"],
+  pull:      ["back", "biceps", "shoulders"],
+  core:      ["core"],
+  full_body: ["chest", "back", "shoulders", "quads", "glutes", "hamstrings", "core"],
+  cardio:    ["full_body", "quads", "calves"],
+};
+
+// Pair main-work exercises into supersets (size 2) or circuits (size 3).
+// Annotates exercises in-place with groupId / groupPosition / groupSize and
+// normalises sets + rest within a group so the round structure works.
+function pairIntoGroups(exercises, size) {
+  if (size < 2) return;
+  const mainIndices = exercises
+    .map((e, i) => (e.pattern === "compound" || e.pattern === "isolation") ? i : -1)
+    .filter(i => i !== -1);
+
+  let groupIdx = 0;
+  for (let i = 0; i + size <= mainIndices.length; i += size) {
+    const indices = mainIndices.slice(i, i + size);
+    const group = indices.map(j => exercises[j]);
+    const gid = `g${++groupIdx}`;
+    const masterSets = group[0].sets;
+    const masterRest = Math.max(group[0].rest, size === 3 ? 60 : 75);
+    group.forEach((e, p) => {
+      e.groupId = gid;
+      e.groupPosition = p;
+      e.groupSize = size;
+      e.sets = masterSets;
+      e.rest = masterRest;
+    });
+  }
+}
+
+// Pick N mobility/dynamic exercises biased to the target muscle group(s).
+// Warm-ups are always bodyweight so they work regardless of equipment.
+function pickWarmupExercises(target, count) {
+  if (count <= 0) return [];
+  const targetMuscles = TARGET_MUSCLES[target] || [];
+  const candidates = EXERCISES.filter(ex =>
+    ex.pattern === "mobility" && ex.equipment.includes("bodyweight")
+  );
+  if (candidates.length === 0) return [];
+  const scored = candidates.map(ex => ({
+    ex,
+    score:
+      (ex.muscle.some(m => targetMuscles.includes(m)) ? 5 : 0) +
+      (ex.muscle.includes("full_body") ? 2 : 0) +
+      (lastPickedNames.has(ex.name) ? -3 : 0) +
+      Math.random() * 2,
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, count).map(s => s.ex);
+}
+
 function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard" }) {
   const count = COUNT_BY_DURATION[duration] || 6;
   const targetDiff = DIFF_ORDER[difficulty];
 
-  // Filter by equipment + difficulty cap + target
+  // Always prepend a brief dynamic warm-up unless the goal IS mobility
+  // (in which case the whole workout is mobility-focused already).
+  const warmupCount = goal === "mobility" ? 0 : (duration >= 30 ? 2 : 1);
+  const mainCount = Math.max(1, count - warmupCount);
+  const warmups = pickWarmupExercises(target, warmupCount);
+  const warmupNames = new Set(warmups.map(w => w.name));
+
+  // Filter by equipment + difficulty cap + target. Exclude warm-up picks
+  // so the main pool can't double-pick a mobility move we already added.
   const candidates = EXERCISES.filter(ex => {
+    if (warmupNames.has(ex.name)) return false;
     const equipOk = ex.equipment.some(e => equipment.includes(e));
     const diffOk = matchesDifficulty(ex.difficulty, difficulty);
     const targetOk = matchesTarget(ex, target);
@@ -876,7 +956,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   const picked = [];
 
   for (const { ex } of scored) {
-    if (picked.length >= count) break;
+    if (picked.length >= mainCount) break;
     const primary = ex.muscle[0];
     muscleCount[primary] = muscleCount[primary] || 0;
     if (muscleCount[primary] >= maxPerMuscle) continue;
@@ -885,12 +965,15 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   }
 
   // Fill from leftovers if muscle cap left us short.
-  if (picked.length < count) {
+  if (picked.length < mainCount) {
     for (const { ex } of scored) {
-      if (picked.length >= count) break;
+      if (picked.length >= mainCount) break;
       if (!picked.includes(ex)) picked.push(ex);
     }
   }
+
+  // Merge warm-ups in front of the main work.
+  picked.unshift(...warmups);
 
   // Re-order: warm-up → power → main → accessories → finisher.
   // Ballistic (explosive) work goes early when the nervous system is fresh.
@@ -912,6 +995,10 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     pattern: ex.pattern,
     ...pickPrescription(goal, difficulty, ex, style),
   }));
+
+  // Group into supersets/circuits if the style calls for it.
+  if (style === "supersets") pairIntoGroups(exercises, 2);
+  if (style === "circuits") pairIntoGroups(exercises, 3);
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1015,7 +1102,88 @@ function renderExerciseLog(ex, units) {
   `;
 }
 
+// Render a single exercise card. opts.inGroup hides the per-card rest line
+// (rest is shown on the group wrapper). opts.groupPosition prefixes the name
+// with "A" / "B" / "C" so positions are obvious within a superset.
+function renderExerciseCard(ex, units, opts = {}) {
+  const positionPrefix = opts.groupPosition != null
+    ? `<span class="group-position-letter">${String.fromCharCode(65 + opts.groupPosition)}</span>`
+    : "";
+  const inGroup = !!opts.inGroup;
+  const restLine = inGroup
+    ? `${ex.reps}`
+    : `${ex.sets} × ${ex.reps}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
+  return `
+    <div class="exercise${inGroup ? " in-group" : ""}" data-name="${escapeAttr(ex.name)}">
+      <div class="exercise-row">
+        <div class="exercise-main">
+          <div class="exercise-name-row">
+            <div class="exercise-name">${positionPrefix}${ex.name}</div>
+            ${renderExerciseExtras(ex.name)}
+          </div>
+          <div class="exercise-info">${ex.muscle.map(m => m.replace("_", " ")).join(" · ")}</div>
+          ${ex.technique ? `
+            <div class="technique-badge">${ex.technique.name}</div>
+            <div class="technique-note">${ex.technique.note}</div>
+          ` : ""}
+          ${renderFormCues(ex.name)}
+          ${renderProgressChart(ex.name)}
+        </div>
+        <div class="exercise-prescription">${restLine}</div>
+        ${workoutReadOnly ? "" : `<button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>`}
+      </div>
+      ${renderExerciseLog(ex, units)}
+    </div>
+  `;
+}
+
+// Walk a flat exercise list, grouping consecutive same-groupId items into
+// superset/circuit blocks, and emit the appropriate markup.
+let _groupCounter = 0;
+function renderExerciseList(list, units) {
+  let html = "";
+  let i = 0;
+  while (i < list.length) {
+    const ex = list[i];
+    if (ex.groupId) {
+      const groupExs = [];
+      const gid = ex.groupId;
+      while (i < list.length && list[i].groupId === gid) {
+        groupExs.push(list[i]);
+        i++;
+      }
+      _groupCounter += 1;
+      const size = groupExs.length;
+      const sets = groupExs[0].sets;
+      const rest = groupExs[0].rest;
+      const label = size === 2
+        ? `SUPERSET ${String.fromCharCode(64 + _groupCounter)}`
+        : `CIRCUIT ${_groupCounter}`;
+      const labelAttr = escapeAttr(label);
+      html += `
+        <div class="exercise-group" data-group-id="${gid}">
+          <div class="exercise-group-header">
+            <span class="exercise-group-label">${label}</span>
+            <span class="exercise-group-prescription">
+              ${sets} rounds · rest <strong>${rest}s</strong> after each round
+              ${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${rest}" data-name="${labelAttr}" title="Start rest timer">⏱</button>`}
+            </span>
+          </div>
+          <div class="exercise-group-body">
+            ${groupExs.map((e, p) => renderExerciseCard(e, units, { inGroup: true, groupPosition: p })).join("")}
+          </div>
+        </div>
+      `;
+    } else {
+      html += renderExerciseCard(ex, units);
+      i++;
+    }
+  }
+  return html;
+}
+
 function renderWorkout(workout, container, { showSave = true } = {}) {
+  _groupCounter = 0; // reset per render so labels run A, B, C from scratch
   const { inputs, exercises } = workout;
   const dateStr = new Date(workout.createdAt).toLocaleString();
   const units = session ? getPrefs(session.username).units : "kg";
@@ -1039,36 +1207,22 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     .map(([title, list]) => `
       <h3 class="section-header">${title}</h3>
       <div class="exercise-list">
-        ${list.map(ex => `
-          <div class="exercise" data-name="${escapeAttr(ex.name)}">
-            <div class="exercise-row">
-              <div class="exercise-main">
-                <div class="exercise-name-row">
-                  <div class="exercise-name">${ex.name}</div>
-                  ${renderExerciseExtras(ex.name)}
-                </div>
-                <div class="exercise-info">${ex.muscle.map(m => m.replace("_"," ")).join(" · ")}</div>
-                ${ex.technique ? `
-                  <div class="technique-badge">${ex.technique.name}</div>
-                  <div class="technique-note">${ex.technique.note}</div>
-                ` : ""}
-                ${renderFormCues(ex.name)}
-                ${renderProgressChart(ex.name)}
-              </div>
-              <div class="exercise-prescription">
-                ${ex.sets} × ${ex.reps}<br />
-                <span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>
-              </div>
-              ${workoutReadOnly ? "" : `<button class="swap-btn" data-action="swap" title="Swap for an alternative" aria-label="Swap exercise">↻</button>`}
-            </div>
-            ${renderExerciseLog(ex, units)}
-          </div>
-        `).join("")}
+        ${renderExerciseList(list, units)}
       </div>
     `).join("");
 
   const intensityFlag = inputs.style === "intensity"
     ? `<span class="intensity-flag">Intensity Mode</span>` : "";
+
+  const notesText = workout.notes || "";
+  const notesHtml = `
+    <details class="workout-notes" ${notesText ? "open" : ""}>
+      <summary><span class="notes-summary">📝 ${notesText ? "Notes" : "Add notes"}</span></summary>
+      <textarea class="notes-input" id="workoutNotes" rows="3"
+        placeholder="How did the session feel? Sticking points, energy, sleep, anything worth remembering.">${notesText.replace(/</g, "&lt;")}</textarea>
+      <div class="notes-status" id="notesStatus" aria-live="polite"></div>
+    </details>
+  `;
 
   container.innerHTML = `
     <div class="workout-header">
@@ -1083,6 +1237,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
         <button class="secondary-btn" id="regenBtn">Regenerate</button>
       </div>
     </div>
+    ${notesHtml}
     ${exercisesHtml}
   `;
 }
@@ -1154,6 +1309,34 @@ function attachWorkoutActions() {
       workoutIsSaved = false;
       el.generateBtn.click();
     });
+  }
+
+  // ─── NOTES AUTO-SAVE ───────────────────────────────────────────────────
+  const notesEl = document.getElementById("workoutNotes");
+  if (notesEl) {
+    let notesTimer = null;
+    const persistNotes = () => {
+      if (!currentWorkout) return;
+      const val = notesEl.value;
+      currentWorkout.notes = val;
+      // If this workout is already saved, persist the edit.
+      if (workoutIsSaved && session?.username) {
+        updateWorkout(session.username, currentWorkout.id, { notes: val });
+        const status = document.getElementById("notesStatus");
+        if (status) {
+          status.textContent = "Saved ✓";
+          setTimeout(() => { if (status) status.textContent = ""; }, 1500);
+        }
+      }
+      // Update the summary label
+      const summary = notesEl.parentElement?.querySelector(".notes-summary");
+      if (summary) summary.textContent = `📝 ${val.trim() ? "Notes" : "Add notes"}`;
+    };
+    notesEl.addEventListener("input", () => {
+      clearTimeout(notesTimer);
+      notesTimer = setTimeout(persistNotes, 600);
+    });
+    notesEl.addEventListener("blur", persistNotes);
   }
 
   // ─── FORM CUES TOGGLE ──────────────────────────────────────────────────
@@ -1770,8 +1953,16 @@ function renderGuided() {
     ? (isLastExercise ? "✓ Finish Workout" : "✓ Done Set — Next Exercise →")
     : "✓ Done Set";
 
+  const inGroup = !!ex.groupId;
+  const positionLetter = inGroup ? String.fromCharCode(65 + (ex.groupPosition || 0)) : "";
+  const groupContext = inGroup
+    ? `<div class="guided-group-context">${ex.groupSize === 2 ? "SUPERSET" : "CIRCUIT"} · POSITION ${positionLetter} of ${ex.groupSize}</div>`
+    : "";
+  const setLabel = inGroup ? "Round" : "Set";
+
   document.getElementById("guidedContent").innerHTML = `
     <div class="guided-section-badge">${getSection(ex.pattern)}</div>
+    ${groupContext}
     <h2 class="guided-exercise-name">${ex.name}</h2>
     <div class="guided-muscle">${muscleStr}</div>
     <div class="guided-icon-row">${renderExerciseExtras(ex.name)}</div>
@@ -1781,11 +1972,11 @@ function renderGuided() {
 
     <div class="guided-set-block">
       <div class="guided-set-num">
-        <span class="guided-set-label">Set</span>
+        <span class="guided-set-label">${setLabel}</span>
         <span class="guided-set-big">${guided.set}</span>
         <span class="guided-set-of">of ${ex.sets}</span>
       </div>
-      <div class="guided-target"><strong>${ex.reps}</strong> reps · rest <strong>${ex.rest}s</strong></div>
+      <div class="guided-target"><strong>${ex.reps}</strong> reps · ${inGroup ? `rest after the ${ex.groupSize === 2 ? "pair" : "circuit"}` : `rest <strong>${ex.rest}s</strong>`}</div>
     </div>
 
     ${lastLine}
@@ -1823,13 +2014,23 @@ function onDoneSet() {
   const ex = currentWorkout.exercises[guided.exIdx];
   if (!ex) return finishGuidedWorkout();
 
-  const isLastSet = guided.set >= ex.sets;
-  const isLastExercise = guided.exIdx >= currentWorkout.exercises.length - 1;
   const trackable = isTrackable(ex.name);
   const usesWeight = exerciseUsesWeight(ex.name);
   const units = getPrefs(session.username).units;
 
-  // Log only on the working (last) set
+  // ── Group-aware advance logic ────────────────────────────────────────
+  // For a superset/circuit, sets count at the ROUND level. Within a round,
+  // we step through each position (A→B[→C]) with no rest. After the last
+  // position, rest, then start the next round at position A.
+  const inGroup = !!ex.groupId;
+  const groupSize = ex.groupSize || 1;
+  const positionInGroup = ex.groupPosition || 0;
+  const isLastInGroup = !inGroup || positionInGroup === groupSize - 1;
+  const isLastSet = guided.set >= ex.sets;
+  const isLastSetOfGroup = isLastInGroup && isLastSet;
+
+  // Working set = the final round at the current position. Log every
+  // exercise's final round so each gets its progression update.
   if (trackable && isLastSet) {
     const rEl = document.getElementById("guidedReps");
     const wEl = document.getElementById("guidedWeight");
@@ -1841,7 +2042,6 @@ function onDoneSet() {
       if (result.pr) {
         guidedSession.prs.push({ name: ex.name, weightKg, reps });
       }
-      // Approximate session volume: assume all sets matched the working set.
       if (weightKg > 0) {
         guidedSession.volumeKg += weightKg * reps * ex.sets;
       }
@@ -1851,16 +2051,35 @@ function onDoneSet() {
   guidedSession.setsDone += 1;
   if (isLastSet) guidedSession.exercisesCompleted += 1;
 
-  // Start rest timer after every set (including the last one before next exercise)
-  if (ex.rest > 0) startRestTimer(ex.rest, `Rest — ${ex.name}`);
-
-  if (isLastSet) {
-    if (isLastExercise) return finishGuidedWorkout();
+  // Within a group round (not at last position): jump to next position, NO rest.
+  if (inGroup && !isLastInGroup) {
     guided.exIdx += 1;
-    guided.set = 1;
-  } else {
-    guided.set += 1;
+    renderGuided();
+    return;
   }
+
+  // At last position OR a single exercise: this round is done — rest now.
+  if (ex.rest > 0) {
+    const label = inGroup ? `Rest — Round of group` : `Rest — ${ex.name}`;
+    startRestTimer(ex.rest, label);
+  }
+
+  // Decide whether to start another round of the same group, move past it,
+  // or end the workout.
+  const totalExercises = currentWorkout.exercises.length;
+
+  if (inGroup && !isLastSetOfGroup) {
+    // Loop back to position A of the group for the next round.
+    guided.exIdx = guided.exIdx - (groupSize - 1);
+    guided.set += 1;
+    renderGuided();
+    return;
+  }
+
+  // Group fully done OR single exercise fully done: move forward.
+  if (guided.exIdx >= totalExercises - 1) return finishGuidedWorkout();
+  guided.exIdx += 1;
+  guided.set = 1;
   renderGuided();
 }
 
@@ -1868,9 +2087,23 @@ function onSkipSet() {
   if (!currentWorkout) return;
   const ex = currentWorkout.exercises[guided.exIdx];
   if (!ex) return finishGuidedWorkout();
+  guidedSession.setsSkipped += 1;
+
+  // In a group: skip jumps past the entire group (simpler + predictable).
+  if (ex.groupId) {
+    let idx = guided.exIdx;
+    while (idx < currentWorkout.exercises.length && currentWorkout.exercises[idx].groupId === ex.groupId) {
+      idx++;
+    }
+    if (idx >= currentWorkout.exercises.length) return finishGuidedWorkout();
+    guided.exIdx = idx;
+    guided.set = 1;
+    renderGuided();
+    return;
+  }
+
   const isLastSet = guided.set >= ex.sets;
   const isLastExercise = guided.exIdx >= currentWorkout.exercises.length - 1;
-  guidedSession.setsSkipped += 1;
   if (isLastSet) {
     if (isLastExercise) return finishGuidedWorkout();
     guided.exIdx += 1;
