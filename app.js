@@ -1687,8 +1687,21 @@ function getIntensityFinisher(exercise) {
   return INTENSITY_FINISHERS.isolation;
 }
 
-function pickPrescription(goal, difficulty, exercise, style = "standard", deload = false) {
-  const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
+// Cap sets based on requested workout duration so short sessions don't
+// inherit 5-set ballistic prescriptions that take 10+ minutes each.
+function maxSetsForDuration(duration) {
+  if (!duration) return 5;
+  if (duration <= 15) return 3;
+  if (duration <= 30) return 4;
+  if (duration <= 45) return 4;
+  return 5;
+}
+
+function pickPrescription(goal, difficulty, exercise, style = "standard", deload = false, duration = 45) {
+  // Mobility exercises always use the mobility prescription regardless of
+  // the workout's main goal — they're brief warm-ups, not the main work.
+  const effectiveGoal = exercise.pattern === "mobility" ? "mobility" : goal;
+  const p = PRESCRIPTIONS[effectiveGoal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
   // Recovery goal disables intensity techniques (whole point is to be easy).
@@ -1700,12 +1713,16 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   // about hip drive, not 1RM strength.
   if (exercise.pattern === "ballistic") {
     sets = difficulty === "beginner" ? 3 : difficulty === "advanced" ? 5 : 4;
+    // Cap by duration so short workouts don't blow past the time budget.
+    sets = Math.min(sets, maxSetsForDuration(duration));
     let reps;
     if (goal === "endurance") reps = "20–30";
     else if (goal === "fat_loss") reps = "15–25";
-    else if (goal === "strength") reps = "5–8";   // heavy/explosive doubles up
-    else reps = "10–15";                          // hypertrophy / power default
-    return { sets, reps, rest: roundRest(90) };
+    else if (goal === "strength") reps = "5–8";
+    else reps = "10–15";
+    // Short sessions get tighter rest too (60s vs 90s).
+    const ballisticRest = duration && duration <= 20 ? 60 : 90;
+    return { sets, reps, rest: roundRest(ballisticRest) };
   }
 
   // Difficulty scales volume + rest.
@@ -1771,9 +1788,11 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   if (deload && exercise.pattern !== "mobility") {
     sets = Math.max(2, Math.round(sets * 0.7));
     rest = roundRest(rest * 1.1);
-    // Strip finishers — deload weeks aren't for extra intensity.
     finisher = null;
   }
+
+  // Final guard: cap sets by requested duration so the time budget holds.
+  sets = Math.min(sets, maxSetsForDuration(duration));
 
   return { sets, reps, rest: roundRest(rest), technique, finisher };
 }
@@ -1815,7 +1834,7 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
-    ...pickPrescription(goal, difficulty, ex, "standard", false),
+    ...pickPrescription(goal, difficulty, ex, "standard", false, duration),
   }));
 
   const cardioCandidates = EXERCISES.filter(e =>
@@ -2040,12 +2059,17 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
-    ...pickPrescription(goal, difficulty, ex, style, deload),
+    ...pickPrescription(goal, difficulty, ex, style, deload, duration),
   }));
 
   // Group into supersets/circuits if the style calls for it.
   if (style === "supersets") pairIntoGroups(exercises, 2);
   if (style === "circuits") pairIntoGroups(exercises, 3);
+
+  // Time-budget guard: estimate total session time and trim sets if we're
+  // still over by more than 15%. The set-cap above handles most cases but
+  // ballistic + isolation combos can still overflow.
+  enforceTimeBudget(exercises, duration);
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -2053,6 +2077,59 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     inputs: { goal, equipment, target, duration, difficulty, style, deload },
     exercises,
   };
+}
+
+// Approximate seconds for one exercise in the workout, including rest
+// between sets. We assume the last set doesn't need its rest, so total =
+// sets × work + (sets - 1) × rest.
+function estimateExerciseSeconds(ex) {
+  const sets = ex.sets || 1;
+  const rest = ex.rest || 0;
+  let workPerSet;
+  const timeSec = parseTimeReps(ex.reps);
+  if (timeSec) {
+    workPerSet = timeSec;
+  } else {
+    const [lo, hi] = parseRepRange(ex.reps);
+    const midReps = (lo + hi) / 2 || 10;
+    const secPerRep =
+      ex.pattern === "ballistic" ? 1.5 :
+      ex.pattern === "isolation" ? 2.5 :
+      ex.pattern === "compound"  ? 3   :
+      ex.pattern === "mobility"  ? 0   : 2;
+    workPerSet = midReps * secPerRep;
+  }
+  return sets * workPerSet + Math.max(0, sets - 1) * rest;
+}
+
+function estimateWorkoutSeconds(exercises) {
+  const work = exercises.reduce((s, ex) => s + estimateExerciseSeconds(ex), 0);
+  // Transition between exercises (setup, water, weight changes) ~30s each.
+  const transitions = Math.max(0, exercises.length - 1) * 30;
+  return work + transitions;
+}
+
+// Trim sets on the highest-volume exercises until total fits the duration
+// (within 15% over). Skips warm-up moves and exercises already at 2 sets.
+function enforceTimeBudget(exercises, durationMin) {
+  if (!durationMin) return;
+  const budgetSec = durationMin * 60;
+  const ceiling = budgetSec * 1.15;
+  let attempts = 0;
+  while (estimateWorkoutSeconds(exercises) > ceiling && attempts < 30) {
+    attempts++;
+    // Find the heaviest exercise (most time) that still has room to trim.
+    let worstIdx = -1, worstSec = 0;
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      if (ex.pattern === "mobility") continue;
+      if ((ex.sets || 1) <= 2) continue;
+      const sec = estimateExerciseSeconds(ex);
+      if (sec > worstSec) { worstSec = sec; worstIdx = i; }
+    }
+    if (worstIdx === -1) break;
+    exercises[worstIdx].sets -= 1;
+  }
 }
 
 // ─── RENDERING ───────────────────────────────────────────────────────────
