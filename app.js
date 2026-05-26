@@ -1762,6 +1762,38 @@ function getIntensityFinisher(exercise) {
   return INTENSITY_FINISHERS.isolation;
 }
 
+// Detect whether an exercise is performed unilaterally (one side at a time)
+// vs bilaterally (both sides simultaneously). Reps for unilateral exercises
+// are "per side" and they take ~2x the time per set.
+function isUnilateralExercise(name) {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  // Explicit one-side names
+  if (/single-?arm|single-?leg|one-?arm|one-?leg/.test(n)) return true;
+  // Lunges, split squats, step-ups, pistol/shrimp squats = per leg
+  if (/\blunges?\b|split squat|step-?up|pistol squat|shrimp squat/.test(n)) return true;
+  // Get-ups + windmills are inherently one-side
+  if (/get-?up|windmill/.test(n)) return true;
+  // Specific kettlebell movements that are unilateral by tradition:
+  // pressing variants, snatches, cleans, single-bell rows, carries
+  if (/kettlebell\s+(arnold|overhead|floor|bottoms-?up|z-?press|see-saw)/.test(n)) return true;
+  if (/kettlebell\s+(snatch|clean|high pull|gorilla row|renegade row|cuban)/.test(n)) return true;
+  if (/kettlebell\s+(suitcase|racked carry|overhead carry)/.test(n)) return true;
+  // Renegade row (bodyweight or DB) is alternating arms, counted per side
+  if (/renegade row/.test(n)) return true;
+  return false;
+}
+
+// "X reps" → "X reps per side" when unilateral. Time-based reps get
+// "per side" too. For ballistic ranges keep the per-side suffix.
+function displayReps(ex) {
+  const reps = ex.reps;
+  if (!ex.unilateral) return reps;
+  // Don't double up if 'per side' is already in the string somehow
+  if (/per side|each side|each arm|each leg/i.test(reps)) return reps;
+  return `${reps} per side`;
+}
+
 // Cap sets based on requested workout duration so short sessions don't
 // inherit 5-set ballistic prescriptions that take 10+ minutes each.
 function maxSetsForDuration(duration) {
@@ -1909,6 +1941,7 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
+    unilateral: isUnilateralExercise(ex.name),
     ...pickPrescription(goal, difficulty, ex, "standard", false, duration),
   }));
 
@@ -1920,7 +1953,6 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
 
   const cardioExercises = [];
   if (cardioCandidates.length === 0) {
-    // No matching cardio equipment — fall back to default flow.
     return null;
   }
   const shuffled = shuffle(cardioCandidates);
@@ -2134,6 +2166,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
+    unilateral: isUnilateralExercise(ex.name),
     ...pickPrescription(goal, difficulty, ex, style, deload, duration),
   }));
 
@@ -2174,6 +2207,8 @@ function estimateExerciseSeconds(ex) {
       ex.pattern === "mobility"  ? 0   : 2;
     workPerSet = midReps * secPerRep;
   }
+  // Unilateral exercises take ~2x the work time per set (do one side, then the other).
+  if (ex.unilateral) workPerSet *= 2;
   return sets * workPerSet + Math.max(0, sets - 1) * rest;
 }
 
@@ -2336,32 +2371,32 @@ function renderExerciseCard(ex, units, opts = {}) {
     ? `<span class="group-position-letter">${String.fromCharCode(65 + opts.groupPosition)}</span>`
     : "";
   const inGroup = !!opts.inGroup;
+  const repsDisplay = displayReps(ex);
   let restLine;
   if (inGroup) {
-    restLine = `${ex.reps}`;
+    restLine = `${repsDisplay}`;
   } else if (ex.isTimeBlock) {
     // Cardio block: single time-based prescription, no sets×reps frame.
     const cardioSec = parseTimeReps(ex.reps);
     const startBtn = !workoutReadOnly && cardioSec
       ? `<button class="start-set-btn" data-action="start-set" data-duration="${cardioSec}" data-name="${escapeAttr(ex.name)}" title="Start set timer">▶ Start</button>`
       : "";
-    restLine = `<span class="time-block-prescription">${ex.reps}</span> ${startBtn}${
+    restLine = `<span class="time-block-prescription">${repsDisplay}</span> ${startBtn}${
       ex.rest > 0 ? `<br /><span class="exercise-rest">rest ${ex.rest}s</span>` : ""
     }`;
   } else {
-    // Detect time-based reps (planks, holds, mobility) and offer a set timer.
     const setSec = parseTimeReps(ex.reps);
     const setBtn = !workoutReadOnly && setSec
       ? `<button class="start-set-btn inline" data-action="start-set" data-duration="${setSec}" data-name="${escapeAttr(ex.name)}" title="Start set timer">▶</button>`
       : "";
-    restLine = `${ex.sets} × ${ex.reps} ${setBtn}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
+    restLine = `${ex.sets} × ${repsDisplay} ${setBtn}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
   }
   return `
     <div class="exercise${inGroup ? " in-group" : ""}" data-name="${escapeAttr(ex.name)}">
       <div class="exercise-row">
         <div class="exercise-main">
           <div class="exercise-name-row">
-            <div class="exercise-name">${positionPrefix}${ex.name}</div>
+            <div class="exercise-name">${positionPrefix}${ex.name}${ex.unilateral ? ` <span class="unilateral-tag">${/\blunges?\b|split squat|step-?up|single-?leg|pistol|shrimp/i.test(ex.name) ? "per leg" : "per side"}</span>` : ""}</div>
             ${renderExerciseExtras(ex.name)}
           </div>
           <div class="exercise-info">${ex.muscle.map(m => m.replace("_", " ")).join(" · ")}</div>

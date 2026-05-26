@@ -774,6 +774,21 @@ input {
   color: var(--text);
 }
 
+.unilateral-tag {
+  display: inline-block;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
 .exercise-name-row {
   display: flex;
   align-items: center;
