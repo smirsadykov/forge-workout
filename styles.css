@@ -239,6 +239,40 @@ input {
   line-height: 1.5;
 }
 
+.cloud-status {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  letter-spacing: 0.3px;
+  line-height: 1.45;
+}
+
+.cloud-status-ok {
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: var(--success);
+}
+
+.cloud-status-err {
+  background: rgba(255, 107, 109, 0.12);
+  border: 1px solid rgba(255, 107, 109, 0.4);
+  color: var(--danger);
+}
+
+.cloud-status-warn {
+  background: rgba(255, 214, 51, 0.12);
+  border: 1px solid rgba(255, 214, 51, 0.4);
+  color: var(--accent);
+}
+
+.cloud-status-local {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
 .auth-tabs {
   display: flex;
   background: var(--bg);

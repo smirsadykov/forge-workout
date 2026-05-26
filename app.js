@@ -19,17 +19,24 @@ const STORAGE_KEYS = {
 const MAJOR_MUSCLES = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "core"];
 
 // ─── SUPABASE BACKEND (optional) ─────────────────────────────────────────
-const HAS_SUPABASE = !!(
-  window.FORGE_CONFIG?.SUPABASE_URL &&
-  window.FORGE_CONFIG?.SUPABASE_ANON_KEY &&
-  window.supabase
-);
+const _configReady = !!(window.FORGE_CONFIG?.SUPABASE_URL && window.FORGE_CONFIG?.SUPABASE_ANON_KEY);
+const _sdkReady = !!window.supabase;
+const HAS_SUPABASE = _configReady && _sdkReady;
 const sb = HAS_SUPABASE
   ? window.supabase.createClient(
       window.FORGE_CONFIG.SUPABASE_URL,
       window.FORGE_CONFIG.SUPABASE_ANON_KEY
     )
   : null;
+
+// Show a status pill on the auth view so the user (and we) can see at a
+// glance whether cloud mode is wired up.
+function getCloudStatus() {
+  if (HAS_SUPABASE) return { mode: "ok", text: "✓ Cloud sync ready" };
+  if (_configReady && !_sdkReady) return { mode: "err", text: "⚠ Cloud config set but Supabase SDK didn't load — check your network or refresh" };
+  if (!_configReady && _sdkReady) return { mode: "warn", text: "⚠ Supabase SDK loaded but config.js is empty — paste credentials per SUPABASE-SETUP.md" };
+  return { mode: "local", text: "ⓘ Local-only mode — your data lives on this device" };
+}
 
 // Fire-and-forget cloud push. Catches errors so a missing network or
 // schema mismatch never breaks the local UX.
@@ -767,6 +774,13 @@ function showAuth() {
   el.authView.classList.remove("hidden");
   el.generatorView.classList.add("hidden");
   el.historyView.classList.add("hidden");
+  // Render cloud status indicator
+  const status = getCloudStatus();
+  const cs = document.getElementById("cloudStatus");
+  if (cs) {
+    cs.textContent = status.text;
+    cs.className = `cloud-status cloud-status-${status.mode}`;
+  }
 }
 function showApp(view = "generator") {
   el.nav.classList.toggle("hidden", view === "guided");
@@ -1111,6 +1125,13 @@ el.authForm.addEventListener("submit", async (e) => {
   }
 
   // ─── Local path: legacy localStorage auth ───────────────────────────
+  // If the identifier looks like an email AND we have no local users yet, it
+  // strongly suggests the user thought they were in cloud mode. Surface that.
+  if (identifier.includes("@") && Object.keys(getUsers()).length === 0 && authMode === "login") {
+    el.authError.textContent = "Cloud sync isn't loaded on this device, so we can't reach your email-based account. Hard-refresh the page or try a Private window — the status pill above should turn green.";
+    return;
+  }
+
   const username = identifier.toLowerCase();
   const users = getUsers();
 
