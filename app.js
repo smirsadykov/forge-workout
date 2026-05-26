@@ -223,6 +223,137 @@ function weekStartOf(d) {
   return date.getTime();
 }
 
+// Sum total recent training volume + set count by muscle (primary AND
+// secondary contributors split equally) over the last N days. Used for the
+// body heatmap so you can see what's been hammered vs neglected.
+function getRecentMuscleVolume(userId, daysBack = 14) {
+  const cutoff = Date.now() - daysBack * 86400000;
+  const stats = getStats(userId);
+  const byMuscle = {};
+  for (const [exName, stat] of Object.entries(stats)) {
+    const ex = EXERCISES.find(e => e.name === exName);
+    if (!ex) continue;
+    for (const entry of (stat.history || [])) {
+      const n = normalizeHistoryEntry(entry);
+      if (n.date < cutoff) continue;
+      const vol = n.sets.reduce((s, set) =>
+        s + (Number(set.weightKg) || 0) * (Number(set.reps) || 0), 0);
+      const setCount = n.sets.length;
+      ex.muscle.forEach((m, idx) => {
+        // Primary muscle takes full credit; secondary muscles get half.
+        const factor = idx === 0 ? 1 : 0.5;
+        if (!byMuscle[m]) byMuscle[m] = { vol: 0, sets: 0 };
+        byMuscle[m].vol += vol * factor;
+        byMuscle[m].sets += setCount * factor;
+      });
+    }
+  }
+  return byMuscle;
+}
+
+// Interpolate intensity (0-1) into a heat color. 0 = cold slate, 0.5 = orange,
+// 1 = bright red. No work at all returns the empty/dark color.
+function heatColor(intensity) {
+  if (intensity <= 0) return "#1e2230";
+  if (intensity < 0.3) {
+    const t = intensity / 0.3;
+    return `hsl(220, ${20 + t * 20}%, ${28 + t * 8}%)`;
+  }
+  if (intensity < 0.7) {
+    const t = (intensity - 0.3) / 0.4;
+    const hue = 220 - t * 200;
+    return `hsl(${hue}, ${40 + t * 40}%, ${36 + t * 10}%)`;
+  }
+  const t = (intensity - 0.7) / 0.3;
+  const hue = 20 - t * 20;
+  return `hsl(${hue}, ${80 + t * 15}%, ${48 + t * 4}%)`;
+}
+
+function renderBodyHeatmap(userId) {
+  const data = getRecentMuscleVolume(userId, 14);
+  const muscles = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core"];
+  const maxSets = Math.max(0.001, ...muscles.map(m => data[m]?.sets || 0));
+  if (maxSets < 0.5) return ""; // not enough data to be meaningful
+
+  const intensity = (m) => Math.min(1, (data[m]?.sets || 0) / maxSets);
+  const fill = (m) => heatColor(intensity(m));
+  const units = getPrefs(userId).units;
+  const tooltip = (m) => {
+    const d = data[m];
+    if (!d || d.sets < 0.5) return `${m}: no work`;
+    const setsRounded = Math.round(d.sets);
+    const volDisplay = d.vol > 0
+      ? ` · ${Math.round(toDisplay(d.vol, units)).toLocaleString()} ${units}`
+      : "";
+    return `${m}: ${setsRounded} sets${volDisplay} (last 14 days)`;
+  };
+
+  // Region helper: emit a muscle shape with a <title> tooltip child.
+  const rect = (m, x, y, w, h, rx = 0) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill(m)}" class="muscle-region" data-muscle="${m}"><title>${tooltip(m)}</title></rect>`;
+  const ell = (m, cx, cy, rx, ry) =>
+    `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill(m)}" class="muscle-region" data-muscle="${m}"><title>${tooltip(m)}</title></ellipse>`;
+  const poly = (m, d) =>
+    `<path d="${d}" fill="${fill(m)}" class="muscle-region" data-muscle="${m}"><title>${tooltip(m)}</title></path>`;
+
+  return `
+    <div class="body-heatmap">
+      <h3 class="volume-chart-title">Body heatmap <span class="volume-chart-sub">last 14 days · hover for details</span></h3>
+      <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
+        <!-- FRONT -->
+        <g class="figure-front">
+          <text x="100" y="14" class="figure-label">FRONT</text>
+          <circle cx="100" cy="40" r="16" fill="#1e2230" stroke="#3a3f55" />
+          <rect x="94" y="54" width="12" height="9" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 56 72 L 144 72 L 138 165 L 62 165 Z" fill="#1e2230" stroke="#3a3f55" />
+          ${rect("chest", 72, 80, 56, 32, 8)}
+          ${ell("shoulders", 58, 84, 14, 11)}
+          ${ell("shoulders", 142, 84, 14, 11)}
+          ${ell("biceps", 44, 123, 10, 22)}
+          ${ell("biceps", 156, 123, 10, 22)}
+          <rect x="36" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
+          <rect x="148" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
+          ${rect("core", 76, 118, 48, 44, 6)}
+          <path d="M 62 165 L 138 165 L 134 195 L 66 195 Z" fill="#1e2230" stroke="#3a3f55" />
+          ${ell("quads", 80, 235, 16, 38)}
+          ${ell("quads", 120, 235, 16, 38)}
+          ${ell("calves", 80, 318, 12, 30)}
+          ${ell("calves", 120, 318, 12, 30)}
+          <ellipse cx="80" cy="365" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+          <ellipse cx="120" cy="365" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+        </g>
+
+        <!-- BACK -->
+        <g transform="translate(210, 0)">
+          <text x="100" y="14" class="figure-label">BACK</text>
+          <circle cx="100" cy="40" r="16" fill="#1e2230" stroke="#3a3f55" />
+          <rect x="94" y="54" width="12" height="9" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 56 72 L 144 72 L 138 165 L 62 165 Z" fill="#1e2230" stroke="#3a3f55" />
+          ${poly("back", "M 70 82 L 130 82 L 134 160 L 66 160 Z")}
+          ${ell("shoulders", 58, 84, 14, 11)}
+          ${ell("shoulders", 142, 84, 14, 11)}
+          ${ell("triceps", 44, 123, 10, 22)}
+          ${ell("triceps", 156, 123, 10, 22)}
+          <rect x="36" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
+          <rect x="148" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
+          ${poly("glutes", "M 62 165 L 138 165 L 135 208 L 65 208 Z")}
+          ${ell("hamstrings", 80, 250, 16, 38)}
+          ${ell("hamstrings", 120, 250, 16, 38)}
+          ${ell("calves", 80, 328, 12, 30)}
+          ${ell("calves", 120, 328, 12, 30)}
+          <ellipse cx="80" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+          <ellipse cx="120" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+        </g>
+      </svg>
+      <div class="heatmap-legend">
+        <span class="heatmap-legend-label">No work</span>
+        <div class="heatmap-legend-bar"></div>
+        <span class="heatmap-legend-label">Hammered</span>
+      </div>
+    </div>
+  `;
+}
+
 // Walk all of a user's exercise_stats history and aggregate by primary muscle,
 // bucketed into ISO weeks. Returns { muscle: { weekStartMs: { kg, sets } } }.
 function getWeeklyVolume(userId, weeksBack = 8) {
@@ -563,6 +694,7 @@ const el = {
   historyView: document.getElementById("historyView"),
   settingsView: document.getElementById("settingsView"),
   guidedView: document.getElementById("guidedView"),
+  libraryView: document.getElementById("libraryView"),
   loadWarning: document.getElementById("loadWarning"),
   deloadBanner: document.getElementById("deloadBanner"),
   recommendationBanner: document.getElementById("recommendationBanner"),
@@ -596,8 +728,10 @@ function showApp(view = "generator") {
   el.historyView.classList.toggle("hidden", view !== "history");
   el.settingsView.classList.toggle("hidden", view !== "settings");
   el.guidedView.classList.toggle("hidden", view !== "guided");
+  el.libraryView.classList.toggle("hidden", view !== "library");
   if (view === "history") renderHistory();
   if (view === "settings") renderSettings();
+  if (view === "library") renderLibrary();
   if (view === "generator") {
     refreshLoadWarning();
     refreshDeloadBanner();
@@ -2125,10 +2259,12 @@ function attachWorkoutActions() {
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
   const items = getWorkouts(session.username);
+  const heatmapHtml = renderBodyHeatmap(session.username);
   const volumeChartHtml = renderWeeklyVolumeChart(session.username, 8);
 
   if (!items.length) {
     el.historyList.innerHTML = `
+      ${heatmapHtml}
       ${volumeChartHtml}
       <div class="empty-state">
         <div class="empty-state-icon">🏋️</div>
@@ -2139,7 +2275,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = volumeChartHtml + items.map(w => {
+  el.historyList.innerHTML = heatmapHtml + volumeChartHtml + items.map(w => {
     const notes = (w.notes || "").trim();
     const notesPreview = notes
       ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`
@@ -2187,6 +2323,138 @@ function renderHistory() {
       renderWorkout(workout, el.workoutResult, { showSave: false });
       attachWorkoutActions();
       el.workoutResult.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+// ─── EXERCISE LIBRARY VIEW ───────────────────────────────────────────────
+const libraryState = {
+  search: "",
+  muscle: null,         // single-select
+  equipment: [],        // multi-select
+  pattern: null,        // single-select
+  difficulty: null,     // single-select
+};
+let libraryInitialized = false;
+
+const LIBRARY_FILTER_OPTIONS = {
+  muscle: ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core", "full_body"],
+  equipment: ["bodyweight", "dumbbells", "barbell", "kettlebell", "bands", "machine", "cardio_machine"],
+  pattern: ["compound", "isolation", "ballistic", "conditioning", "mobility"],
+  difficulty: ["beginner", "intermediate", "advanced"],
+};
+
+const PATTERN_LABELS = {
+  compound: "Compound", isolation: "Isolation", ballistic: "Ballistic",
+  conditioning: "Conditioning", mobility: "Mobility",
+};
+
+function initLibraryFilters() {
+  if (libraryInitialized) return;
+  libraryInitialized = true;
+
+  document.getElementById("libraryTotal").textContent = EXERCISES.length;
+
+  Object.entries(LIBRARY_FILTER_OPTIONS).forEach(([field, values]) => {
+    const row = document.querySelector(`.library-filter[data-lib-filter="${field}"]`);
+    if (!row) return;
+    row.innerHTML = values.map(v => {
+      const label = field === "equipment"
+        ? EQUIP_LABELS[v] || v
+        : field === "pattern"
+          ? PATTERN_LABELS[v] || v
+          : v.replace("_", " ");
+      return `<button class="chip" data-lib-value="${v}">${label}</button>`;
+    }).join("");
+    row.querySelectorAll(".chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const value = btn.dataset.libValue;
+        if (field === "equipment") {
+          const arr = libraryState[field];
+          const idx = arr.indexOf(value);
+          if (idx === -1) arr.push(value);
+          else arr.splice(idx, 1);
+          btn.classList.toggle("selected");
+        } else {
+          const wasSelected = btn.classList.contains("selected");
+          row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
+          if (!wasSelected) {
+            btn.classList.add("selected");
+            libraryState[field] = value;
+          } else {
+            libraryState[field] = null;
+          }
+        }
+        renderLibrary();
+      });
+    });
+  });
+
+  document.getElementById("librarySearch").addEventListener("input", (e) => {
+    libraryState.search = e.target.value.toLowerCase().trim();
+    renderLibrary();
+  });
+
+  document.getElementById("libraryClearBtn").addEventListener("click", () => {
+    libraryState.search = "";
+    libraryState.muscle = null;
+    libraryState.equipment = [];
+    libraryState.pattern = null;
+    libraryState.difficulty = null;
+    document.getElementById("librarySearch").value = "";
+    document.querySelectorAll(".library-filter .chip.selected").forEach(c => c.classList.remove("selected"));
+    renderLibrary();
+  });
+}
+
+function renderLibrary() {
+  initLibraryFilters();
+
+  const filtered = EXERCISES.filter(ex => {
+    if (libraryState.search) {
+      const hit = ex.name.toLowerCase().includes(libraryState.search) ||
+                  ex.muscle.some(m => m.toLowerCase().includes(libraryState.search)) ||
+                  ex.equipment.some(e => e.toLowerCase().includes(libraryState.search));
+      if (!hit) return false;
+    }
+    if (libraryState.muscle && !ex.muscle.includes(libraryState.muscle)) return false;
+    if (libraryState.equipment.length > 0 &&
+        !ex.equipment.some(e => libraryState.equipment.includes(e))) return false;
+    if (libraryState.pattern && ex.pattern !== libraryState.pattern) return false;
+    if (libraryState.difficulty && ex.difficulty !== libraryState.difficulty) return false;
+    return true;
+  });
+
+  document.getElementById("libraryCount").textContent =
+    `${filtered.length} exercise${filtered.length === 1 ? "" : "s"}`;
+
+  document.getElementById("libraryList").innerHTML = filtered.map(ex => `
+    <div class="library-card" data-name="${escapeAttr(ex.name)}">
+      <div class="library-card-head">
+        <div class="library-card-name">${ex.name}</div>
+        ${renderExerciseExtras(ex.name)}
+      </div>
+      <div class="library-card-meta">
+        <span class="tag">${PATTERN_LABELS[ex.pattern] || ex.pattern}</span>
+        <span class="tag">${ex.difficulty}</span>
+      </div>
+      <div class="library-card-info">
+        <strong>Muscles:</strong> ${ex.muscle.map(m => m.replace("_", " ")).join(" · ")}
+      </div>
+      <div class="library-card-info">
+        <strong>Equipment:</strong> ${ex.equipment.map(e => EQUIP_LABELS[e] || e).join(", ")}
+      </div>
+      ${renderFormCues(ex.name)}
+    </div>
+  `).join("") || `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">No exercises match</div><div class="empty-state-sub">Try clearing some filters.</div></div>`;
+
+  // Wire form-cues toggles inside the library
+  document.querySelectorAll(".library-card [data-action='toggle-cues']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const panel = btn.closest(".library-card")?.querySelector(".form-cues");
+      if (panel) panel.classList.toggle("hidden");
+      btn.classList.toggle("active");
     });
   });
 }

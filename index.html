@@ -17,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body>
   <header class="topbar">
@@ -28,6 +28,7 @@
     <nav id="nav" class="nav hidden">
       <button class="nav-btn active" data-view="generator">Generator</button>
       <button class="nav-btn" data-view="history">History</button>
+      <button class="nav-btn" data-view="library">Library</button>
       <button class="nav-btn" data-view="settings">Settings</button>
       <div class="units-toggle" role="group" aria-label="Units">
         <button class="units-btn active" data-units="kg">kg</button>
@@ -155,6 +156,38 @@
         </div>
 
         <div id="workoutResult" class="workout-result hidden"></div>
+      </div>
+    </section>
+
+    <!-- LIBRARY VIEW -->
+    <section id="libraryView" class="view hidden">
+      <div class="container">
+        <h1 class="view-title">Exercise library</h1>
+        <p class="view-sub">Browse all <span id="libraryTotal">298</span> exercises. Filter, search, see form cues and demos.</p>
+
+        <div class="library-controls">
+          <input type="search" id="librarySearch" class="library-search" placeholder="Search exercises…" />
+          <div class="library-filter-group">
+            <span class="library-filter-label">Muscle</span>
+            <div class="chip-row library-filter" data-lib-filter="muscle"></div>
+          </div>
+          <div class="library-filter-group">
+            <span class="library-filter-label">Equipment</span>
+            <div class="chip-row library-filter" data-lib-filter="equipment"></div>
+          </div>
+          <div class="library-filter-group">
+            <span class="library-filter-label">Pattern</span>
+            <div class="chip-row library-filter" data-lib-filter="pattern"></div>
+          </div>
+          <div class="library-filter-group">
+            <span class="library-filter-label">Difficulty</span>
+            <div class="chip-row library-filter" data-lib-filter="difficulty"></div>
+          </div>
+          <button id="libraryClearBtn" class="link-btn">Clear filters</button>
+        </div>
+
+        <div id="libraryCount" class="library-count"></div>
+        <div id="libraryList" class="library-list"></div>
       </div>
     </section>
 
@@ -307,9 +340,9 @@
     </div>
   </div>
 
-  <script src="config.js?v=22"></script>
+  <script src="config.js?v=23"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="exercises.js?v=22"></script>
-  <script src="app.js?v=22"></script>
+  <script src="exercises.js?v=23"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

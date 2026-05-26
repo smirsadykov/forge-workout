@@ -1295,6 +1295,185 @@ input {
   align-self: flex-start;
 }
 
+/* ─── BODY HEATMAP ───────────────────────────────────────────────────── */
+.body-heatmap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  margin-bottom: 16px;
+}
+
+.body-svg {
+  display: block;
+  margin: 14px auto 0;
+  max-width: 420px;
+  width: 100%;
+  height: auto;
+}
+
+.body-svg .figure-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  fill: var(--text-dim);
+  text-anchor: middle;
+}
+
+.muscle-region {
+  cursor: pointer;
+  transition: opacity 0.15s, stroke-width 0.15s;
+  stroke: rgba(0,0,0,0.4);
+  stroke-width: 0.5;
+}
+
+.muscle-region:hover {
+  opacity: 0.85;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.heatmap-legend-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.heatmap-legend-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #2a3140, hsl(220,40%,40%), hsl(20,80%,50%), hsl(0,90%,50%));
+}
+
+/* ─── EXERCISE LIBRARY ───────────────────────────────────────────────── */
+.library-controls {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.library-search {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.library-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.library-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-filter-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.library-filter .chip {
+  padding: 7px 13px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.library-count {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.library-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.library-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.library-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.library-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.library-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.library-card-meta {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.library-card-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  line-height: 1.45;
+  text-transform: capitalize;
+}
+
+.library-card-info strong {
+  color: var(--text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin-right: 4px;
+}
+
 /* ─── SORENESS GRID ──────────────────────────────────────────────────── */
 .soreness-grid {
   display: flex;
