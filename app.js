@@ -2404,33 +2404,45 @@ function renderExerciseLog(ex, units) {
             <span class="progress-hint ${trendClass}">${trendArrow} ${trendLabel}</span>`;
   }
 
-  // Build N set rows based on the exercise's set count.
+  // Build set rows. For unilateral exercises, render two rows per set
+  // (one for each side) so the user can track R/L independently.
   const totalSets = ex.sets || 1;
   const stepW = units === "lb" ? 5 : 2.5;
   const defaultRep = next ? next.reps : parseRepRange(ex.reps)[0];
   const defaultWeight = next ? toDisplay(next.weightKg, units) : "";
+  const isUni = !!ex.unilateral;
+  const sidesPerSet = isUni ? ["R", "L"] : [null];
 
-  const setRows = Array.from({ length: totalSets }, (_, i) => {
-    const restored = justLogged?.sets?.[i];
-    const w = restored ? toDisplay(restored.weightKg, units) : (i === 0 ? defaultWeight : "");
-    const r = restored ? restored.reps : (i === 0 ? defaultRep : "");
-    return `
-      <div class="set-row" data-set-idx="${i}">
-        <span class="set-num">Set ${i + 1}</span>
-        ${usesWeight ? `
+  const rows = [];
+  let entryIdx = 0;
+  for (let setN = 1; setN <= totalSets; setN++) {
+    for (const side of sidesPerSet) {
+      const restored = justLogged?.sets?.[entryIdx];
+      const w = restored ? toDisplay(restored.weightKg, units)
+              : (entryIdx === 0 ? defaultWeight : "");
+      const r = restored ? restored.reps
+              : (entryIdx === 0 ? defaultRep : "");
+      const label = side ? `Set ${setN} <span class="side-tag side-${side.toLowerCase()}">${side}</span>` : `Set ${setN}`;
+      rows.push(`
+        <div class="set-row" data-set-idx="${entryIdx}" ${side ? `data-side="${side}"` : ""}>
+          <span class="set-num">${label}</span>
+          ${usesWeight ? `
+            <label class="log-field compact">
+              <input type="number" inputmode="decimal" step="${stepW}" min="0" data-log-set="weight"
+                     placeholder="${defaultWeight || "wt"}" value="${w || ""}" />
+              <span class="log-field-suffix">${units}</span>
+            </label>` : ""}
           <label class="log-field compact">
-            <input type="number" inputmode="decimal" step="${stepW}" min="0" data-log-set="weight"
-                   placeholder="${defaultWeight || "wt"}" value="${w || ""}" />
-            <span class="log-field-suffix">${units}</span>
-          </label>` : ""}
-        <label class="log-field compact">
-          <input type="number" inputmode="numeric" step="1" min="0" data-log-set="reps"
-                 placeholder="${defaultRep}" value="${r || ""}" />
-          <span class="log-field-suffix">reps</span>
-        </label>
-      </div>
-    `;
-  }).join("");
+            <input type="number" inputmode="numeric" step="1" min="0" data-log-set="reps"
+                   placeholder="${defaultRep}" value="${r || ""}" />
+            <span class="log-field-suffix">reps</span>
+          </label>
+        </div>
+      `);
+      entryIdx++;
+    }
+  }
+  const setRows = rows.join("");
 
   return `
     <div class="exercise-log" data-exercise="${escapeAttr(ex.name)}">
@@ -2895,7 +2907,10 @@ function attachWorkoutActions() {
         if (!reps || reps <= 0) return;
         const weightDisplay = weightInput ? Number(weightInput.value) : 0;
         const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
-        sets.push({ weightKg, reps });
+        const side = row.dataset.side; // "R" or "L" for unilateral, undefined otherwise
+        const entry = { weightKg, reps };
+        if (side) entry.side = side;
+        sets.push(entry);
       });
 
       if (sets.length === 0) {
@@ -2914,11 +2929,14 @@ function attachWorkoutActions() {
       // Working set = heaviest by e1RM
       const workingSet = sets.reduce((best, s) =>
         calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, sets[0]);
-      const w = workingSet.weightKg
+      const wText = workingSet.weightKg
         ? `${toDisplay(workingSet.weightKg, units)} ${units} × ${workingSet.reps}`
         : `${workingSet.reps} reps`;
+      const isUnilateralLog = sets.some(s => s.side);
       const setsCount = sets.length;
-      const summary = setsCount > 1 ? `${setsCount} sets · best ${w}` : w;
+      const summary = isUnilateralLog
+        ? `${setsCount / 2 | 0} sets per side · best ${wText}`
+        : (setsCount > 1 ? `${setsCount} sets · best ${wText}` : wText);
       const prBadge = result.pr ? `<span class="pr-celebrate">🏆 NEW PR</span>` : "";
 
       logEl.innerHTML = `

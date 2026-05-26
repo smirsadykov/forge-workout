@@ -2489,8 +2489,28 @@ input {
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 1px;
-  min-width: 48px;
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.side-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.side-tag.side-r { color: var(--accent); border-color: rgba(255, 214, 51, 0.4); }
+.side-tag.side-l { color: #93c5fd; border-color: rgba(96, 165, 250, 0.4); }
 
 .log-field.compact {
   padding: 0 8px;
