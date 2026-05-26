@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   stats: "forge:stats",   // per-user, per-exercise logs (always stored in kg)
   prefs: "forge:prefs",   // per-user preferences (units, etc.)
   loads: "forge:loads",   // per-user available equipment loads (kg)
+  soreness: "forge:soreness", // per-user, per-muscle soreness (decays over time)
 };
 
 // ─── SUPABASE BACKEND (optional) ─────────────────────────────────────────
@@ -174,6 +175,27 @@ function getLoads(userId) {
   const all = load(STORAGE_KEYS.loads, {});
   return all[userId] || { maxDumbbellKg: 0, maxKettlebellKg: 0, hasHeavyBarbell: false };
 }
+// ─── SORENESS TRACKING ───────────────────────────────────────────────────
+// Stores per-muscle soreness levels (0-3 scale). Decays over time so old
+// soreness doesn't poison future generations.
+function setSoreness(userId, muscle, level) {
+  const all = load(STORAGE_KEYS.soreness, {});
+  if (!all[userId]) all[userId] = {};
+  all[userId][muscle] = { level: Math.max(0, Math.min(3, level)), at: Date.now() };
+  save(STORAGE_KEYS.soreness, all);
+}
+
+function getCurrentSoreness(userId, muscle) {
+  if (!userId) return 0;
+  const all = load(STORAGE_KEYS.soreness, {});
+  const entry = all[userId]?.[muscle];
+  if (!entry) return 0;
+  const hoursSince = (Date.now() - entry.at) / 3600000;
+  // Full strength for first 18h, then halves every 24h after that.
+  if (hoursSince <= 18) return entry.level;
+  return entry.level * Math.pow(0.5, (hoursSince - 18) / 24);
+}
+
 function setLoads(userId, loads) {
   const all = load(STORAGE_KEYS.loads, {});
   all[userId] = { ...getLoads(userId), ...loads };
@@ -368,6 +390,7 @@ const el = {
   settingsView: document.getElementById("settingsView"),
   guidedView: document.getElementById("guidedView"),
   loadWarning: document.getElementById("loadWarning"),
+  deloadBanner: document.getElementById("deloadBanner"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
   authError: document.getElementById("authError"),
@@ -400,7 +423,44 @@ function showApp(view = "generator") {
   el.guidedView.classList.toggle("hidden", view !== "guided");
   if (view === "history") renderHistory();
   if (view === "settings") renderSettings();
-  if (view === "generator") refreshLoadWarning();
+  if (view === "generator") {
+    refreshLoadWarning();
+    refreshDeloadBanner();
+  }
+}
+
+function refreshDeloadBanner() {
+  if (!session || !el.deloadBanner) return;
+  if (formState.deload || !shouldSuggestDeload(session.username)) {
+    el.deloadBanner.classList.add("hidden");
+    el.deloadBanner.innerHTML = "";
+    return;
+  }
+  const weeks = weeksSinceLastDeload(session.username);
+  el.deloadBanner.classList.remove("hidden");
+  el.deloadBanner.innerHTML = `
+    <div class="deload-banner-title">Deload week recommended</div>
+    <div class="deload-banner-body">
+      You've trained <strong>${weeks} weeks</strong> in a row since your last deload.
+      A planned light week (~30% less volume, slightly more rest) lets your nervous system
+      catch up and primes the next training block. Highly recommended for sustained progress.
+    </div>
+    <div class="deload-banner-actions">
+      <button class="primary-btn" data-deload-action="start">Plan this as a deload week</button>
+      <button class="secondary-btn" data-deload-action="dismiss">Not yet</button>
+    </div>
+  `;
+  el.deloadBanner.querySelector("[data-deload-action='start']").addEventListener("click", () => {
+    formState.deload = true;
+    setPrefs(session.username, { lastDeloadAt: Date.now() });
+    refreshDeloadBanner();
+    // Visual confirmation: brief flash on the Generate button
+    el.generateBtn.style.boxShadow = "0 0 0 4px var(--accent-soft)";
+    setTimeout(() => { el.generateBtn.style.boxShadow = ""; }, 1000);
+  });
+  el.deloadBanner.querySelector("[data-deload-action='dismiss']").addEventListener("click", () => {
+    el.deloadBanner.classList.add("hidden");
+  });
 }
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
@@ -606,7 +666,33 @@ el.logoutBtn.addEventListener("click", async () => {
 });
 
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
-const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard" };
+const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard", deload: false };
+
+// ─── DELOAD DETECTION ────────────────────────────────────────────────────
+// Counts ISO weeks containing a saved workout, since the last marked deload.
+function weeksSinceLastDeload(userId) {
+  if (!userId) return 0;
+  const prefs = getPrefs(userId);
+  const lastDeload = prefs.lastDeloadAt || 0;
+  const workouts = getWorkouts(userId);
+  if (!workouts.length) return 0;
+  const recent = workouts.filter(w => w.createdAt > lastDeload);
+  if (!recent.length) return 0;
+  const weekBuckets = new Set();
+  recent.forEach(w => {
+    const d = new Date(w.createdAt);
+    // Snap to Monday 00:00 — defines the week.
+    const monday = new Date(d);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    weekBuckets.add(monday.getTime());
+  });
+  return weekBuckets.size;
+}
+
+function shouldSuggestDeload(userId) {
+  return weeksSinceLastDeload(userId) >= 4;
+}
 
 document.querySelectorAll(".chip-row").forEach(row => {
   const field = row.dataset.field;
@@ -731,7 +817,38 @@ function getIntensityTechnique(exercise) {
   return { name: "Tempo 3-1-1", note: "Slow eccentric for max time-under-tension" };
 }
 
-function pickPrescription(goal, difficulty, exercise, style = "standard") {
+// Optional "finisher" — an extra-intensity technique applied to the FINAL
+// working set of a fraction of exercises when Intensity Mode is on. Picks
+// the appropriate finisher per movement pattern.
+const INTENSITY_FINISHERS = {
+  squatHinge: { name: "Drop set on final", note: "After last working set, drop weight 20% and continue to failure" },
+  press:      { name: "AMRAP final set",   note: "Final set: as many reps as possible — stop when form breaks" },
+  pull:       { name: "Cluster final set", note: "Final set: 3 reps, rest 15s, 3 reps, rest 15s, 3 reps" },
+  isolation:  { name: "1.5 reps final",    note: "Final set: each rep = full ROM + bottom half-rep, counts as one" },
+};
+
+function getIntensityFinisher(exercise) {
+  if (!exercise || exercise.pattern === "ballistic" ||
+      exercise.pattern === "mobility" ||
+      exercise.pattern === "conditioning") return null;
+  // Only apply to ~50% of eligible exercises so the workout stays varied
+  // rather than every exercise getting a finisher.
+  if (Math.random() < 0.5) return null;
+
+  const name = exercise.name;
+  if (/squat|deadlift|rdl|romanian|lunge|step-up|hip thrust|glute bridge|cossack/i.test(name)) {
+    return INTENSITY_FINISHERS.squatHinge;
+  }
+  if (/press|push-up|push up|bench|dip|fly/i.test(name)) {
+    return INTENSITY_FINISHERS.press;
+  }
+  if (/row|pull|chin|pulldown|face pull/i.test(name)) {
+    return INTENSITY_FINISHERS.pull;
+  }
+  return INTENSITY_FINISHERS.isolation;
+}
+
+function pickPrescription(goal, difficulty, exercise, style = "standard", deload = false) {
   const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
@@ -779,8 +896,10 @@ function pickPrescription(goal, difficulty, exercise, style = "standard") {
   // reps and extend rest. Only applies to compound/isolation lifts (ballistic
   // / mobility / conditioning already returned above).
   let technique = null;
+  let finisher = null;
   if (intensity && (exercise.pattern === "compound" || exercise.pattern === "isolation")) {
     technique = getIntensityTechnique(exercise);
+    finisher = getIntensityFinisher(exercise);
     if (technique) {
       // Pull reps down and rest up to reflect the longer time-under-tension.
       if (goal === "strength") {
@@ -807,7 +926,16 @@ function pickPrescription(goal, difficulty, exercise, style = "standard") {
     }
   }
 
-  return { sets, reps, rest: roundRest(rest), technique };
+  // Deload week: cut sets by ~30%, give 10% more rest. Volume drops without
+  // changing the rep ranges so the movements still feel familiar.
+  if (deload && exercise.pattern !== "mobility") {
+    sets = Math.max(2, Math.round(sets * 0.7));
+    rest = roundRest(rest * 1.1);
+    // Strip finishers — deload weeks aren't for extra intensity.
+    finisher = null;
+  }
+
+  return { sets, reps, rest: roundRest(rest), technique, finisher };
 }
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -899,7 +1027,7 @@ function pickWarmupExercises(target, count) {
   return scored.slice(0, count).map(s => s.ex);
 }
 
-function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard" }) {
+function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false }) {
   const count = COUNT_BY_DURATION[duration] || 6;
   const targetDiff = DIFF_ORDER[difficulty];
 
@@ -941,6 +1069,14 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
 
     // Anti-repeat penalty for exercises from the previous workout.
     if (lastPickedNames.has(ex.name)) score -= 9;
+
+    // Soreness penalty — sum decayed soreness across this exercise's muscles
+    // and subtract. Highly-sore primary muscles strongly deprioritize their
+    // exercises so the user doesn't pound them again before recovery.
+    if (session?.username) {
+      const sore = ex.muscle.reduce((s, m) => s + getCurrentSoreness(session.username, m), 0);
+      score -= sore * 6;
+    }
 
     // Random jitter so equal-scored items shuffle naturally on each regen.
     score += Math.random() * 4;
@@ -993,7 +1129,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     name: ex.name,
     muscle: ex.muscle,
     pattern: ex.pattern,
-    ...pickPrescription(goal, difficulty, ex, style),
+    ...pickPrescription(goal, difficulty, ex, style, deload),
   }));
 
   // Group into supersets/circuits if the style calls for it.
@@ -1003,7 +1139,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal, equipment, target, duration, difficulty, style },
+    inputs: { goal, equipment, target, duration, difficulty, style, deload },
     exercises,
   };
 }
@@ -1126,6 +1262,10 @@ function renderExerciseCard(ex, units, opts = {}) {
             <div class="technique-badge">${ex.technique.name}</div>
             <div class="technique-note">${ex.technique.note}</div>
           ` : ""}
+          ${ex.finisher ? `
+            <div class="technique-badge finisher-badge">★ ${ex.finisher.name}</div>
+            <div class="technique-note">${ex.finisher.note}</div>
+          ` : ""}
           ${renderFormCues(ex.name)}
           ${renderProgressChart(ex.name)}
         </div>
@@ -1213,6 +1353,8 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
 
   const intensityFlag = inputs.style === "intensity"
     ? `<span class="intensity-flag">Intensity Mode</span>` : "";
+  const deloadFlag = inputs.deload
+    ? `<span class="deload-flag">Deload</span>` : "";
 
   const notesText = workout.notes || "";
   const notesHtml = `
@@ -1228,7 +1370,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     <div class="workout-header">
       <div>
         <div class="workout-title">${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}</div>
-        <div class="workout-meta">${tags} ${intensityFlag}</div>
+        <div class="workout-meta">${tags} ${intensityFlag} ${deloadFlag}</div>
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
@@ -1259,6 +1401,7 @@ el.generateBtn.addEventListener("click", () => {
     duration: parseInt(duration, 10),
     difficulty,
     style: formState.style || "standard",
+    deload: !!formState.deload,
   });
   workoutIsSaved = false;
   workoutReadOnly = false;
@@ -2133,6 +2276,30 @@ function finishGuidedWorkout() {
     ? `${Math.round(toDisplay(guidedSession.volumeKg, units)).toLocaleString()} ${units}`
     : "—";
 
+  // Collect muscles trained in this workout for the soreness prompt
+  const trainedMuscles = new Set();
+  currentWorkout.exercises.forEach(ex => {
+    if (ex.pattern === "mobility") return;
+    ex.muscle.forEach(m => trainedMuscles.add(m));
+  });
+  const muscleList = Array.from(trainedMuscles).filter(m => m !== "full_body");
+  const sorenessHtml = muscleList.length ? `
+    <h3 class="summary-prs-title">How sore are you?</h3>
+    <div class="soreness-grid">
+      ${muscleList.map(m => `
+        <div class="soreness-row" data-muscle="${m}">
+          <span class="soreness-muscle">${m.replace("_", " ")}</span>
+          <div class="soreness-buttons">
+            <button class="soreness-btn" data-level="0" title="Not sore">😌</button>
+            <button class="soreness-btn" data-level="1" title="A bit sore">😐</button>
+            <button class="soreness-btn" data-level="2" title="Properly sore">😣</button>
+            <button class="soreness-btn" data-level="3" title="Wrecked">😱</button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
+
   const prsHtml = guidedSession.prs.length ? `
     <h3 class="summary-prs-title">🏆 New Personal Records</h3>
     <ul class="summary-prs">
@@ -2170,6 +2337,7 @@ function finishGuidedWorkout() {
       </div>
 
       ${prsHtml}
+      ${sorenessHtml}
 
       <div class="guided-actions">
         <button class="primary-btn big" id="guidedFinishBtn">Done</button>
@@ -2177,6 +2345,19 @@ function finishGuidedWorkout() {
     </div>
   `;
   document.getElementById("guidedFinishBtn").addEventListener("click", exitGuided);
+
+  // Wire soreness buttons
+  document.querySelectorAll(".soreness-row").forEach(row => {
+    const muscle = row.dataset.muscle;
+    row.querySelectorAll(".soreness-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const level = Number(btn.dataset.level);
+        setSoreness(session.username, muscle, level);
+        row.querySelectorAll(".soreness-btn").forEach(b =>
+          b.classList.toggle("selected", b === btn));
+      });
+    });
+  });
 }
 
 document.getElementById("guidedExitBtn").addEventListener("click", () => {
