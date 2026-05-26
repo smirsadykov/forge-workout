@@ -1133,6 +1133,13 @@ function refreshRecommendationBanner() {
     el.recommendationBanner.innerHTML = "";
     return;
   }
+  // Suppress if recovery banner is active — recovery is more important and
+  // the recommendation would conflict with the under-recovered messaging.
+  if (el.recoveryBanner && !el.recoveryBanner.classList.contains("hidden")) {
+    el.recommendationBanner.classList.add("hidden");
+    el.recommendationBanner.innerHTML = "";
+    return;
+  }
   const rec = getRecommendedTarget(session.username);
   el.recommendationBanner.classList.remove("hidden");
   el.recommendationBanner.innerHTML = `
@@ -1197,8 +1204,30 @@ function refreshDeloadBanner() {
 }
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => showApp(btn.dataset.view));
+  btn.addEventListener("click", () => {
+    showApp(btn.dataset.view);
+    // Auto-close mobile menu on selection
+    el.nav.classList.remove("menu-open");
+    const menuBtn = document.getElementById("navMenuBtn");
+    if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
+  });
 });
+
+// Hamburger toggle (mobile)
+const navMenuBtn = document.getElementById("navMenuBtn");
+if (navMenuBtn) {
+  navMenuBtn.addEventListener("click", () => {
+    const isOpen = el.nav.classList.toggle("menu-open");
+    navMenuBtn.setAttribute("aria-expanded", String(isOpen));
+  });
+  // Tap outside menu closes it
+  document.addEventListener("click", (e) => {
+    if (!el.nav.classList.contains("menu-open")) return;
+    if (el.nav.contains(e.target)) return;
+    el.nav.classList.remove("menu-open");
+    navMenuBtn.setAttribute("aria-expanded", "false");
+  });
+}
 
 // ─── UNITS TOGGLE ────────────────────────────────────────────────────────
 function applyUnitsButtons() {
