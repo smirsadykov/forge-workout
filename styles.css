@@ -991,6 +991,217 @@ input {
   flex-wrap: wrap;
 }
 
+/* ─── RECOMMENDATION BANNER ─────────────────────────────────────────── */
+.recommendation-banner {
+  background: linear-gradient(135deg, rgba(255, 214, 51, 0.10), rgba(255, 140, 51, 0.06));
+  border: 1px solid rgba(255, 214, 51, 0.4);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.rec-banner-icon {
+  font-size: 28px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+
+.rec-banner-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.rec-banner-title strong { color: var(--accent); }
+
+.rec-banner-body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rec-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+
+@media (max-width: 700px) {
+  .recommendation-banner {
+    grid-template-columns: auto 1fr;
+  }
+  .rec-banner-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+  }
+}
+
+/* ─── STREAK BADGE (top nav) ─────────────────────────────────────────── */
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #ff6b35, #ffb84d);
+  color: #1a1500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 12px rgba(255, 107, 53, 0.4);
+  margin-left: 6px;
+  cursor: default;
+}
+
+/* ─── HISTORY NOTES PREVIEW ──────────────────────────────────────────── */
+.history-notes {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.45;
+  max-width: 520px;
+}
+
+/* ─── TIME BLOCK (Cardio) ────────────────────────────────────────────── */
+.time-block-prescription {
+  font-size: 15px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ─── SETTINGS: Tools section ────────────────────────────────────────── */
+.tool-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 16px;
+}
+
+.tool-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.tool-help {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.tool-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tool-result {
+  font-size: 14px;
+  color: var(--text);
+  min-height: 16px;
+}
+
+.tool-warn {
+  background: rgba(255, 107, 109, 0.08);
+  border: 1px solid rgba(255, 107, 109, 0.35);
+  color: var(--danger);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.tool-pass {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: var(--success);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.plate-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.plate-result-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.plate-result-plates {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.plate-chip {
+  background: var(--accent-soft);
+  border: 1px solid rgba(255, 214, 51, 0.3);
+  color: var(--accent);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plate-result-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.onerm-result {
+  background: rgba(255, 214, 51, 0.06);
+  border: 1px solid rgba(255, 214, 51, 0.25);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.onerm-headline {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.onerm-headline-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.onerm-breakdown {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.onerm-breakdown strong {
+  color: var(--text);
+}
+
 /* ─── SORENESS GRID ──────────────────────────────────────────────────── */
 .soreness-grid {
   display: flex;

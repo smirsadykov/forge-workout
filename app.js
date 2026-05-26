@@ -531,6 +531,7 @@ const el = {
   guidedView: document.getElementById("guidedView"),
   loadWarning: document.getElementById("loadWarning"),
   deloadBanner: document.getElementById("deloadBanner"),
+  recommendationBanner: document.getElementById("recommendationBanner"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
   authError: document.getElementById("authError"),
@@ -566,7 +567,119 @@ function showApp(view = "generator") {
   if (view === "generator") {
     refreshLoadWarning();
     refreshDeloadBanner();
+    refreshRecommendationBanner();
+    refreshStreakBadge();
   }
+}
+
+// Pick a target the user hasn't trained recently. Body-part balance.
+function getRecommendedTarget(userId) {
+  const workouts = getWorkouts(userId);
+  if (!workouts.length) {
+    return { target: "full_body", reason: "Start your first session with a full body workout to baseline everything." };
+  }
+  const last = workouts[0];
+  const lastTarget = last.inputs?.target;
+  const hoursSince = (Date.now() - last.createdAt) / 3600000;
+
+  if (hoursSince < 12) {
+    return {
+      target: "mobility",
+      reason: `You trained ${TARGET_LABELS[lastTarget] || lastTarget} recently — a mobility session lets you keep moving while you recover.`,
+    };
+  }
+
+  const opposite = {
+    upper: "lower", lower: "upper",
+    push: "pull", pull: "push",
+    legs: "upper", core: "full_body",
+    full_body: "mobility", cardio: "full_body",
+    mobility: "full_body",
+  }[lastTarget] || "full_body";
+
+  return {
+    target: opposite,
+    reason: `Last session was ${TARGET_LABELS[lastTarget] || lastTarget} — train ${TARGET_LABELS[opposite]} today to keep your body balanced.`,
+  };
+}
+
+// Count consecutive training days ending today (or yesterday — grace day).
+function getStreak(userId) {
+  const stats = getStats(userId);
+  const dates = new Set();
+  for (const stat of Object.values(stats)) {
+    for (const entry of (stat.history || [])) {
+      const n = normalizeHistoryEntry(entry);
+      const d = new Date(n.date);
+      d.setHours(0, 0, 0, 0);
+      dates.add(d.getTime());
+    }
+  }
+  const workouts = getWorkouts(userId);
+  for (const w of workouts) {
+    const d = new Date(w.createdAt);
+    d.setHours(0, 0, 0, 0);
+    dates.add(d.getTime());
+  }
+  if (dates.size === 0) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let cursor = today.getTime();
+  // Grace: allow today to be empty if user hasn't trained yet today.
+  if (!dates.has(cursor)) cursor -= 86400000;
+  if (!dates.has(cursor)) return 0;
+  let streak = 0;
+  while (dates.has(cursor)) {
+    streak++;
+    cursor -= 86400000;
+  }
+  return streak;
+}
+
+function refreshStreakBadge() {
+  const badge = document.getElementById("streakBadge");
+  if (!badge || !session) return;
+  const streak = getStreak(session.username);
+  if (streak < 2) {
+    badge.classList.add("hidden");
+    return;
+  }
+  badge.classList.remove("hidden");
+  badge.textContent = `🔥 ${streak}`;
+  badge.title = `${streak} day training streak — keep it going`;
+}
+
+function refreshRecommendationBanner() {
+  if (!session || !el.recommendationBanner) return;
+  // Don't show if the user has already selected a target (they know what they want)
+  if (formState.target) {
+    el.recommendationBanner.classList.add("hidden");
+    el.recommendationBanner.innerHTML = "";
+    return;
+  }
+  const rec = getRecommendedTarget(session.username);
+  el.recommendationBanner.classList.remove("hidden");
+  el.recommendationBanner.innerHTML = `
+    <div class="rec-banner-icon">★</div>
+    <div class="rec-banner-content">
+      <div class="rec-banner-title">Recommended for today: <strong>${TARGET_LABELS[rec.target]}</strong></div>
+      <div class="rec-banner-body">${rec.reason}</div>
+    </div>
+    <div class="rec-banner-actions">
+      <button class="primary-btn" data-rec-action="apply" data-target="${rec.target}">Apply</button>
+      <button class="secondary-btn" data-rec-action="dismiss">Dismiss</button>
+    </div>
+  `;
+  el.recommendationBanner.querySelector("[data-rec-action='apply']").addEventListener("click", (e) => {
+    const t = e.target.dataset.target;
+    const chip = document.querySelector(`.chip[data-value="${t}"]`);
+    if (chip) chip.click();
+    el.recommendationBanner.classList.add("hidden");
+  });
+  el.recommendationBanner.querySelector("[data-rec-action='dismiss']").addEventListener("click", () => {
+    el.recommendationBanner.classList.add("hidden");
+  });
 }
 
 function refreshDeloadBanner() {
@@ -854,6 +967,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       }
       el.formError.textContent = "";
       refreshLoadWarning();
+      refreshRecommendationBanner();
     });
   });
 });
@@ -1101,6 +1215,65 @@ function matchesDifficulty(exDiff, target) {
   return order[exDiff] <= order[target];
 }
 
+// Cardio target produces one (or two) steady-state blocks rather than picking
+// six different cardio "exercises". Warm-up still prepended.
+function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
+  const warmupCount = duration >= 30 ? 2 : 1;
+  const warmupMin = warmupCount * 2;
+  const cardioMin = Math.max(duration - warmupMin, 8);
+  const numBlocks = cardioMin >= 40 ? 2 : 1;
+  const perBlockMin = Math.floor(cardioMin / numBlocks);
+
+  const warmups = pickWarmupExercises("cardio", warmupCount);
+  const warmupExercises = warmups.map(ex => ({
+    name: ex.name,
+    muscle: ex.muscle,
+    pattern: ex.pattern,
+    ...pickPrescription(goal, difficulty, ex, "standard", false),
+  }));
+
+  const cardioCandidates = EXERCISES.filter(e =>
+    e.group.includes("cardio") &&
+    e.pattern === "conditioning" &&
+    e.equipment.some(eq => equipment.includes(eq))
+  );
+
+  const cardioExercises = [];
+  if (cardioCandidates.length === 0) {
+    // No matching cardio equipment — fall back to default flow.
+    return null;
+  }
+  const shuffled = shuffle(cardioCandidates);
+  const styleByGoal = {
+    fat_loss:  "intervals (1 min hard / 1 min easy)",
+    endurance: "steady state",
+    strength:  "tempo intervals (30s push / 30s recovery)",
+    hypertrophy: "moderate steady state",
+    mobility:  "light steady state",
+  };
+  const styleLabel = styleByGoal[goal] || "steady state";
+
+  for (let i = 0; i < numBlocks && i < shuffled.length; i++) {
+    const ex = shuffled[i];
+    cardioExercises.push({
+      name: ex.name,
+      muscle: ex.muscle,
+      pattern: ex.pattern,
+      sets: 1,
+      reps: `${perBlockMin} min ${styleLabel}`,
+      rest: numBlocks > 1 && i < numBlocks - 1 ? 60 : 0,
+      isTimeBlock: true,
+    });
+  }
+
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: { goal, equipment, target: "cardio", duration, difficulty, style: "standard", deload: false },
+    exercises: [...warmupExercises, ...cardioExercises],
+  };
+}
+
 // Anti-repeat memory: exercises picked in the immediately previous workout
 // get penalized so Regenerate produces visibly different sessions.
 let lastPickedNames = new Set();
@@ -1168,6 +1341,12 @@ function pickWarmupExercises(target, count) {
 }
 
 function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false }) {
+  // Cardio target gets a special handler: warm-up + one steady-state block
+  // (or two for long durations) instead of 6 separate cardio "exercises".
+  if (target === "cardio") {
+    return generateCardioWorkout({ goal, equipment, duration, difficulty });
+  }
+
   const count = COUNT_BY_DURATION[duration] || 6;
   const targetDiff = DIFF_ORDER[difficulty];
 
@@ -1404,9 +1583,17 @@ function renderExerciseCard(ex, units, opts = {}) {
     ? `<span class="group-position-letter">${String.fromCharCode(65 + opts.groupPosition)}</span>`
     : "";
   const inGroup = !!opts.inGroup;
-  const restLine = inGroup
-    ? `${ex.reps}`
-    : `${ex.sets} × ${ex.reps}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
+  let restLine;
+  if (inGroup) {
+    restLine = `${ex.reps}`;
+  } else if (ex.isTimeBlock) {
+    // Cardio block: single time-based prescription, no sets×reps frame.
+    restLine = `<span class="time-block-prescription">${ex.reps}</span>${
+      ex.rest > 0 ? `<br /><span class="exercise-rest">rest ${ex.rest}s</span>` : ""
+    }`;
+  } else {
+    restLine = `${ex.sets} × ${ex.reps}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
+  }
   return `
     <div class="exercise${inGroup ? " in-group" : ""}" data-name="${escapeAttr(ex.name)}">
       <div class="exercise-row">
@@ -1796,7 +1983,12 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = volumeChartHtml + items.map(w => `
+  el.historyList.innerHTML = volumeChartHtml + items.map(w => {
+    const notes = (w.notes || "").trim();
+    const notesPreview = notes
+      ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`
+      : "";
+    return `
     <div class="history-item" data-id="${w.id}">
       <div class="history-item-header">
         <div>
@@ -1805,7 +1997,10 @@ function renderHistory() {
             <span class="tag">${w.inputs.duration} min</span>
             <span class="tag">${w.exercises.length} exercises</span>
             <span class="tag">${w.inputs.difficulty}</span>
+            ${w.inputs.style === "intensity" ? `<span class="tag">Intensity ⚡</span>` : ""}
+            ${w.inputs.deload ? `<span class="tag">Deload</span>` : ""}
           </div>
+          ${notesPreview}
         </div>
         <div class="history-side">
           <span class="history-date">${new Date(w.createdAt).toLocaleDateString()}</span>
@@ -1813,7 +2008,8 @@ function renderHistory() {
         </div>
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   el.historyList.querySelectorAll(".history-item").forEach(item => {
     item.addEventListener("click", (e) => {
@@ -1854,6 +2050,147 @@ function renderSettings() {
   dbInput.value = loads.maxDumbbellKg ? toDisplay(loads.maxDumbbellKg, units) : "";
   kbInput.value = loads.maxKettlebellKg ? toDisplay(loads.maxKettlebellKg, units) : "";
   bbCheck.checked = !!loads.hasHeavyBarbell;
+}
+
+// ─── PLATE CALCULATOR ───────────────────────────────────────────────────
+function calculatePlates(totalDisplay, units) {
+  const barWeight = units === "lb" ? 45 : 20;
+  if (totalDisplay <= barWeight) {
+    if (totalDisplay === barWeight) return { plates: [], remainder: 0, bar: barWeight };
+    return null;
+  }
+  const perSide = (totalDisplay - barWeight) / 2;
+  const plates = units === "lb"
+    ? [45, 35, 25, 10, 5, 2.5]
+    : [25, 20, 15, 10, 5, 2.5, 1.25];
+  let remaining = perSide;
+  const result = [];
+  for (const p of plates) {
+    const count = Math.floor(remaining / p);
+    if (count > 0) {
+      result.push({ plate: p, count });
+      remaining = Math.round((remaining - count * p) * 1000) / 1000;
+    }
+  }
+  return { plates: result, remainder: remaining, bar: barWeight };
+}
+
+document.getElementById("plateCalcBtn").addEventListener("click", () => {
+  const units = getPrefs(session.username).units;
+  const total = Number(document.getElementById("plateInput").value);
+  const out = document.getElementById("plateResult");
+  if (!total) { out.innerHTML = ""; return; }
+  const r = calculatePlates(total, units);
+  if (!r) {
+    out.innerHTML = `<div class="tool-warn">Below bar weight (${units === "lb" ? 45 : 20} ${units}). Just lift the empty bar.</div>`;
+    return;
+  }
+  if (r.plates.length === 0) {
+    out.innerHTML = `<div class="tool-pass">Just the bar — no plates needed.</div>`;
+    return;
+  }
+  const plateText = r.plates.map(p => `<span class="plate-chip">${p.count} × ${p.plate}${units}</span>`).join("");
+  const remainderNote = r.remainder > 0.05
+    ? `<div class="tool-warn">⚠ Couldn't make exact — short by ${r.remainder * 2} ${units} total.</div>`
+    : "";
+  out.innerHTML = `
+    <div class="plate-result">
+      <div class="plate-result-label">Per side:</div>
+      <div class="plate-result-plates">${plateText}</div>
+    </div>
+    <div class="plate-result-meta">Bar: ${r.bar} ${units} · Per side: ${(total - r.bar) / 2} ${units} · Total: ${total} ${units}</div>
+    ${remainderNote}
+  `;
+});
+
+// ─── 1RM CALCULATOR ─────────────────────────────────────────────────────
+document.getElementById("oneRmCalcBtn").addEventListener("click", () => {
+  const units = getPrefs(session.username).units;
+  const w = Number(document.getElementById("oneRmWeight").value);
+  const r = Number(document.getElementById("oneRmReps").value);
+  const out = document.getElementById("oneRmResult");
+  if (!w || !r) { out.innerHTML = ""; return; }
+  if (r > 15) {
+    out.innerHTML = `<div class="tool-warn">Formulas lose accuracy past 12-15 reps. Use a lower-rep set for a real estimate.</div>`;
+    return;
+  }
+  const epley = w * (1 + r / 30);
+  const brzycki = w / (1.0278 - 0.0278 * r);
+  const lombardi = w * Math.pow(r, 0.1);
+  const avg = (epley + brzycki + lombardi) / 3;
+  const fmt = (v) => `${Math.round(v * 2) / 2} ${units}`;
+  out.innerHTML = `
+    <div class="onerm-result">
+      <div class="onerm-headline">≈ ${fmt(avg)} <span class="onerm-headline-sub">estimated 1RM</span></div>
+      <div class="onerm-breakdown">
+        <span>Epley: <strong>${fmt(epley)}</strong></span>
+        <span>Brzycki: <strong>${fmt(brzycki)}</strong></span>
+        <span>Lombardi: <strong>${fmt(lombardi)}</strong></span>
+      </div>
+    </div>
+  `;
+});
+
+// ─── DATA EXPORT / IMPORT ───────────────────────────────────────────────
+const EXPORT_KEYS = [
+  STORAGE_KEYS.users,
+  STORAGE_KEYS.workouts,
+  STORAGE_KEYS.stats,
+  STORAGE_KEYS.prefs,
+  STORAGE_KEYS.loads,
+  STORAGE_KEYS.soreness,
+];
+
+document.getElementById("exportDataBtn").addEventListener("click", () => {
+  const data = { exportedAt: new Date().toISOString(), version: 1 };
+  for (const key of EXPORT_KEYS) {
+    const v = localStorage.getItem(key);
+    if (v != null) data[key] = JSON.parse(v);
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `forge-backup-${new Date().toISOString().split("T")[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showDataStatus("Exported ✓", "success");
+});
+
+document.getElementById("importDataInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!confirm("Importing will overwrite your local data (users, workouts, stats, settings). Continue?")) {
+    e.target.value = "";
+    return;
+  }
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    let imported = 0;
+    for (const key of EXPORT_KEYS) {
+      if (data[key] != null) {
+        localStorage.setItem(key, JSON.stringify(data[key]));
+        imported++;
+      }
+    }
+    showDataStatus(`Imported ${imported} section${imported === 1 ? "" : "s"}. Reloading…`, "success");
+    setTimeout(() => location.reload(), 800);
+  } catch (err) {
+    showDataStatus("Import failed: " + err.message, "error");
+  }
+  e.target.value = "";
+});
+
+function showDataStatus(text, kind = "success") {
+  const el = document.getElementById("dataStatus");
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = kind === "error" ? "var(--danger)" : "var(--success)";
+  el.classList.remove("hidden");
+  setTimeout(() => el.classList.add("hidden"), 2400);
 }
 
 document.getElementById("saveSettingsBtn").addEventListener("click", () => {

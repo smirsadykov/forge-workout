@@ -17,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
 </head>
 <body>
   <header class="topbar">
@@ -33,6 +33,7 @@
         <button class="units-btn active" data-units="kg">kg</button>
         <button class="units-btn" data-units="lb">lb</button>
       </div>
+      <span id="streakBadge" class="streak-badge hidden" title="Training streak"></span>
       <span class="user-chip">
         <span id="userLabel"></span>
         <button id="logoutBtn" class="link-btn">Logout</button>
@@ -144,6 +145,7 @@
           </div>
         </div>
 
+        <div id="recommendationBanner" class="recommendation-banner hidden"></div>
         <div id="deloadBanner" class="deload-banner hidden"></div>
         <div id="loadWarning" class="load-warning hidden"></div>
 
@@ -210,6 +212,53 @@
             <span id="settingsSaved" class="settings-saved hidden">Saved ✓</span>
           </div>
         </div>
+
+        <div class="settings-card">
+          <h2 class="settings-section">Tools</h2>
+          <p class="settings-help">Quick utilities. Don't change any saved data.</p>
+
+          <div class="tool-block">
+            <h3 class="tool-title">Plate calculator</h3>
+            <p class="tool-help">How to load a barbell for a target weight. Assumes a 20 kg / 45 lb Olympic bar.</p>
+            <div class="tool-form">
+              <label class="log-field">
+                <input type="number" id="plateInput" min="0" step="2.5" placeholder="total" />
+                <span class="log-field-suffix" data-unit-label>kg</span>
+              </label>
+              <button class="secondary-btn" id="plateCalcBtn">Calculate</button>
+            </div>
+            <div id="plateResult" class="tool-result"></div>
+          </div>
+
+          <div class="tool-block">
+            <h3 class="tool-title">1RM calculator</h3>
+            <p class="tool-help">Estimated 1-rep max from a weight × reps set. Three formulas + average.</p>
+            <div class="tool-form">
+              <label class="log-field">
+                <input type="number" id="oneRmWeight" min="0" step="0.5" placeholder="weight" />
+                <span class="log-field-suffix" data-unit-label>kg</span>
+              </label>
+              <label class="log-field">
+                <input type="number" id="oneRmReps" min="1" max="15" step="1" placeholder="reps" />
+                <span class="log-field-suffix">reps</span>
+              </label>
+              <button class="secondary-btn" id="oneRmCalcBtn">Estimate</button>
+            </div>
+            <div id="oneRmResult" class="tool-result"></div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2 class="settings-section">Data</h2>
+          <p class="settings-help">Backup your workouts, stats, and settings. JSON file, restore on any device or after wiping the browser.</p>
+
+          <div class="settings-actions">
+            <button id="exportDataBtn" class="secondary-btn">Export all data</button>
+            <label class="secondary-btn" for="importDataInput">Import data</label>
+            <input type="file" id="importDataInput" accept="application/json" style="display:none" />
+            <span id="dataStatus" class="settings-saved hidden"></span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -242,9 +291,9 @@
     </div>
   </div>
 
-  <script src="config.js?v=20"></script>
+  <script src="config.js?v=21"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="exercises.js?v=20"></script>
-  <script src="app.js?v=20"></script>
+  <script src="exercises.js?v=21"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>
