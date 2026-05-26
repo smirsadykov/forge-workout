@@ -1763,8 +1763,16 @@ el.authForm.addEventListener("submit", async (e) => {
         // full network stack timeout (~30s+) when the host is unreachable.
         const timeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error("timeout")), 10000));
+        // Critical: pass emailRedirectTo so the confirmation email points
+        // back to *this* deployed path. Without it, Supabase falls back to
+        // the project's default Site URL and users land on a 404.
+        const redirectUrl = location.origin + location.pathname;
         const authCall = authMode === "signup"
-          ? sb.auth.signUp({ email: identifier, password })
+          ? sb.auth.signUp({
+              email: identifier,
+              password,
+              options: { emailRedirectTo: redirectUrl },
+            })
           : sb.auth.signInWithPassword({ email: identifier, password });
         result = await Promise.race([authCall, timeout]);
       } catch (netErr) {
