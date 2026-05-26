@@ -9,6 +9,6 @@
 // (data lives in this browser's localStorage). Existing local accounts
 // continue to work.
 window.FORGE_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://bdokozyonhzluyhztynj.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkb2tvenlvbmh6bHV5aHp0eW5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NTA3ODQsImV4cCI6MjA5NTMyNjc4NH0.Ulmnycboxxz5wp_kBYooK5IQoUB9EnNgW67J-DxCY4k",
 };
