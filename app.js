@@ -3854,26 +3854,23 @@ function onDoneSet() {
     return;
   }
 
-  // At last position OR a single exercise: this round is done — rest now.
+  // At last position OR a single exercise: rest now.
   if (ex.rest > 0) {
     const label = inGroup ? `Rest — Round of group` : `Rest — ${ex.name}`;
     startRestTimer(ex.rest, label);
   }
 
-  // Decide whether to start another round of the same group, move past it,
-  // or end the workout.
-  const totalExercises = currentWorkout.exercises.length;
-
-  if (inGroup && !isLastSetOfGroup) {
-    // Loop back to position A of the group for the next round.
-    guided.exIdx = guided.exIdx - (groupSize - 1);
+  // If we're NOT at the last set of this exercise/group: stay on this
+  // exercise (for groups, loop back to position A) and bump the set counter.
+  if (!isLastSet) {
+    if (inGroup) guided.exIdx = guided.exIdx - (groupSize - 1);
     guided.set += 1;
     renderGuided();
     return;
   }
 
-  // Group fully done OR single exercise fully done: move forward.
-  if (guided.exIdx >= totalExercises - 1) return finishGuidedWorkout();
+  // All sets done for this exercise/group: move to the next exercise (or finish).
+  if (guided.exIdx >= currentWorkout.exercises.length - 1) return finishGuidedWorkout();
   guided.exIdx += 1;
   guided.set = 1;
   renderGuided();

@@ -1755,11 +1755,17 @@ input {
   font-weight: 700;
   color: var(--text);
   text-transform: capitalize;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .soreness-buttons {
   display: inline-flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .soreness-btn {
@@ -1772,6 +1778,12 @@ input {
   font-size: 18px;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+@media (max-width: 480px) {
+  .soreness-row { padding: 8px 12px; gap: 8px; }
+  .soreness-btn { width: 32px; height: 32px; font-size: 15px; }
+  .soreness-muscle { font-size: 13px; }
 }
 
 .soreness-btn:hover {
