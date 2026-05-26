@@ -1249,8 +1249,17 @@ el.authForm.addEventListener("submit", async (e) => {
     el.authSubmit.textContent = authMode === "signup" ? "Creating…" : "Logging in…";
     try {
       let result;
+      try {
+        if (authMode === "signup") {
+          result = await sb.auth.signUp({ email: identifier, password });
+        } else {
+          result = await sb.auth.signInWithPassword({ email: identifier, password });
+        }
+      } catch (netErr) {
+        el.authError.textContent = "Can't reach Supabase. Your network may be blocking it — try Cloudflare WARP (1.1.1.1 app) or a different VPN exit.";
+        return;
+      }
       if (authMode === "signup") {
-        result = await sb.auth.signUp({ email: identifier, password });
         if (result.error) {
           el.authError.textContent = result.error.message;
           return;
@@ -1262,7 +1271,6 @@ el.authForm.addEventListener("submit", async (e) => {
           return;
         }
       } else {
-        result = await sb.auth.signInWithPassword({ email: identifier, password });
         if (result.error) {
           el.authError.textContent = result.error.message;
           return;
@@ -4071,6 +4079,18 @@ function showSharedWorkout(workout) {
 
 // ─── INIT ────────────────────────────────────────────────────────────────
 async function bootstrap() {
+  // Always render the cloud status pill at boot, regardless of which path
+  // bootstrap takes. Diagnostic value: if anything else errors, the pill
+  // still tells you what state the app is in.
+  try {
+    const status = getCloudStatus();
+    const cs = document.getElementById("cloudStatus");
+    if (cs) {
+      cs.textContent = status.text;
+      cs.className = `cloud-status cloud-status-${status.mode}`;
+    }
+  } catch (e) { console.warn("FORGE: cloud status render failed", e); }
+
   // Detect a shared-workout link first — process AFTER auth so it shows once
   // the user is in. Stash for now.
   sharedWorkoutPending = decodeSharedWorkoutFromHash();
