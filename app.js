@@ -38,6 +38,27 @@ function getCloudStatus() {
   return { mode: "local", text: "ⓘ Local-only mode — your data lives on this device" };
 }
 
+// Render the pill as early as possible — even if later JS errors out, this
+// gives the user (and remote debug) a clear signal of which mode is active.
+// Wrapped in DOMContentLoaded so the cloudStatus element exists.
+(function renderPillEarly() {
+  const fire = () => {
+    try {
+      const status = getCloudStatus();
+      const cs = document.getElementById("cloudStatus");
+      if (cs) {
+        cs.textContent = status.text;
+        cs.className = `cloud-status cloud-status-${status.mode}`;
+      }
+    } catch (e) { /* swallow */ }
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", fire);
+  } else {
+    fire();
+  }
+})();
+
 // Fire-and-forget cloud push. Catches errors so a missing network or
 // schema mismatch never breaks the local UX. Also drives the sync
 // status indicator in the top nav.
