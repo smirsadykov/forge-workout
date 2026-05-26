@@ -21,7 +21,11 @@ const MAJOR_MUSCLES = ["chest", "back", "shoulders", "biceps", "triceps", "quads
 // ─── SUPABASE BACKEND (optional) ─────────────────────────────────────────
 const _configReady = !!(window.FORGE_CONFIG?.SUPABASE_URL && window.FORGE_CONFIG?.SUPABASE_ANON_KEY);
 const _sdkReady = !!window.supabase;
-const HAS_SUPABASE = _configReady && _sdkReady;
+// User-forced override: if they've explicitly chosen local-only mode (e.g.
+// because their network blocks Supabase), respect that even with valid cloud
+// config. Set via the "Use offline mode" button on auth or Settings toggle.
+const _userForcedLocal = localStorage.getItem("forge:forceLocal") === "1";
+const HAS_SUPABASE = !_userForcedLocal && _configReady && _sdkReady;
 const sb = HAS_SUPABASE
   ? window.supabase.createClient(
       window.FORGE_CONFIG.SUPABASE_URL,
@@ -33,6 +37,7 @@ const sb = HAS_SUPABASE
 // glance whether cloud mode is wired up.
 function getCloudStatus() {
   if (HAS_SUPABASE) return { mode: "ok", text: "✓ Cloud sync ready" };
+  if (_userForcedLocal) return { mode: "local", text: "ⓘ Offline mode (you chose this) — re-enable cloud in Settings" };
   if (_configReady && !_sdkReady) return { mode: "err", text: "⚠ Cloud config set but Supabase SDK didn't load — check your network or refresh" };
   if (!_configReady && _sdkReady) return { mode: "warn", text: "⚠ Supabase SDK loaded but config.js is empty — paste credentials per SUPABASE-SETUP.md" };
   return { mode: "local", text: "ⓘ Local-only mode — your data lives on this device" };
@@ -1221,6 +1226,19 @@ document.querySelectorAll(".units-btn").forEach(btn => {
 });
 
 // ─── AUTH TABS ───────────────────────────────────────────────────────────
+// Escape hatch: if cloud is configured but unreachable, let the user opt
+// into offline mode. Creates a separate local account, no sync. Visible
+// only when cloud is configured (otherwise local is already the default).
+const offlineModeBtn = document.getElementById("offlineModeBtn");
+if (offlineModeBtn) {
+  if (_configReady) offlineModeBtn.classList.remove("hidden");
+  offlineModeBtn.addEventListener("click", () => {
+    if (!confirm("Switch to offline mode? This creates a separate local account on this device that won't sync with the cloud. Your cloud account is untouched — you can re-enable cloud sync in Settings later.")) return;
+    localStorage.setItem("forge:forceLocal", "1");
+    location.replace(location.pathname);
+  });
+}
+
 // Self-rescue for users stuck on a cached old version (looking at you, iOS Safari).
 const resetBtn = document.getElementById("resetCacheBtn");
 if (resetBtn) {
@@ -2996,6 +3014,37 @@ function renderSettings() {
   renderSettingsSoreness();
   renderVolumeTargets();
   renderSettingsSleep();
+  renderCloudToggle();
+}
+
+function renderCloudToggle() {
+  const card = document.getElementById("cloudToggleCard");
+  const btn = document.getElementById("cloudToggleBtn");
+  const status = document.getElementById("cloudToggleStatus");
+  if (!card || !btn) return;
+  // Only show this card when cloud is actually configured (otherwise nothing
+  // to toggle — local is already the default).
+  if (!_configReady) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "";
+  const isLocal = _userForcedLocal;
+  btn.textContent = isLocal ? "Re-enable cloud sync" : "Switch to offline mode";
+  status.textContent = isLocal
+    ? "Currently: offline — local-only, no sync"
+    : "Currently: cloud sync active";
+  btn.onclick = () => {
+    if (isLocal) {
+      // Re-enabling cloud
+      if (!confirm("Re-enable cloud sync? You'll be asked to log in to your cloud account. Your local-only data on this device stays where it is.")) return;
+      localStorage.removeItem("forge:forceLocal");
+    } else {
+      if (!confirm("Switch to offline mode? Your cloud data stays in the cloud — this device just won't sync with it. Re-enable any time.")) return;
+      localStorage.setItem("forge:forceLocal", "1");
+    }
+    location.replace(location.pathname);
+  };
 }
 
 function renderSettingsSleep() {
