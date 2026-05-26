@@ -354,6 +354,65 @@ input {
   gap: 18px;
 }
 
+/* ─── Confirmation pending panel ──────────────────────────────────────── */
+.confirm-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 28px 20px 24px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: 4px;
+}
+.confirm-panel.hidden { display: none; }
+.confirm-panel-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+.confirm-panel-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--text);
+  margin: 0;
+}
+.confirm-panel-body {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 32ch;
+}
+.confirm-panel-body strong {
+  color: var(--text);
+  word-break: break-all;
+}
+.confirm-panel-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.confirm-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.confirm-panel-actions .secondary-btn {
+  min-width: 180px;
+}
+.confirm-panel-status {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 4px 0 0;
+}
+
 .auth-form label {
   display: flex;
   flex-direction: column;

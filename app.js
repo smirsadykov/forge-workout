@@ -1283,6 +1283,11 @@ const el = {
   authError: document.getElementById("authError"),
   username: document.getElementById("username"),
   password: document.getElementById("password"),
+  confirmPanel: document.getElementById("confirmPanel"),
+  confirmPanelEmail: document.getElementById("confirmPanelEmail"),
+  confirmResendBtn: document.getElementById("confirmResendBtn"),
+  confirmBackBtn: document.getElementById("confirmBackBtn"),
+  confirmStatus: document.getElementById("confirmStatus"),
   generateBtn: document.getElementById("generateBtn"),
   formError: document.getElementById("formError"),
   workoutResult: document.getElementById("workoutResult"),
@@ -1739,10 +1744,93 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
     el.password.setAttribute("autocomplete", authMode === "login" ? "current-password" : "new-password");
     el.authError.textContent = "";
     el.authError.style.color = "";
+    // Hide confirmation panel if it's stuck open from a previous signup
+    el.confirmPanel?.classList.add("hidden");
+    el.authForm?.classList.remove("hidden");
     // Forgot password only makes sense on login + cloud mode
     const forgot = document.getElementById("forgotPasswordBtn");
     if (forgot) forgot.classList.toggle("hidden", authMode !== "login" || !HAS_SUPABASE);
   });
+});
+
+// ─── EMAIL CONFIRMATION PANEL ────────────────────────────────────────────
+// Shown when signUp returns no session — meaning Supabase has email
+// confirmation enabled and the user must click the email link to activate.
+// The previous version was a single line on top of the existing form, which
+// hid the actual call to action behind cluttered context. This is a
+// dedicated panel with a clear next step and a recovery (resend) path.
+
+let _pendingConfirmEmail = null;
+let _lastResendAt = 0;
+
+function showConfirmPanel(email) {
+  _pendingConfirmEmail = email;
+  if (el.confirmPanelEmail) el.confirmPanelEmail.textContent = email;
+  if (el.confirmStatus) el.confirmStatus.textContent = "";
+  // Hide the auth form + tabs, show the panel
+  el.authForm?.classList.add("hidden");
+  document.querySelector(".auth-tabs")?.classList.add("hidden");
+  document.getElementById("forgotPasswordBtn")?.classList.add("hidden");
+  el.confirmPanel?.classList.remove("hidden");
+}
+
+function hideConfirmPanel() {
+  _pendingConfirmEmail = null;
+  el.confirmPanel?.classList.add("hidden");
+  el.authForm?.classList.remove("hidden");
+  document.querySelector(".auth-tabs")?.classList.remove("hidden");
+  // Restore forgot-password visibility based on current mode + cloud
+  const forgot = document.getElementById("forgotPasswordBtn");
+  if (forgot) forgot.classList.toggle("hidden", authMode !== "login" || !HAS_SUPABASE);
+}
+
+// Wire Back button — sends user back to login (NOT signup, since they
+// already have an account in Supabase, just unconfirmed).
+el.confirmBackBtn?.addEventListener("click", () => {
+  // Switch tabs to "login" so the form is in the right mode.
+  const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
+  if (loginTab) loginTab.click();
+  hideConfirmPanel();
+});
+
+// Wire Resend button. Supabase rate-limits resends — we add a 30s
+// client-side cooldown on top to avoid mashing the button.
+el.confirmResendBtn?.addEventListener("click", async () => {
+  if (!_pendingConfirmEmail || !HAS_SUPABASE) return;
+  const elapsed = Date.now() - _lastResendAt;
+  const cooldown = 30000;
+  if (_lastResendAt && elapsed < cooldown) {
+    const remaining = Math.ceil((cooldown - elapsed) / 1000);
+    if (el.confirmStatus) el.confirmStatus.textContent = t("confirm.cooldown", { sec: remaining });
+    return;
+  }
+  el.confirmResendBtn.disabled = true;
+  el.confirmResendBtn.textContent = t("confirm.resending");
+  if (el.confirmStatus) el.confirmStatus.textContent = "";
+  try {
+    const redirectUrl = location.origin + location.pathname;
+    // supabase-js v2: resend by type=signup
+    const { error } = await sb.auth.resend({
+      type: "signup",
+      email: _pendingConfirmEmail,
+      options: { emailRedirectTo: redirectUrl },
+    });
+    if (error) {
+      if (el.confirmStatus) el.confirmStatus.textContent = error.message || t("confirm.resendError");
+      if (el.confirmStatus) el.confirmStatus.style.color = "";
+    } else {
+      _lastResendAt = Date.now();
+      if (el.confirmStatus) {
+        el.confirmStatus.textContent = t("confirm.resent");
+        el.confirmStatus.style.color = "var(--success)";
+      }
+    }
+  } catch (e) {
+    if (el.confirmStatus) el.confirmStatus.textContent = t("confirm.resendError");
+  } finally {
+    el.confirmResendBtn.disabled = false;
+    el.confirmResendBtn.textContent = t("confirm.resend");
+  }
 });
 
 el.authForm.addEventListener("submit", async (e) => {
@@ -1785,9 +1873,11 @@ el.authForm.addEventListener("submit", async (e) => {
           return;
         }
         // If email confirmation is on, user must verify before signing in.
+        // Show a dedicated "check inbox" panel instead of just a one-liner,
+        // and offer a Resend button so the user has a recovery path if the
+        // email gets lost.
         if (!result.data.session) {
-          el.authError.textContent = "Check your email for a confirmation link.";
-          el.authError.style.color = "var(--success)";
+          showConfirmPanel(identifier);
           return;
         }
       } else {

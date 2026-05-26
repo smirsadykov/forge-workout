@@ -48,6 +48,18 @@
     "auth.newPasswordLabel": { en: "New password", ru: "Новый пароль" },
     "auth.updatePassword": { en: "Update password", ru: "Сохранить пароль" },
 
+    // Email confirmation pending panel
+    "confirm.title": { en: "Check your email", ru: "Проверь почту" },
+    "confirm.bodyPre": { en: "We sent a confirmation link to", ru: "Мы отправили ссылку для подтверждения на" },
+    "confirm.bodyPost": { en: "Click the link, then come back here and log in.", ru: "Перейди по ссылке, потом вернись сюда и войди." },
+    "confirm.spamHint": { en: "Didn't see it? Check your spam folder.", ru: "Не пришло? Проверь папку спам." },
+    "confirm.resend": { en: "Resend email", ru: "Отправить снова" },
+    "confirm.resending": { en: "Sending…", ru: "Отправляем…" },
+    "confirm.resent": { en: "Sent! Check your inbox.", ru: "Отправлено! Проверь почту." },
+    "confirm.resendError": { en: "Couldn't resend. Try again in a moment.", ru: "Не получилось отправить. Попробуй ещё раз." },
+    "confirm.back": { en: "← Back to login", ru: "← Назад ко входу" },
+    "confirm.cooldown": { en: "Please wait {sec}s before requesting another email.", ru: "Подожди {sec}с перед повторной отправкой." },
+
     // ─── Generator view ──────────────────────────────────────────────
     "gen.title": { en: "Build your workout", ru: "Собери тренировку" },
     "gen.sub": { en: "Pick what you want, what you have, and how long you've got.", ru: "Выбери цель, инвентарь и длительность." },
