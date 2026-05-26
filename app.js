@@ -1354,7 +1354,9 @@ el.authForm.addEventListener("submit", async (e) => {
         loggedInAt: Date.now(),
       };
       save(STORAGE_KEYS.session, session);
-      await syncFromCloud();
+      // Don't block the UI on cloud fetch — navigate immediately, let sync
+      // populate in the background. The sync indicator shows progress.
+      syncFromCloud().catch(() => {});
       showApp("generator");
     } finally {
       el.authSubmit.disabled = false;
@@ -1483,33 +1485,36 @@ if (resetPasswordForm) {
   });
 }
 
-// Pull all data for the current user from Supabase into localStorage so
-// subsequent reads (which are sync) see fresh cloud state.
+// Pull all data for the current user from Supabase into localStorage. Runs
+// the four table queries in parallel + races against an 8s overall timeout
+// so a hanging network never blocks the UI for long.
 async function syncFromCloud() {
   if (!sb || !session?.userId) return;
   const uid = session.userId;
   const username = session.username;
 
+  const withTimeout = (p, ms = 8000) =>
+    Promise.race([p, new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("sync-timeout")), ms))]);
+
   try {
-    // Workouts
-    const { data: ws } = await sb.from("workouts")
-      .select("data, created_at")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false });
-    if (ws) {
+    setSyncStatus("syncing");
+    const [wsRes, statsRes, pfRes, ldRes] = await withTimeout(Promise.all([
+      sb.from("workouts").select("data, created_at").eq("user_id", uid).order("created_at", { ascending: false }),
+      sb.from("exercise_stats").select("exercise_name, weight_kg, reps, date, history").eq("user_id", uid),
+      sb.from("user_prefs").select("units").eq("user_id", uid).maybeSingle(),
+      sb.from("user_loads").select("max_dumbbell_kg, max_kettlebell_kg, has_heavy_barbell").eq("user_id", uid).maybeSingle(),
+    ]));
+
+    if (wsRes?.data) {
       const all = load(STORAGE_KEYS.workouts, {});
-      all[username] = ws.map(r => r.data);
+      all[username] = wsRes.data.map(r => r.data);
       save(STORAGE_KEYS.workouts, all);
     }
-
-    // Stats
-    const { data: stats } = await sb.from("exercise_stats")
-      .select("exercise_name, weight_kg, reps, date, history")
-      .eq("user_id", uid);
-    if (stats) {
+    if (statsRes?.data) {
       const all = load(STORAGE_KEYS.stats, {});
       all[username] = {};
-      for (const row of stats) {
+      for (const row of statsRes.data) {
         all[username][row.exercise_name] = {
           weightKg: Number(row.weight_kg) || 0,
           reps: Number(row.reps) || 0,
@@ -1519,33 +1524,24 @@ async function syncFromCloud() {
       }
       save(STORAGE_KEYS.stats, all);
     }
-
-    // Prefs
-    const { data: pf } = await sb.from("user_prefs")
-      .select("units")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (pf) {
+    if (pfRes?.data) {
       const all = load(STORAGE_KEYS.prefs, {});
-      all[username] = { units: pf.units || "kg" };
+      all[username] = { units: pfRes.data.units || "kg" };
       save(STORAGE_KEYS.prefs, all);
     }
-
-    // Loads
-    const { data: ld } = await sb.from("user_loads")
-      .select("max_dumbbell_kg, max_kettlebell_kg, has_heavy_barbell")
-      .eq("user_id", uid)
-      .maybeSingle();
-    if (ld) {
+    if (ldRes?.data) {
       const all = load(STORAGE_KEYS.loads, {});
       all[username] = {
-        maxDumbbellKg: Number(ld.max_dumbbell_kg) || 0,
-        maxKettlebellKg: Number(ld.max_kettlebell_kg) || 0,
-        hasHeavyBarbell: !!ld.has_heavy_barbell,
+        maxDumbbellKg: Number(ldRes.data.max_dumbbell_kg) || 0,
+        maxKettlebellKg: Number(ldRes.data.max_kettlebell_kg) || 0,
+        hasHeavyBarbell: !!ldRes.data.has_heavy_barbell,
       };
       save(STORAGE_KEYS.loads, all);
     }
-  } catch { /* offline or schema mismatch — fall back to local cache */ }
+    setSyncStatus("ok");
+  } catch {
+    setSyncStatus("error");
+  }
 }
 
 el.logoutBtn.addEventListener("click", async () => {
@@ -4241,7 +4237,8 @@ async function bootstrap() {
           loggedInAt: Date.now(),
         };
         save(STORAGE_KEYS.session, session);
-        await syncFromCloud();
+        // Background sync — don't block app load on slow networks.
+        syncFromCloud().catch(() => {});
         showApp("generator");
         if (sharedWorkoutPending) {
           showSharedWorkout(sharedWorkoutPending);
