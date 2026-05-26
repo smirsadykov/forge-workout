@@ -116,29 +116,70 @@ function calculateE1RM(weightKg, reps) {
   return weightKg * (1 + reps / 30);
 }
 
-function isPR(weightKg, reps, history) {
-  if (!history || history.length === 0) return false; // baseline is not a PR
-  if (weightKg > 0) {
-    const newE1 = calculateE1RM(weightKg, reps);
-    const bestE1 = history.reduce((m, h) => Math.max(m, calculateE1RM(h.weightKg, h.reps)), 0);
-    return newE1 > bestE1 + 0.01; // small epsilon to avoid float ties
-  }
-  const bestReps = history.reduce((m, h) => Math.max(m, h.reps || 0), 0);
-  return reps > bestReps;
+// Normalize either old single-set history entries or new sets-array entries
+// into the new shape: { date, sets: [{ weightKg, reps }] }.
+function normalizeHistoryEntry(entry) {
+  if (!entry) return { date: Date.now(), sets: [] };
+  if (Array.isArray(entry.sets)) return entry;
+  return {
+    date: entry.date || Date.now(),
+    sets: [{ weightKg: entry.weightKg || 0, reps: entry.reps || 0 }],
+  };
 }
 
-function logExercise(userId, exName, { weightKg, reps }) {
+function sessionBestE1RM(sets) {
+  return sets.reduce((m, s) => Math.max(m, calculateE1RM(s.weightKg, s.reps)), 0);
+}
+function sessionBestReps(sets) {
+  return sets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
+}
+
+function isPR(sets, history) {
+  if (!history || history.length === 0) return false;
+  if (!sets || sets.length === 0) return false;
+  const newBestE1 = sessionBestE1RM(sets);
+  const oldBestE1 = history.reduce((m, h) => Math.max(m, sessionBestE1RM(normalizeHistoryEntry(h).sets)), 0);
+  if (newBestE1 > 0 && newBestE1 > oldBestE1 + 0.01) return true;
+  // Bodyweight: pure rep PR
+  const newBestReps = sessionBestReps(sets);
+  const oldBestReps = history.reduce((m, h) =>
+    Math.max(m, sessionBestReps(normalizeHistoryEntry(h).sets)), 0);
+  return newBestReps > oldBestReps;
+}
+
+// Log a set OR an array of sets for an exercise. Accepts:
+//   { weightKg, reps }         — single set (back-compat)
+//   { sets: [{...}, ...] }     — multi-set session
+//   [{ weightKg, reps }, ...]  — bare array
+// Empty sets (reps == 0) are dropped silently.
+function logExercise(userId, exName, payload) {
+  let sets;
+  if (Array.isArray(payload)) {
+    sets = payload;
+  } else if (payload && Array.isArray(payload.sets)) {
+    sets = payload.sets;
+  } else if (payload) {
+    sets = [{ weightKg: payload.weightKg, reps: payload.reps }];
+  } else {
+    sets = [];
+  }
+  sets = sets
+    .map(s => ({ weightKg: Number(s.weightKg) || 0, reps: Number(s.reps) || 0 }))
+    .filter(s => s.reps > 0);
+  if (sets.length === 0) return { pr: false };
+
   const all = load(STORAGE_KEYS.stats, {});
   if (!all[userId]) all[userId] = {};
   const existing = all[userId][exName] || { history: [] };
-  const pr = isPR(Number(weightKg) || 0, Number(reps) || 0, existing.history);
-  const entry = {
-    weightKg: Number(weightKg) || 0,
-    reps: Number(reps) || 0,
-    date: Date.now(),
-  };
-  existing.weightKg = entry.weightKg;
-  existing.reps = entry.reps;
+  const pr = isPR(sets, existing.history);
+
+  // Working set = the heaviest set this session (used for "last session" lookups).
+  const workingSet = sets.reduce((best, s) =>
+    calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, sets[0]);
+
+  const entry = { date: Date.now(), sets };
+  existing.weightKg = workingSet.weightKg;
+  existing.reps = workingSet.reps;
   existing.date = entry.date;
   existing.history = (existing.history || []).concat([entry]).slice(-30);
   all[userId][exName] = existing;
@@ -167,6 +208,100 @@ function setPrefs(userId, prefs) {
     units: all[userId].units,
     updated_at: new Date().toISOString(),
   }));
+}
+
+// ─── WEEKLY VOLUME ANALYTICS ─────────────────────────────────────────────
+// Snap a date to Monday 00:00 — defines the ISO week bucket.
+function weekStartOf(d) {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return date.getTime();
+}
+
+// Walk all of a user's exercise_stats history and aggregate (weight × reps)
+// by primary muscle, then bucketed into ISO weeks. Returns an object
+// shaped like { muscle: { weekStartMs → totalKg } }.
+function getWeeklyVolume(userId, weeksBack = 8) {
+  const stats = getStats(userId);
+  const cutoffMs = weekStartOf(Date.now()) - (weeksBack - 1) * 7 * 86400000;
+  const byMuscle = {};
+
+  for (const [exName, stat] of Object.entries(stats)) {
+    const ex = EXERCISES.find(e => e.name === exName);
+    if (!ex) continue;
+    // Use primary muscle (first in the list). full_body lifts spread across
+    // the whole body so we attribute them to the "full body" bucket.
+    const primary = ex.muscle[0];
+    if (!primary) continue;
+
+    for (const entry of (stat.history || [])) {
+      const n = normalizeHistoryEntry(entry);
+      const ws = weekStartOf(n.date);
+      if (ws < cutoffMs) continue;
+      const vol = n.sets.reduce((sum, s) =>
+        sum + (Number(s.weightKg) || 0) * (Number(s.reps) || 0), 0);
+      if (vol <= 0) continue;
+      if (!byMuscle[primary]) byMuscle[primary] = {};
+      byMuscle[primary][ws] = (byMuscle[primary][ws] || 0) + vol;
+    }
+  }
+  return byMuscle;
+}
+
+// Render a row of stacked sparkline bars for each muscle with at least one
+// week of volume. Empty data → returns "" so the section can be omitted.
+function renderWeeklyVolumeChart(userId, weeksBack = 8) {
+  const byMuscle = getWeeklyVolume(userId, weeksBack);
+  const muscleNames = Object.keys(byMuscle).sort((a, b) => {
+    const totalA = Object.values(byMuscle[a]).reduce((s, v) => s + v, 0);
+    const totalB = Object.values(byMuscle[b]).reduce((s, v) => s + v, 0);
+    return totalB - totalA;
+  });
+  if (muscleNames.length === 0) return "";
+
+  const units = getPrefs(userId).units;
+  // Build the X-axis: the most recent N weeks in chronological order.
+  const thisWeek = weekStartOf(Date.now());
+  const weekStarts = Array.from({ length: weeksBack }, (_, i) =>
+    thisWeek - (weeksBack - 1 - i) * 7 * 86400000);
+
+  // Find the global max for consistent bar heights.
+  const allValues = muscleNames.flatMap(m => weekStarts.map(w => byMuscle[m][w] || 0));
+  const globalMax = Math.max(1, ...allValues);
+
+  const rows = muscleNames.map(muscle => {
+    const values = weekStarts.map(w => byMuscle[muscle][w] || 0);
+    const latest = values[values.length - 1];
+    const latestDisplay = latest > 0
+      ? `${Math.round(toDisplay(latest, units)).toLocaleString()} ${units}`
+      : "—";
+    const bars = values.map((v, idx) => {
+      const height = (v / globalMax) * 100;
+      const cls = v > 0 ? "bar-filled" : "bar-empty";
+      const display = v > 0
+        ? `${Math.round(toDisplay(v, units)).toLocaleString()} ${units}`
+        : "no work";
+      const weekDate = new Date(weekStarts[idx]).toLocaleDateString();
+      return `<div class="vol-bar-wrap" title="${display} · week of ${weekDate}">
+        <div class="vol-bar ${cls}" style="height: ${height}%;"></div>
+      </div>`;
+    }).join("");
+    return `
+      <div class="vol-row">
+        <span class="vol-muscle">${muscle.replace("_", " ")}</span>
+        <div class="vol-bars">${bars}</div>
+        <span class="vol-latest">${latestDisplay}</span>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="volume-chart">
+      <h3 class="volume-chart-title">Weekly volume <span class="volume-chart-sub">last ${weeksBack} weeks · per primary muscle</span></h3>
+      <div class="vol-rows">${rows}</div>
+    </div>
+  `;
 }
 
 // ─── EQUIPMENT LOADS ─────────────────────────────────────────────────────
@@ -345,14 +480,19 @@ function isTrackable(name) {
 
 function getSuggestion(userId, exerciseName, prescription, pattern) {
   const stat = getExerciseStat(userId, exerciseName);
-  if (!stat) return { last: null, next: null, trend: null };
+  if (!stat || !stat.history?.length) return { last: null, next: null, trend: null };
 
   const [lo, hi] = parseRepRange(prescription.reps);
   const usesWeight = exerciseUsesWeight(exerciseName);
   const inc = progressionIncrementKg(pattern);
 
-  const lastReps = stat.reps;
-  const lastKg = stat.weightKg;
+  // Find the working set from the last session (heaviest set, by e1RM).
+  const lastSession = normalizeHistoryEntry(stat.history[stat.history.length - 1]);
+  if (lastSession.sets.length === 0) return { last: null, next: null, trend: null };
+  const workingSet = lastSession.sets.reduce((best, s) =>
+    calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, lastSession.sets[0]);
+  const lastReps = workingSet.reps;
+  const lastKg = workingSet.weightKg;
 
   let nextKg = lastKg;
   let nextReps = lastReps;
@@ -373,7 +513,7 @@ function getSuggestion(userId, exerciseName, prescription, pattern) {
   }
 
   return {
-    last: { weightKg: lastKg, reps: lastReps, date: stat.date },
+    last: { weightKg: lastKg, reps: lastReps, date: lastSession.date, allSets: lastSession.sets },
     next: { weightKg: nextKg, reps: nextReps },
     trend,
   };
@@ -1185,18 +1325,29 @@ function renderExerciseLog(ex, units) {
   const suggestion = getSuggestion(session.username, ex.name, ex, ex.pattern);
   const last = suggestion.last;
   const next = suggestion.next;
-  // If the user already logged this exercise during the current viewing
-  // pass, pre-fill with what they just entered (so 'edit' restores their
-  // values rather than jumping to the next-session progression suggestion).
+  // recentlyLogged now holds an array of sets per exercise (per-set logging),
+  // not a single set. Falls back gracefully for older entries.
   const justLogged = recentlyLogged[ex.name];
 
-  // Last-session pill
+  // Last-session pill — summarises all sets if available
   let pill = "";
   if (last) {
-    const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
+    let summary;
+    if (last.allSets && last.allSets.length > 1) {
+      // Show count + best
+      const bestSet = last.allSets.reduce((b, s) =>
+        calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, last.allSets[0]);
+      const bestStr = bestSet.weightKg > 0
+        ? `${toDisplay(bestSet.weightKg, units)} ${units} × ${bestSet.reps}`
+        : `${bestSet.reps} reps`;
+      summary = `${last.allSets.length} sets · best ${bestStr}`;
+    } else {
+      const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
+      summary = usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`;
+    }
     const trendArrow = suggestion.trend === "up" ? "↑" : suggestion.trend === "down" ? "↓" : "·";
     const trendClass = suggestion.trend === "up" ? "up" : suggestion.trend === "down" ? "down" : "";
-    pill = `<span class="last-pill">${usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`}</span>
+    pill = `<span class="last-pill">${summary}</span>
             <span class="progress-hint ${trendClass}">${trendArrow} ${
               suggestion.trend === "up" ? "progress" :
               suggestion.trend === "down" ? "deload" :
@@ -1204,35 +1355,42 @@ function renderExerciseLog(ex, units) {
             }</span>`;
   }
 
-  // Pre-filled inputs — prefer just-logged values over progression suggestion
-  const suggestedWeight = justLogged
-    ? toDisplay(justLogged.weightKg, units)
-    : (next ? toDisplay(next.weightKg, units) : "");
-  const suggestedReps = justLogged
-    ? justLogged.reps
-    : (next ? next.reps : parseRepRange(ex.reps)[0]);
+  // Build N set rows based on the exercise's set count.
+  const totalSets = ex.sets || 1;
+  const stepW = units === "lb" ? 5 : 2.5;
+  const defaultRep = next ? next.reps : parseRepRange(ex.reps)[0];
+  const defaultWeight = next ? toDisplay(next.weightKg, units) : "";
 
-  const weightField = usesWeight ? `
-    <label class="log-field">
-      <input type="number" inputmode="decimal" step="${units === "lb" ? 5 : 2.5}" min="0" data-log="weight"
-             placeholder="weight" value="${suggestedWeight || ""}" />
-      <span class="log-field-suffix">${units}</span>
-    </label>` : "";
-
-  const repsField = `
-    <label class="log-field">
-      <input type="number" inputmode="numeric" step="1" min="0" data-log="reps"
-             placeholder="reps" value="${suggestedReps || ""}" />
-      <span class="log-field-suffix">reps</span>
-    </label>`;
+  const setRows = Array.from({ length: totalSets }, (_, i) => {
+    const restored = justLogged?.sets?.[i];
+    const w = restored ? toDisplay(restored.weightKg, units) : (i === 0 ? defaultWeight : "");
+    const r = restored ? restored.reps : (i === 0 ? defaultRep : "");
+    return `
+      <div class="set-row" data-set-idx="${i}">
+        <span class="set-num">Set ${i + 1}</span>
+        ${usesWeight ? `
+          <label class="log-field compact">
+            <input type="number" inputmode="decimal" step="${stepW}" min="0" data-log-set="weight"
+                   placeholder="${defaultWeight || "wt"}" value="${w || ""}" />
+            <span class="log-field-suffix">${units}</span>
+          </label>` : ""}
+        <label class="log-field compact">
+          <input type="number" inputmode="numeric" step="1" min="0" data-log-set="reps"
+                 placeholder="${defaultRep}" value="${r || ""}" />
+          <span class="log-field-suffix">reps</span>
+        </label>
+      </div>
+    `;
+  }).join("");
 
   return `
     <div class="exercise-log" data-exercise="${escapeAttr(ex.name)}">
-      ${pill}
+      <div class="exercise-log-head">
+        ${pill || `<span class="last-pill empty">No log yet</span>`}
+      </div>
+      <div class="set-list">${setRows}</div>
       <div class="log-form">
-        ${weightField}
-        ${repsField}
-        <button class="log-btn" data-action="log-set">✓ Log</button>
+        <button class="log-btn" data-action="log-set">✓ Save sets</button>
       </div>
     </div>
   `;
@@ -1570,34 +1728,50 @@ function attachWorkoutActions() {
       const logEl = btn.closest(".exercise-log");
       if (!logEl) return;
       const exName = logEl.dataset.exercise;
-      const weightInput = logEl.querySelector("[data-log='weight']");
-      const repsInput = logEl.querySelector("[data-log='reps']");
-      const reps = Number(repsInput?.value);
-      if (!reps || reps <= 0) {
-        repsInput?.focus();
+      const units = getPrefs(session.username).units;
+
+      // Gather sets from each row — skip rows without a reps value.
+      const setRows = logEl.querySelectorAll(".set-row");
+      const sets = [];
+      setRows.forEach(row => {
+        const repsInput = row.querySelector("[data-log-set='reps']");
+        const weightInput = row.querySelector("[data-log-set='weight']");
+        const reps = Number(repsInput?.value);
+        if (!reps || reps <= 0) return;
+        const weightDisplay = weightInput ? Number(weightInput.value) : 0;
+        const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
+        sets.push({ weightKg, reps });
+      });
+
+      if (sets.length === 0) {
+        // Highlight first empty rep input as an affordance
+        logEl.querySelector("[data-log-set='reps']")?.focus();
         return;
       }
-      const units = getPrefs(session.username).units;
-      const weightDisplay = weightInput ? Number(weightInput.value) : 0;
-      const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
 
-      const result = logExercise(session.username, exName, { weightKg, reps });
-      recentlyLogged[exName] = { weightKg, reps };
+      const result = logExercise(session.username, exName, sets);
+      recentlyLogged[exName] = { sets };
 
-      // Auto-start the rest timer using this exercise's prescribed rest.
+      // Auto-start rest timer using the exercise's prescribed rest.
       const ex = currentWorkout?.exercises.find(x => x.name === exName);
       if (ex && ex.rest > 0) startRestTimer(ex.rest, `Rest — ${exName}`);
 
-      // Swap the form for a logged badge so user has visual confirmation.
-      const w = weightKg ? `${toDisplay(weightKg, units)} ${units} × ${reps}` : `${reps} reps`;
+      // Working set = heaviest by e1RM
+      const workingSet = sets.reduce((best, s) =>
+        calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, sets[0]);
+      const w = workingSet.weightKg
+        ? `${toDisplay(workingSet.weightKg, units)} ${units} × ${workingSet.reps}`
+        : `${workingSet.reps} reps`;
+      const setsCount = sets.length;
+      const summary = setsCount > 1 ? `${setsCount} sets · best ${w}` : w;
       const prBadge = result.pr ? `<span class="pr-celebrate">🏆 NEW PR</span>` : "";
+
       logEl.innerHTML = `
-        <span class="logged-badge">✓ Logged ${w}${prBadge}
+        <span class="logged-badge">✓ Logged ${summary}${prBadge}
           <span class="edit-link" data-action="edit-log">edit</span>
         </span>
       `;
       logEl.querySelector("[data-action='edit-log']").addEventListener("click", () => {
-        // Re-render the whole workout so the new "last" data flows through suggestions.
         renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
         attachWorkoutActions();
       });
@@ -1608,8 +1782,11 @@ function attachWorkoutActions() {
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
   const items = getWorkouts(session.username);
+  const volumeChartHtml = renderWeeklyVolumeChart(session.username, 8);
+
   if (!items.length) {
     el.historyList.innerHTML = `
+      ${volumeChartHtml}
       <div class="empty-state">
         <div class="empty-state-icon">🏋️</div>
         <div class="empty-state-title">No saved workouts yet</div>
@@ -1619,7 +1796,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = items.map(w => `
+  el.historyList.innerHTML = volumeChartHtml + items.map(w => `
     <div class="history-item" data-id="${w.id}">
       <div class="history-item-header">
         <div>
@@ -1865,10 +2042,11 @@ function renderProgressChart(exerciseName) {
   const usesWeight = exerciseUsesWeight(exerciseName);
   const units = getPrefs(session.username).units;
 
-  // Raw values (kg-based for e1RM, integer reps for bodyweight)
+  // Per-session: best e1RM for weighted, best reps for bodyweight.
+  const normalized = history.map(normalizeHistoryEntry);
   const rawValues = usesWeight
-    ? history.map(h => calculateE1RM(h.weightKg, h.reps))
-    : history.map(h => h.reps || 0);
+    ? normalized.map(n => sessionBestE1RM(n.sets))
+    : normalized.map(n => sessionBestReps(n.sets));
 
   if (rawValues.every(v => v === 0)) {
     return `
@@ -1903,11 +2081,14 @@ function renderProgressChart(exerciseName) {
       ` L${points[n-1][0]},${H} Z`;
 
   const dots = points.map((p, i) => {
-    const h = history[i];
-    const dateStr = new Date(h.date).toLocaleDateString();
+    const n = normalized[i];
+    const dateStr = new Date(n.date).toLocaleDateString();
+    const setsSummary = n.sets.map(s => s.weightKg > 0
+      ? `${toDisplay(s.weightKg, units)} ${units}×${s.reps}`
+      : `${s.reps} reps`).join(", ");
     const tooltip = usesWeight
-      ? `${toDisplay(h.weightKg, units)} ${units} × ${h.reps}  ·  e1RM ${displayValues[i]}  ·  ${dateStr}`
-      : `${h.reps} reps  ·  ${dateStr}`;
+      ? `${setsSummary}  ·  best e1RM ${displayValues[i]}  ·  ${dateStr}`
+      : `${setsSummary}  ·  ${dateStr}`;
     return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--accent)"><title>${escapeAttr(tooltip)}</title></circle>`;
   }).join("");
 
@@ -1921,8 +2102,8 @@ function renderProgressChart(exerciseName) {
     ? "log again for trend"
     : trend >= 0 ? `↑ +${trend.toFixed(1)}%` : `↓ ${trend.toFixed(1)}%`;
   const dateRange = n > 1
-    ? `${new Date(history[0].date).toLocaleDateString()} → ${new Date(history[n-1].date).toLocaleDateString()}`
-    : new Date(history[0].date).toLocaleDateString();
+    ? `${new Date(normalized[0].date).toLocaleDateString()} → ${new Date(normalized[n-1].date).toLocaleDateString()}`
+    : new Date(normalized[0].date).toLocaleDateString();
 
   return `
     <div class="progress-panel hidden">
@@ -1997,6 +2178,7 @@ function resetGuidedSession() {
   guidedSession.exercisesCompleted = 0;
   guidedSession.volumeKg = 0;
   guidedSession.prs = [];
+  guidedSession.exerciseSets = {}; // { exName → [{weightKg, reps}, ...] }
 }
 
 function startGuidedMode() {
@@ -2062,11 +2244,19 @@ function renderGuided() {
     }</strong> &nbsp;${trendLabel}</div>`;
   }
 
-  // Inputs (only on last set; intermediate sets just advance + timer)
+  // Inputs visible on every set so the user can log per-set actuals.
+  // Pre-fill: carry the previous set's values forward, or use progression
+  // suggestion on the very first set.
   let inputsHtml = "";
-  if (trackable && isLastSet) {
-    const sugW = suggestion.next ? toDisplay(suggestion.next.weightKg, units) : "";
-    const sugR = suggestion.next ? suggestion.next.reps : parseRepRange(ex.reps)[0];
+  if (trackable) {
+    const buffered = guidedSession.exerciseSets?.[ex.name] || [];
+    const prevSet = buffered[buffered.length - 1];
+    const sugW = prevSet
+      ? toDisplay(prevSet.weightKg, units)
+      : (suggestion.next ? toDisplay(suggestion.next.weightKg, units) : "");
+    const sugR = prevSet
+      ? prevSet.reps
+      : (suggestion.next ? suggestion.next.reps : parseRepRange(ex.reps)[0]);
     inputsHtml = `
       <div class="guided-log-row">
         ${usesWeight ? `
@@ -2172,27 +2362,46 @@ function onDoneSet() {
   const isLastSet = guided.set >= ex.sets;
   const isLastSetOfGroup = isLastInGroup && isLastSet;
 
-  // Working set = the final round at the current position. Log every
-  // exercise's final round so each gets its progression update.
-  if (trackable && isLastSet) {
+  // Always capture this set's actuals into a per-exercise buffer. We log
+  // the full sets[] array when the exercise (or group) completes so each
+  // session has one history entry with all the work in it.
+  if (trackable) {
     const rEl = document.getElementById("guidedReps");
     const wEl = document.getElementById("guidedWeight");
     const reps = Number(rEl?.value || 0);
     if (reps > 0) {
       const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
       const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
-      const result = logExercise(session.username, ex.name, { weightKg, reps });
-      if (result.pr) {
-        guidedSession.prs.push({ name: ex.name, weightKg, reps });
-      }
-      if (weightKg > 0) {
-        guidedSession.volumeKg += weightKg * reps * ex.sets;
-      }
+      if (!guidedSession.exerciseSets[ex.name]) guidedSession.exerciseSets[ex.name] = [];
+      guidedSession.exerciseSets[ex.name].push({ weightKg, reps });
     }
   }
 
   guidedSession.setsDone += 1;
   if (isLastSet) guidedSession.exercisesCompleted += 1;
+
+  // Flush the per-exercise buffer when we're about to leave that exercise
+  // for good. For singles: at the last set. For groups: when the whole
+  // group completes (last position of last round).
+  const flushNow = isLastSet && (!inGroup || isLastSetOfGroup);
+  if (flushNow) {
+    const namesToFlush = inGroup
+      ? currentWorkout.exercises.filter(e => e.groupId === ex.groupId).map(e => e.name)
+      : [ex.name];
+    for (const name of namesToFlush) {
+      const setsToLog = guidedSession.exerciseSets[name];
+      if (!setsToLog || setsToLog.length === 0) continue;
+      const result = logExercise(session.username, name, setsToLog);
+      if (result.pr) {
+        const bestSet = setsToLog.reduce((b, s) =>
+          calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, setsToLog[0]);
+        guidedSession.prs.push({ name, weightKg: bestSet.weightKg, reps: bestSet.reps });
+      }
+      const vol = setsToLog.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      guidedSession.volumeKg += vol;
+      delete guidedSession.exerciseSets[name];
+    }
+  }
 
   // Within a group round (not at last position): jump to next position, NO rest.
   if (inGroup && !isLastInGroup) {

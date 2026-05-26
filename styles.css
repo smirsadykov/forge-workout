@@ -1588,6 +1588,54 @@ input {
   flex-wrap: wrap;
 }
 
+.exercise-log-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+.last-pill.empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.set-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.set-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  min-width: 48px;
+}
+
+.log-field.compact {
+  padding: 0 8px;
+}
+
+.log-field.compact input {
+  font-size: 13px;
+  width: 50px;
+  padding: 6px 0;
+}
+
 .log-field {
   display: inline-flex;
   align-items: center;
@@ -1867,6 +1915,103 @@ input {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ─── WEEKLY VOLUME CHART (History) ──────────────────────────────────── */
+.volume-chart {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  margin-bottom: 16px;
+}
+
+.volume-chart-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.volume-chart-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-left: 6px;
+}
+
+.vol-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.vol-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 80px;
+  align-items: center;
+  gap: 12px;
+}
+
+.vol-muscle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.vol-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  height: 36px;
+}
+
+.vol-bar-wrap {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border);
+}
+
+.vol-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s ease-out;
+}
+
+.vol-bar.bar-filled {
+  background: linear-gradient(to top, var(--accent-dark), var(--accent));
+}
+
+.vol-bar.bar-empty {
+  background: var(--border);
+  height: 2px !important;
+  border-radius: 2px;
+}
+
+.vol-latest {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+  .vol-row {
+    grid-template-columns: 70px 1fr 70px;
+    gap: 8px;
+  }
+  .vol-muscle { font-size: 12px; }
+  .vol-latest { font-size: 11px; }
+  .volume-chart { padding: 18px 16px; }
 }
 
 .history-item {
