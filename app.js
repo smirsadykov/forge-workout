@@ -39,11 +39,65 @@ function getCloudStatus() {
 }
 
 // Fire-and-forget cloud push. Catches errors so a missing network or
-// schema mismatch never breaks the local UX.
+// schema mismatch never breaks the local UX. Also drives the sync
+// status indicator in the top nav.
 function cloudPush(fn) {
   if (!sb || !session?.userId) return;
-  Promise.resolve(fn()).catch(() => {});
+  setSyncStatus("syncing");
+  Promise.resolve(fn())
+    .then(() => setSyncStatus("ok"))
+    .catch(() => setSyncStatus("error"));
 }
+
+// ─── SYNC STATUS INDICATOR ───────────────────────────────────────────────
+const syncState = { status: "idle", lastOk: 0, lastErr: 0 };
+
+function setSyncStatus(status) {
+  syncState.status = status;
+  if (status === "ok") syncState.lastOk = Date.now();
+  if (status === "error") syncState.lastErr = Date.now();
+  renderSyncIndicator();
+}
+
+function renderSyncIndicator() {
+  const elx = document.getElementById("syncIndicator");
+  if (!elx) return;
+  if (!HAS_SUPABASE) {
+    elx.classList.remove("hidden");
+    elx.className = "sync-indicator sync-local";
+    elx.innerHTML = `<span class="sync-dot"></span><span>Local</span>`;
+    elx.title = "Local-only mode — data lives in this browser";
+    return;
+  }
+  if (!session?.userId) {
+    elx.classList.add("hidden");
+    return;
+  }
+  elx.classList.remove("hidden");
+  const map = {
+    idle:    { cls: "sync-idle",    text: "Cloud",     title: "Cloud sync ready" },
+    syncing: { cls: "sync-pending", text: "Syncing…",  title: "Pushing to cloud" },
+    ok:      { cls: "sync-ok",      text: "Synced",    title: `Last sync ${new Date(syncState.lastOk).toLocaleTimeString()}` },
+    error:   { cls: "sync-err",     text: "Offline",   title: `Last cloud push failed — changes saved locally, will retry when you're back online` },
+  };
+  const s = map[syncState.status] || map.idle;
+  elx.className = `sync-indicator ${s.cls}`;
+  elx.innerHTML = `<span class="sync-dot"></span><span class="sync-label">${s.text}</span>`;
+  elx.title = s.title;
+}
+
+// Watch browser-level connectivity. If we go online and we're authed,
+// run a tiny probe query to confirm Supabase itself is reachable.
+window.addEventListener("online", () => {
+  if (HAS_SUPABASE && session?.userId) {
+    sb.from("user_prefs").select("user_id").limit(1).maybeSingle()
+      .then(() => setSyncStatus("ok"))
+      .catch(() => setSyncStatus("error"));
+  }
+});
+window.addEventListener("offline", () => {
+  if (HAS_SUPABASE && session?.userId) setSyncStatus("error");
+});
 
 // ─── STORAGE HELPERS ─────────────────────────────────────────────────────
 const load = (key, fallback) => {
@@ -787,6 +841,12 @@ function showApp(view = "generator") {
   el.authView.classList.add("hidden");
   el.userLabel.textContent = session.username;
   applyUnitsButtons();
+  // Initial sync state — assume OK on first paint; cloudPush calls will update.
+  if (HAS_SUPABASE && session?.userId && syncState.status === "idle") {
+    setSyncStatus(navigator.onLine ? "ok" : "error");
+  } else {
+    renderSyncIndicator();
+  }
   document.querySelectorAll(".nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.view === view);
   });

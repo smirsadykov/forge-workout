@@ -1097,6 +1097,46 @@ input {
   }
 }
 
+/* ─── SYNC INDICATOR (top nav) ──────────────────────────────────────── */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  margin-left: 6px;
+  user-select: none;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.sync-indicator.sync-ok    { color: var(--success); border-color: rgba(74, 222, 128, 0.35); background: rgba(74, 222, 128, 0.08); }
+.sync-indicator.sync-pending { color: var(--accent); border-color: rgba(255, 214, 51, 0.35); background: var(--accent-soft); }
+.sync-indicator.sync-pending .sync-dot { animation: syncPulse 1s ease-in-out infinite; }
+.sync-indicator.sync-err   { color: var(--danger); border-color: rgba(255, 107, 109, 0.35); background: rgba(255, 107, 109, 0.08); }
+.sync-indicator.sync-local { color: var(--text-dim); }
+.sync-indicator.sync-idle  { color: var(--text-secondary); }
+
+@keyframes syncPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@media (max-width: 700px) {
+  .sync-indicator .sync-label { display: none; }
+  .sync-indicator { padding: 6px; }
+}
+
 /* ─── STREAK BADGE (top nav) ─────────────────────────────────────────── */
 .streak-badge {
   display: inline-flex;
