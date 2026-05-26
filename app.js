@@ -1271,13 +1271,16 @@ el.authForm.addEventListener("submit", async (e) => {
     try {
       let result;
       try {
-        if (authMode === "signup") {
-          result = await sb.auth.signUp({ email: identifier, password });
-        } else {
-          result = await sb.auth.signInWithPassword({ email: identifier, password });
-        }
+        // Race against a 10s timeout so we don't sit on 'Logging in…' for the
+        // full network stack timeout (~30s+) when the host is unreachable.
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 10000));
+        const authCall = authMode === "signup"
+          ? sb.auth.signUp({ email: identifier, password })
+          : sb.auth.signInWithPassword({ email: identifier, password });
+        result = await Promise.race([authCall, timeout]);
       } catch (netErr) {
-        el.authError.textContent = "Can't reach Supabase. Your network may be blocking it — try Cloudflare WARP (1.1.1.1 app) or a different VPN exit.";
+        el.authError.textContent = "Can't reach Supabase. Your network is blocking it — turn on Cloudflare WARP (free 1.1.1.1 app) or a working VPN, then try again.";
         return;
       }
       if (authMode === "signup") {
