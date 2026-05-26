@@ -336,7 +336,11 @@ function logExercise(userId, exName, payload) {
     sets = [];
   }
   sets = sets
-    .map(s => ({ weightKg: Number(s.weightKg) || 0, reps: Number(s.reps) || 0 }))
+    .map(s => {
+      const out = { weightKg: Number(s.weightKg) || 0, reps: Number(s.reps) || 0 };
+      if (s.side === "R" || s.side === "L") out.side = s.side;
+      return out;
+    })
     .filter(s => s.reps > 0);
   if (sets.length === 0) return { pr: false };
 
@@ -865,8 +869,22 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   if (lastSession.sets.length === 0) return { last: null, next: null, trend: null };
   const workingSet = lastSession.sets.reduce((best, s) =>
     calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, lastSession.sets[0]);
-  const lastReps = workingSet.reps;
   const lastKg = workingSet.weightKg;
+
+  // For unilateral exercises, progression is gated by the WEAKER side —
+  // both sides must hit the top of the rep range before adding load.
+  // Pick the lowest rep count across the most-recent matched R/L pair.
+  let lastReps = workingSet.reps;
+  const isUnilateralSession = lastSession.sets.some(s => s.side);
+  if (isUnilateralSession) {
+    const rSets = lastSession.sets.filter(s => s.side === "R");
+    const lSets = lastSession.sets.filter(s => s.side === "L");
+    if (rSets.length && lSets.length) {
+      const minR = Math.min(...rSets.map(s => s.reps));
+      const minL = Math.min(...lSets.map(s => s.reps));
+      lastReps = Math.min(minR, minL);
+    }
+  }
 
   let nextKg = lastKg;
   let nextReps = lastReps;
@@ -2375,14 +2393,23 @@ function renderExerciseLog(ex, units) {
   let pill = "";
   if (last) {
     let summary;
-    if (last.allSets && last.allSets.length > 1) {
-      // Show count + best
-      const bestSet = last.allSets.reduce((b, s) =>
-        calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, last.allSets[0]);
+    const allSets = last.allSets || [];
+    const hasSideData = allSets.some(s => s.side);
+    if (hasSideData) {
+      // Unilateral: show R/L breakdown (best of each)
+      const rSets = allSets.filter(s => s.side === "R");
+      const lSets = allSets.filter(s => s.side === "L");
+      const wt = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
+      const rBest = rSets.length ? Math.max(...rSets.map(s => s.reps)) : "—";
+      const lBest = lSets.length ? Math.max(...lSets.map(s => s.reps)) : "—";
+      summary = `${wt} · R ${rBest} · L ${lBest}`;
+    } else if (allSets.length > 1) {
+      const bestSet = allSets.reduce((b, s) =>
+        calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, allSets[0]);
       const bestStr = bestSet.weightKg > 0
         ? `${toDisplay(bestSet.weightKg, units)} ${units} × ${bestSet.reps}`
         : `${bestSet.reps} reps`;
-      summary = `${last.allSets.length} sets · best ${bestStr}`;
+      summary = `${allSets.length} sets · best ${bestStr}`;
     } else {
       const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
       summary = usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`;
@@ -2937,10 +2964,30 @@ function attachWorkoutActions() {
       const summary = isUnilateralLog
         ? `${setsCount / 2 | 0} sets per side · best ${wText}`
         : (setsCount > 1 ? `${setsCount} sets · best ${wText}` : wText);
+
+      // "Ready to push weight" hint: did the user hit the top of the rep
+      // range on the gating side? For unilateral, both sides must hit top.
+      const [lo, hi] = parseRepRange(ex.reps);
+      let progressHint = "";
+      if (hi > 0) {
+        let gatingReps;
+        if (isUnilateralLog) {
+          const minR = Math.min(...sets.filter(s => s.side === "R").map(s => s.reps), Infinity);
+          const minL = Math.min(...sets.filter(s => s.side === "L").map(s => s.reps), Infinity);
+          gatingReps = Math.min(minR, minL);
+        } else {
+          gatingReps = Math.max(...sets.map(s => s.reps));
+        }
+        if (gatingReps >= hi) {
+          progressHint = `<span class="progress-ready-tag">→ ready to push weight</span>`;
+        } else if (gatingReps < lo) {
+          progressHint = `<span class="progress-ready-tag down">↓ deload next time</span>`;
+        }
+      }
       const prBadge = result.pr ? `<span class="pr-celebrate">🏆 NEW PR</span>` : "";
 
       logEl.innerHTML = `
-        <span class="logged-badge">✓ Logged ${summary}${prBadge}
+        <span class="logged-badge">✓ Logged ${summary}${prBadge}${progressHint}
           <span class="edit-link" data-action="edit-log">edit</span>
         </span>
       `;
