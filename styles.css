@@ -1110,6 +1110,16 @@ input {
   border: 1px solid var(--border);
   margin-left: 6px;
   user-select: none;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.sync-indicator:hover {
+  filter: brightness(1.15);
+}
+
+.sync-indicator:active {
+  transform: scale(0.96);
 }
 
 .sync-dot {

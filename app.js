@@ -75,10 +75,10 @@ function renderSyncIndicator() {
   }
   elx.classList.remove("hidden");
   const map = {
-    idle:    { cls: "sync-idle",    text: "Cloud",     title: "Cloud sync ready" },
+    idle:    { cls: "sync-idle",    text: "Cloud",     title: "Tap to sync now" },
     syncing: { cls: "sync-pending", text: "Syncing…",  title: "Pushing to cloud" },
-    ok:      { cls: "sync-ok",      text: "Synced",    title: `Last sync ${new Date(syncState.lastOk).toLocaleTimeString()}` },
-    error:   { cls: "sync-err",     text: "Offline",   title: `Last cloud push failed — changes saved locally, will retry when you're back online` },
+    ok:      { cls: "sync-ok",      text: "Synced",    title: `Last sync ${new Date(syncState.lastOk).toLocaleTimeString()} — tap to sync again` },
+    error:   { cls: "sync-err",     text: "Offline",   title: `Cloud unreachable — changes saved locally. Tap to retry (enable VPN first if your network blocks Supabase).` },
   };
   const s = map[syncState.status] || map.idle;
   elx.className = `sync-indicator ${s.cls}`;
@@ -97,6 +97,86 @@ window.addEventListener("online", () => {
 });
 window.addEventListener("offline", () => {
   if (HAS_SUPABASE && session?.userId) setSyncStatus("error");
+});
+
+// Manual sync — push all local user data to Supabase, then pull back any
+// remote changes from other devices. Useful on blocked networks where the
+// user toggles VPN on briefly to sync, off otherwise.
+async function forceSyncAll() {
+  if (!sb || !session?.userId) return { ok: false, reason: "not signed in" };
+  setSyncStatus("syncing");
+  const uid = session.userId;
+  const username = session.username;
+  try {
+    // Push workouts (upsert all)
+    const workouts = getWorkouts(username);
+    if (workouts.length > 0) {
+      const rows = workouts.map(w => ({
+        id: w.id, user_id: uid, data: w,
+        created_at: new Date(w.createdAt).toISOString(),
+      }));
+      const { error } = await sb.from("workouts").upsert(rows);
+      if (error) throw error;
+    }
+    // Push exercise stats
+    const stats = getStats(username);
+    const statRows = Object.entries(stats).map(([exName, stat]) => ({
+      user_id: uid,
+      exercise_name: exName,
+      weight_kg: Number(stat.weightKg) || 0,
+      reps: Number(stat.reps) || 0,
+      date: new Date(stat.date || Date.now()).toISOString(),
+      history: stat.history || [],
+    }));
+    if (statRows.length > 0) {
+      const { error } = await sb.from("exercise_stats").upsert(statRows);
+      if (error) throw error;
+    }
+    // Push prefs
+    const prefs = getPrefs(username);
+    {
+      const { error } = await sb.from("user_prefs").upsert({
+        user_id: uid, units: prefs.units || "kg",
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    }
+    // Push loads
+    const loads = getLoads(username);
+    {
+      const { error } = await sb.from("user_loads").upsert({
+        user_id: uid,
+        max_dumbbell_kg: Number(loads.maxDumbbellKg) || 0,
+        max_kettlebell_kg: Number(loads.maxKettlebellKg) || 0,
+        has_heavy_barbell: !!loads.hasHeavyBarbell,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    }
+    // Pull whatever the server has back into the local cache.
+    await syncFromCloud();
+    setSyncStatus("ok");
+    return { ok: true };
+  } catch (e) {
+    setSyncStatus("error");
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
+// Make the indicator clickable — manual sync trigger.
+document.addEventListener("DOMContentLoaded", () => {
+  const indicator = document.getElementById("syncIndicator");
+  if (indicator) {
+    indicator.addEventListener("click", async () => {
+      if (!HAS_SUPABASE || !session?.userId) return;
+      const result = await forceSyncAll();
+      if (result.ok) {
+        indicator.title = `✓ Sync complete · ${new Date().toLocaleTimeString()}`;
+      } else {
+        indicator.title = `Sync failed: ${result.error || "network unreachable"} — tap to retry`;
+      }
+    });
+  }
 });
 
 // ─── STORAGE HELPERS ─────────────────────────────────────────────────────
