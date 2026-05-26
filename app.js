@@ -1060,6 +1060,27 @@ document.querySelectorAll(".units-btn").forEach(btn => {
 });
 
 // ─── AUTH TABS ───────────────────────────────────────────────────────────
+// Self-rescue for users stuck on a cached old version (looking at you, iOS Safari).
+const resetBtn = document.getElementById("resetCacheBtn");
+if (resetBtn) {
+  resetBtn.addEventListener("click", async () => {
+    resetBtn.disabled = true;
+    resetBtn.textContent = "Clearing…";
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch {}
+    // Add a cache-bust query so the next fetch dodges any HTTP cache too.
+    location.replace(location.pathname + "?reset=" + Date.now());
+  });
+}
+
 document.querySelectorAll(".auth-tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".auth-tab").forEach(t => t.classList.remove("active"));
