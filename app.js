@@ -1297,9 +1297,17 @@ const el = {
 // ─── ROUTING / VIEWS ─────────────────────────────────────────────────────
 function showAuth() {
   el.nav.classList.add("hidden");
+  // Close the mobile menu in case it's open (otherwise it overlays auth)
+  el.nav.classList.remove("menu-open");
   el.authView.classList.remove("hidden");
+  // Hide ALL app views — not just generator+history, because if the user
+  // clicks Logout from Settings/Library/Guided, those need to vanish too
+  // or they'll stack on top of the auth view and the screen looks frozen.
   el.generatorView.classList.add("hidden");
   el.historyView.classList.add("hidden");
+  el.settingsView?.classList.add("hidden");
+  el.libraryView?.classList.add("hidden");
+  el.guidedView?.classList.add("hidden");
   // Render cloud status indicator
   const status = getCloudStatus();
   const cs = document.getElementById("cloudStatus");
@@ -2093,6 +2101,12 @@ el.logoutBtn.addEventListener("click", async () => {
   el.password.value = "";
   el.workoutResult.classList.add("hidden");
   el.workoutResult.innerHTML = "";
+  // Clean up any active in-app state (guided wake-lock, rest timer, etc.)
+  // so the user actually sees the auth screen instead of stale chrome.
+  try { stopRestTimer?.(true); } catch {}
+  try { releaseWakeLock?.(); } catch {}
+  if (typeof guided === "object" && guided) guided.active = false;
+  currentWorkout = null;
   resetForm();
   showAuth();
 });
