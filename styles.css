@@ -1295,6 +1295,116 @@ input {
   align-self: flex-start;
 }
 
+/* ─── SLEEP PROMPT ───────────────────────────────────────────────────── */
+.sleep-prompt {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.sleep-prompt-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.sleep-prompt-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sleep-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sleep-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.sleep-btn.skip {
+  color: var(--text-dim);
+  background: none;
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+.sleep-btn.skip:hover {
+  color: var(--text);
+  transform: none;
+}
+
+.sleep-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1500;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* ─── RECOVERY BANNER ────────────────────────────────────────────────── */
+.recovery-banner {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(167, 139, 250, 0.08));
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.recovery-banner-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.4));
+}
+
+.recovery-banner-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #93c5fd;
+  margin-bottom: 6px;
+}
+
+.recovery-banner-body {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.recovery-banner-body strong { color: var(--text); }
+
+.recovery-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+
+@media (max-width: 700px) {
+  .recovery-banner {
+    grid-template-columns: auto 1fr;
+  }
+  .recovery-banner-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+  }
+}
+
 /* ─── BODY HEATMAP ───────────────────────────────────────────────────── */
 .body-heatmap {
   background: var(--bg-card);

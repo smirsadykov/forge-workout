@@ -325,6 +325,9 @@ const PRESCRIPTIONS = {
   fat_loss:    { sets: [3, 4], reps: [12, 15], rest: 45,  isoReps: [15, 20] },
   endurance:   { sets: [2, 3], reps: [15, 20], rest: 30,  isoReps: [20, 25] },
   mobility:    { sets: [2, 3], reps: [8, 12],  rest: 20,  isoReps: [10, 12] },
+  // Light loaded session for when you're under-recovered. Easy to start,
+  // promotes blood flow without adding stress. Keep momentum, don't dig in.
+  recovery:    { sets: [2, 3], reps: [10, 15], rest: 60,  isoReps: [12, 18] },
 };
 
 // How many exercises to pick by duration (minutes)

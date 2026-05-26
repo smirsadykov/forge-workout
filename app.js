@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   loads: "forge:loads",   // per-user available equipment loads (kg)
   soreness: "forge:soreness", // per-user, per-muscle soreness (decays over time)
   volumeTargets: "forge:volumeTargets", // per-user weekly sets target per muscle
+  sleep: "forge:sleep",   // per-user, per-date sleep quality rating (1-5)
 };
 
 // Muscle groups we expose in soreness + volume target UI.
@@ -469,6 +470,47 @@ function setSoreness(userId, muscle, level) {
   save(STORAGE_KEYS.soreness, all);
 }
 
+// ─── SLEEP TRACKING ──────────────────────────────────────────────────────
+function dateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getSleepRating(userId, date = new Date()) {
+  const all = load(STORAGE_KEYS.sleep, {});
+  const userSleep = all[userId];
+  if (!userSleep) return null;
+  return userSleep[dateKey(date)] || null;
+}
+
+function setSleepRating(userId, quality) {
+  const all = load(STORAGE_KEYS.sleep, {});
+  if (!all[userId]) all[userId] = {};
+  all[userId][dateKey()] = { quality, recordedAt: Date.now() };
+  save(STORAGE_KEYS.sleep, all);
+}
+
+// Detect under-recovery from sleep + accumulated soreness. Returns an
+// object describing the reasons, or null if we're fine.
+function getUnderRecoveryStatus(userId) {
+  const sleep = getSleepRating(userId);
+  const badSleep = sleep && sleep.quality <= 2;
+  const all = load(STORAGE_KEYS.soreness, {});
+  const us = all[userId] || {};
+  let highSore = 0;
+  const soreMuscles = [];
+  for (const muscle of Object.keys(us)) {
+    if (getCurrentSoreness(userId, muscle) >= 2.0) {
+      highSore++;
+      soreMuscles.push(muscle);
+    }
+  }
+  if (!badSleep && highSore < 3) return null;
+  return { badSleep, highSore, soreMuscles };
+}
+
 function getCurrentSoreness(userId, muscle) {
   if (!userId) return 0;
   const all = load(STORAGE_KEYS.soreness, {});
@@ -643,7 +685,7 @@ function isTrackable(name) {
   return true;
 }
 
-function getSuggestion(userId, exerciseName, prescription, pattern) {
+function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   const stat = getExerciseStat(userId, exerciseName);
   if (!stat || !stat.history?.length) return { last: null, next: null, trend: null };
 
@@ -677,6 +719,14 @@ function getSuggestion(userId, exerciseName, prescription, pattern) {
     trend = "same";
   }
 
+  // Recovery override: regardless of progression math, suggest ~55% of last
+  // working weight at the prescription's mid-rep range. Whole point is light.
+  if (goal === "recovery" && usesWeight && lastKg > 0) {
+    nextKg = Math.max(0, Math.round(lastKg * 0.55 * 2) / 2);
+    nextReps = Math.round((lo + hi) / 2);
+    trend = "recovery";
+  }
+
   return {
     last: { weightKg: lastKg, reps: lastReps, date: lastSession.date, allSets: lastSession.sets },
     next: { weightKg: nextKg, reps: nextReps },
@@ -698,6 +748,8 @@ const el = {
   loadWarning: document.getElementById("loadWarning"),
   deloadBanner: document.getElementById("deloadBanner"),
   recommendationBanner: document.getElementById("recommendationBanner"),
+  sleepPrompt: document.getElementById("sleepPrompt"),
+  recoveryBanner: document.getElementById("recoveryBanner"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
   authError: document.getElementById("authError"),
@@ -737,6 +789,8 @@ function showApp(view = "generator") {
     refreshDeloadBanner();
     refreshRecommendationBanner();
     refreshStreakBadge();
+    refreshSleepPrompt();
+    refreshRecoveryBanner();
   }
 }
 
@@ -816,6 +870,79 @@ function refreshStreakBadge() {
   badge.classList.remove("hidden");
   badge.textContent = `🔥 ${streak}`;
   badge.title = `${streak} day training streak — keep it going`;
+}
+
+// One-tap sleep prompt that appears once per day until rated.
+function refreshSleepPrompt() {
+  if (!session || !el.sleepPrompt) return;
+  const today = getSleepRating(session.username);
+  if (today) {
+    el.sleepPrompt.classList.add("hidden");
+    el.sleepPrompt.innerHTML = "";
+    return;
+  }
+  el.sleepPrompt.classList.remove("hidden");
+  el.sleepPrompt.innerHTML = `
+    <div class="sleep-prompt-title">How did you sleep last night?</div>
+    <div class="sleep-prompt-options">
+      <button class="sleep-btn" data-sleep="5" title="8+ hours, deep, refreshed">😴 Great</button>
+      <button class="sleep-btn" data-sleep="4" title="6-8 hours, decent">🙂 OK</button>
+      <button class="sleep-btn" data-sleep="2" title="5-6 hours or restless">😐 Meh</button>
+      <button class="sleep-btn" data-sleep="1" title="Under 5 hours or terrible">😩 Bad</button>
+      <button class="sleep-btn skip" data-sleep="skip">Skip</button>
+    </div>
+  `;
+  el.sleepPrompt.querySelectorAll(".sleep-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.sleep;
+      if (v !== "skip") setSleepRating(session.username, Number(v));
+      el.sleepPrompt.classList.add("hidden");
+      refreshRecoveryBanner();
+    });
+  });
+}
+
+// Recovery banner: shows when bad sleep + accumulated soreness suggest the
+// user should skip the heavy session and do a light Recovery workout instead.
+function refreshRecoveryBanner() {
+  if (!session || !el.recoveryBanner) return;
+  // Don't show if user has already picked recovery as their goal.
+  if (formState.goal === "recovery") {
+    el.recoveryBanner.classList.add("hidden");
+    el.recoveryBanner.innerHTML = "";
+    return;
+  }
+  const status = getUnderRecoveryStatus(session.username);
+  if (!status) {
+    el.recoveryBanner.classList.add("hidden");
+    el.recoveryBanner.innerHTML = "";
+    return;
+  }
+  const reasons = [];
+  if (status.badSleep) reasons.push("you slept badly");
+  if (status.highSore >= 3) reasons.push(`${status.highSore} muscles still sore`);
+  el.recoveryBanner.classList.remove("hidden");
+  el.recoveryBanner.innerHTML = `
+    <div class="recovery-banner-icon">🌙</div>
+    <div class="recovery-banner-content">
+      <div class="recovery-banner-title">You're under-recovered.</div>
+      <div class="recovery-banner-body">
+        Detected: <strong>${reasons.join(" + ")}</strong>. A <strong>Recovery</strong> session — ~55% of your usual weights, 2-3 sets of 10-15 reps with short rest — keeps momentum without digging the hole deeper. Better than skipping.
+      </div>
+    </div>
+    <div class="recovery-banner-actions">
+      <button class="primary-btn" data-rec-action="apply">Start Recovery</button>
+      <button class="secondary-btn" data-rec-action="dismiss">Train anyway</button>
+    </div>
+  `;
+  el.recoveryBanner.querySelector("[data-rec-action='apply']").addEventListener("click", () => {
+    // Select the Recovery goal chip
+    const chip = document.querySelector('.chip[data-value="recovery"]');
+    if (chip) chip.click();
+  });
+  el.recoveryBanner.querySelector("[data-rec-action='dismiss']").addEventListener("click", () => {
+    el.recoveryBanner.classList.add("hidden");
+  });
 }
 
 function refreshRecommendationBanner() {
@@ -1160,6 +1287,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       el.formError.textContent = "";
       refreshLoadWarning();
       refreshRecommendationBanner();
+      refreshRecoveryBanner();
     });
   });
 });
@@ -1298,7 +1426,8 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   const p = PRESCRIPTIONS[goal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
-  const intensity = style === "intensity";
+  // Recovery goal disables intensity techniques (whole point is to be easy).
+  const intensity = goal !== "recovery" && style === "intensity";
 
   // Ballistic / explosive movements (KB swings, jumps, plyos) follow their own
   // template: moderate reps with explosive intent, generous rest for power
@@ -1577,6 +1706,12 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     if ((goal === "fat_loss" || goal === "endurance") &&
         (ex.pattern === "compound" || ex.pattern === "conditioning" || ex.pattern === "ballistic")) score += 6;
     if (goal === "mobility" && ex.pattern === "mobility") score += 10;
+    // Recovery: prefer compounds + isolations for blood flow; skip ballistic
+    // entirely (too intense) and avoid conditioning (raises HR too much).
+    if (goal === "recovery") {
+      if (ex.pattern === "ballistic" || ex.pattern === "conditioning") score -= 100; // effectively excluded
+      if (ex.pattern === "compound" || ex.pattern === "isolation") score += 5;
+    }
 
     // Anti-repeat penalty for exercises from the previous workout.
     if (lastPickedNames.has(ex.name)) score -= 9;
@@ -1662,6 +1797,7 @@ const GOAL_LABELS = {
   fat_loss: "Fat Loss",
   endurance: "Endurance",
   mobility: "Mobility",
+  recovery: "Recovery",
 };
 const TARGET_LABELS = {
   full_body: "Full Body",
@@ -1693,7 +1829,8 @@ function renderExerciseLog(ex, units) {
   if (!isTrackable(ex.name)) return "";
 
   const usesWeight = exerciseUsesWeight(ex.name);
-  const suggestion = getSuggestion(session.username, ex.name, ex, ex.pattern);
+  const workoutGoal = currentWorkout?.inputs?.goal;
+  const suggestion = getSuggestion(session.username, ex.name, ex, ex.pattern, workoutGoal);
   const last = suggestion.last;
   const next = suggestion.next;
   // recentlyLogged now holds an array of sets per exercise (per-set logging),
@@ -1716,14 +1853,21 @@ function renderExerciseLog(ex, units) {
       const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
       summary = usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`;
     }
-    const trendArrow = suggestion.trend === "up" ? "↑" : suggestion.trend === "down" ? "↓" : "·";
-    const trendClass = suggestion.trend === "up" ? "up" : suggestion.trend === "down" ? "down" : "";
+    const trendArrow =
+      suggestion.trend === "up" ? "↑" :
+      suggestion.trend === "down" ? "↓" :
+      suggestion.trend === "recovery" ? "↻" : "·";
+    const trendClass =
+      suggestion.trend === "up" ? "up" :
+      suggestion.trend === "down" ? "down" :
+      suggestion.trend === "recovery" ? "down" : "";
+    const trendLabel =
+      suggestion.trend === "up" ? "progress" :
+      suggestion.trend === "down" ? "deload" :
+      suggestion.trend === "recovery" ? "recovery — light" :
+      "push reps";
     pill = `<span class="last-pill">${summary}</span>
-            <span class="progress-hint ${trendClass}">${trendArrow} ${
-              suggestion.trend === "up" ? "progress" :
-              suggestion.trend === "down" ? "deload" :
-              "push reps"
-            }</span>`;
+            <span class="progress-hint ${trendClass}">${trendArrow} ${trendLabel}</span>`;
   }
 
   // Build N set rows based on the exercise's set count.
@@ -2477,6 +2621,30 @@ function renderSettings() {
 
   renderSettingsSoreness();
   renderVolumeTargets();
+  renderSettingsSleep();
+}
+
+function renderSettingsSleep() {
+  const grid = document.getElementById("settingsSleep");
+  if (!grid || !session) return;
+  const current = getSleepRating(session.username);
+  const opts = [
+    { q: 5, label: "😴 Great", desc: "8+ hrs, refreshed" },
+    { q: 4, label: "🙂 OK",    desc: "6-8 hrs" },
+    { q: 2, label: "😐 Meh",   desc: "5-6 hrs / restless" },
+    { q: 1, label: "😩 Bad",   desc: "Under 5 hrs / terrible" },
+  ];
+  grid.innerHTML = opts.map(o => `
+    <button class="sleep-btn ${current?.quality === o.q ? "selected" : ""}"
+            data-settings-sleep="${o.q}" title="${o.desc}">${o.label}</button>
+  `).join("");
+  grid.querySelectorAll("[data-settings-sleep]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const q = Number(btn.dataset.settingsSleep);
+      setSleepRating(session.username, q);
+      renderSettingsSleep();
+    });
+  });
 }
 
 function renderSettingsSoreness() {
@@ -3047,7 +3215,7 @@ function renderGuided() {
   const usesWeight = exerciseUsesWeight(ex.name);
   const units = getPrefs(session.username).units;
   const suggestion = trackable
-    ? getSuggestion(session.username, ex.name, ex, ex.pattern)
+    ? getSuggestion(session.username, ex.name, ex, ex.pattern, currentWorkout?.inputs?.goal)
     : { last: null, next: null, trend: null };
 
   // Update top progress bar
