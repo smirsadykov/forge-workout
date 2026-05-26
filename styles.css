@@ -1730,6 +1730,80 @@ input {
   background: linear-gradient(to right, #2a3140, hsl(220,40%,40%), hsl(20,80%,50%), hsl(0,90%,50%));
 }
 
+/* MEV/MAV/MRV legend — replaces the gradient bar */
+.heatmap-legend.landmarks {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.heatmap-legend.landmarks span:not(.lm-swatch) {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.lm-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-right: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Per-muscle status list under the body diagram */
+.volume-status-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.vol-status-row {
+  display: grid;
+  grid-template-columns: 12px minmax(90px, 1fr) auto minmax(0, 2fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.vol-status-row.status-over { background: rgba(192,57,43,0.10); }
+.vol-status-row.status-under { background: rgba(255,255,255,0.03); }
+.vol-status-row.status-optimal { background: rgba(61,163,93,0.08); }
+.vol-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.vol-status-muscle {
+  font-weight: 700;
+  color: var(--text);
+  text-transform: capitalize;
+}
+.vol-status-sets {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.vol-status-msg {
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .vol-status-row {
+    grid-template-columns: 12px 1fr auto;
+  }
+  .vol-status-msg { display: none; }
+}
+
 /* ─── EXERCISE LIBRARY ───────────────────────────────────────────────── */
 .library-controls {
   background: var(--bg-card);
@@ -2532,6 +2606,86 @@ input {
 .side-tag.side-r { color: var(--accent); border-color: rgba(255, 214, 51, 0.4); }
 .side-tag.side-l { color: #93c5fd; border-color: rgba(96, 165, 250, 0.4); }
 
+/* ─── RIR (Reps In Reserve) picker ──────────────────────────────────── */
+.rir-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.rir-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.rir-picker {
+  display: inline-flex;
+  gap: 3px;
+}
+.rir-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.rir-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.rir-btn.active {
+  background: var(--accent);
+  color: #1a1a1a;
+  border-color: var(--accent);
+}
+/* Color cue: low RIR (failure) = warm; high RIR (easy) = cool */
+.rir-btn[data-rir="0"].active { background: #c0392b; color: #fff; border-color: #c0392b; }
+.rir-btn[data-rir="1"].active { background: #e67e22; color: #1a1a1a; border-color: #e67e22; }
+.rir-btn[data-rir="2"].active { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+.rir-btn[data-rir="3"].active { background: #3da35d; color: #fff; border-color: #3da35d; }
+.rir-btn[data-rir="4"].active { background: #5dade2; color: #fff; border-color: #5dade2; }
+
+/* Guided-mode RIR row */
+.guided-rir-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+}
+.guided-rir-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.guided-rir-row .rir-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 15px;
+}
+@media (max-width: 600px) {
+  .rir-wrap {
+    /* On narrow screens, RIR drops to the next line so the row stays readable. */
+    margin-left: 0;
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}
+
 .log-field.compact {
   padding: 0 8px;
 }
@@ -2642,6 +2796,18 @@ input {
 
 .progress-hint.up { color: var(--success); }
 .progress-hint.down { color: var(--danger); }
+
+.progress-note {
+  display: inline-block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+}
 
 /* ─── LOAD WARNING BANNER ────────────────────────────────────────────── */
 .load-warning {

@@ -191,6 +191,9 @@ async function forceSyncAll() {
 
 // Make the indicator clickable — manual sync trigger.
 document.addEventListener("DOMContentLoaded", () => {
+  // Apply translations to all static DOM elements tagged with data-i18n.
+  if (window.i18n) window.i18n.applyI18n(document);
+
   const indicator = document.getElementById("syncIndicator");
   if (indicator) {
     indicator.addEventListener("click", async () => {
@@ -339,6 +342,12 @@ function logExercise(userId, exName, payload) {
     .map(s => {
       const out = { weightKg: Number(s.weightKg) || 0, reps: Number(s.reps) || 0 };
       if (s.side === "R" || s.side === "L") out.side = s.side;
+      // Reps In Reserve (0-4): how many reps were left in the tank.
+      // Optional — only persisted if the user logged it.
+      if (s.rir != null && !Number.isNaN(Number(s.rir))) {
+        const rir = Math.max(0, Math.min(4, Number(s.rir)));
+        out.rir = rir;
+      }
       return out;
     })
     .filter(s => s.reps > 0);
@@ -386,6 +395,165 @@ function setPrefs(userId, prefs) {
   }));
 }
 
+// ─── VOLUME LANDMARKS (MEV / MAV / MRV) ──────────────────────────────────
+// Per-muscle WEEKLY set targets, from the evidence-based programming
+// literature (Israetel volume landmarks, cross-referenced with Schoenfeld
+// meta-analyses on dose response).
+//
+//   MEV = Minimum Effective Volume — below this, muscle stops growing
+//   MAV = Maximum Adaptive Volume — productive working range
+//   MRV = Maximum Recoverable Volume — over this, recovery fails
+//
+// These are population midpoints; individuals vary ±30%. The app uses them
+// to color the heatmap and surface "undertrained / well-trained / overdone"
+// status rather than treating volume as a single accumulating gradient.
+const VOLUME_LANDMARKS = {
+  chest:      { mev: 8,  mavLow: 12, mavHigh: 20, mrv: 22 },
+  back:       { mev: 10, mavLow: 14, mavHigh: 22, mrv: 25 },
+  shoulders:  { mev: 8,  mavLow: 16, mavHigh: 22, mrv: 26 },
+  biceps:     { mev: 6,  mavLow: 12, mavHigh: 20, mrv: 24 },
+  triceps:    { mev: 6,  mavLow: 10, mavHigh: 18, mrv: 22 },
+  quads:      { mev: 8,  mavLow: 12, mavHigh: 18, mrv: 20 },
+  hamstrings: { mev: 6,  mavLow: 10, mavHigh: 16, mrv: 20 },
+  glutes:     { mev: 0,  mavLow: 8,  mavHigh: 16, mrv: 18 },
+  calves:     { mev: 8,  mavLow: 12, mavHigh: 16, mrv: 20 },
+  core:       { mev: 0,  mavLow: 8,  mavHigh: 16, mrv: 25 },
+};
+
+// Classify a 7-day set count against the landmarks. Status drives color.
+function classifyVolumeStatus(muscle, weeklySets) {
+  const lm = VOLUME_LANDMARKS[muscle];
+  if (!lm) return { status: "unknown", color: "#1e2230" };
+  const s = weeklySets || 0;
+  if (s < lm.mev) {
+    return {
+      status: "under",
+      color: s < lm.mev * 0.5 ? "#1e2230" : "#3a3f55",
+      label: `${s.toFixed(0)}/${lm.mev} MEV`,
+      message: t("vol.belowMev"),
+    };
+  }
+  if (s < lm.mavLow) {
+    return {
+      status: "approaching",
+      color: "#9a8c2b", // muted yellow
+      label: `${s.toFixed(0)} ${t("wo.sets")}`,
+      message: t("vol.approachingMsg"),
+    };
+  }
+  if (s <= lm.mavHigh) {
+    return {
+      status: "optimal",
+      color: "#3da35d", // green
+      label: `${s.toFixed(0)} ${t("wo.sets")}`,
+      message: t("vol.optimalMsg"),
+    };
+  }
+  if (s <= lm.mrv) {
+    return {
+      status: "high",
+      color: "#d68f2c", // amber
+      label: `${s.toFixed(0)}/${lm.mrv} MRV`,
+      message: t("vol.highMsg"),
+    };
+  }
+  return {
+    status: "over",
+    color: "#c0392b", // red
+    label: `${s.toFixed(0)} ${t("wo.sets")}`,
+    message: t("vol.overMsg"),
+  };
+}
+
+// ─── MUSCLE CONTRIBUTION MAP ─────────────────────────────────────────────
+// Single source of truth for "how much does this exercise count toward each
+// muscle's weekly set count?" Compound lifts produce real stimulus in muscles
+// beyond the primary; ignoring that systematically overstates the primary and
+// under-credits arms/shoulders (the "why do my biceps grow but I never train
+// them?" effect). Fractional credit is the standard approach in evidence-based
+// programming (Israetel, Helms, Schoenfeld).
+//
+// Returns: { muscle: factor }. Primary = 1.0; listed secondaries = 0.5;
+// pattern-derived synergists = 0.5 or 0.25.
+function getMuscleContributions(exercise) {
+  if (!exercise) return {};
+  const contrib = {};
+  const muscles = exercise.muscle || [];
+  if (!muscles.length) return contrib;
+
+  // Author-tagged primary + secondary muscles
+  contrib[muscles[0]] = 1.0;
+  for (let i = 1; i < muscles.length; i++) {
+    if (contrib[muscles[i]] == null) contrib[muscles[i]] = 0.5;
+  }
+
+  const addIfMissing = (m, w) => { if (contrib[m] == null) contrib[m] = w; };
+  const name = (exercise.name || "").toLowerCase();
+  const primary = muscles[0];
+
+  // Pattern-derived synergists. Each line encodes a well-known biomechanical
+  // assist: pressing recruits triceps + front delt, pulling recruits biceps,
+  // squatting recruits glutes, hinging recruits glutes + erectors, etc.
+
+  // Horizontal push → triceps + front delt
+  if (primary === "chest" || /bench|push.?up|chest press|fly/.test(name)) {
+    if (!/fly|flye/.test(name)) {
+      // Flies are isolation-ish; minimal triceps. Skip the tri credit.
+      addIfMissing("triceps", 0.5);
+    }
+    addIfMissing("shoulders", 0.25);
+  }
+  // Vertical push (overhead press variants) → triceps
+  if (/overhead press|shoulder press|ohp|military|arnold|push press/.test(name)
+      || (primary === "shoulders" && /press/.test(name))) {
+    addIfMissing("triceps", 0.5);
+  }
+  // Vertical pull (pull-up / lat pulldown) → biceps
+  if (/pull.?up|chin.?up|pulldown|pull.?down|lat pull/.test(name)) {
+    addIfMissing("biceps", 0.5);
+  }
+  // Horizontal pull (row variants) → biceps
+  if (/row/.test(name) && !/upright row/.test(name)) {
+    addIfMissing("biceps", 0.5);
+  }
+  // Upright row → side delts + biceps
+  if (/upright row/.test(name)) {
+    addIfMissing("shoulders", 0.5);
+    addIfMissing("biceps", 0.25);
+  }
+  // Squat patterns → glutes (and ham as antagonist stabilizer)
+  if (/squat|lunge|step.?up|split squat|bulgarian/.test(name)) {
+    addIfMissing("glutes", 0.5);
+    if (primary === "quads") addIfMissing("hamstrings", 0.25);
+  }
+  // Hinge patterns → glutes + hams + erectors (back)
+  if (/deadlift|good morning|rdl|romanian|hip thrust|kettlebell swing|clean|snatch/.test(name)) {
+    addIfMissing("glutes", 0.5);
+    addIfMissing("hamstrings", 0.5);
+    addIfMissing("back", 0.25);
+  }
+  // Loaded carries → core + grip/traps (we don't track traps separately,
+  // so we credit shoulders as the closest proxy)
+  if (/carry|farmer|suitcase walk|loaded carry/.test(name)) {
+    addIfMissing("core", 0.5);
+    addIfMissing("shoulders", 0.25);
+  }
+  // Dips → chest + triceps depending on lean; credit both half-strength
+  if (/\bdip\b|dips/.test(name)) {
+    addIfMissing("chest", 0.5);
+    addIfMissing("triceps", 0.5);
+  }
+  // Curl variants → minor forearm work (no forearm muscle tracked; skip)
+  // Triceps extension → minor anterior delt (skip — too small)
+
+  // Most compounds engage the core for stabilization. Credit a small amount.
+  if (/squat|deadlift|overhead|standing press|push press|pull.?up|chin.?up|row|carry|swing|clean|snatch/.test(name)) {
+    addIfMissing("core", 0.25);
+  }
+
+  return contrib;
+}
+
 // ─── WEEKLY VOLUME ANALYTICS ─────────────────────────────────────────────
 // Snap a date to Monday 00:00 — defines the ISO week bucket.
 function weekStartOf(d) {
@@ -395,9 +563,11 @@ function weekStartOf(d) {
   return date.getTime();
 }
 
-// Sum total recent training volume + set count by muscle (primary AND
-// secondary contributors split equally) over the last N days. Used for the
-// body heatmap so you can see what's been hammered vs neglected.
+// Sum total recent training volume + set count by muscle over the last N days.
+// Uses fractional synergist credit (see getMuscleContributions) so compound
+// lifts properly attribute work to triceps, biceps, glutes, etc.
+// Unilateral sets count as 0.5 (each side) so a "5 sets per side" log is
+// equivalent to 5 bilateral sets, not 10.
 function getRecentMuscleVolume(userId, daysBack = 14) {
   const cutoff = Date.now() - daysBack * 86400000;
   const stats = getStats(userId);
@@ -405,19 +575,18 @@ function getRecentMuscleVolume(userId, daysBack = 14) {
   for (const [exName, stat] of Object.entries(stats)) {
     const ex = EXERCISES.find(e => e.name === exName);
     if (!ex) continue;
+    const contributions = getMuscleContributions(ex);
     for (const entry of (stat.history || [])) {
       const n = normalizeHistoryEntry(entry);
       if (n.date < cutoff) continue;
       const vol = n.sets.reduce((s, set) =>
         s + (Number(set.weightKg) || 0) * (Number(set.reps) || 0), 0);
-      const setCount = n.sets.length;
-      ex.muscle.forEach((m, idx) => {
-        // Primary muscle takes full credit; secondary muscles get half.
-        const factor = idx === 0 ? 1 : 0.5;
+      const setCount = n.sets.reduce((c, s) => c + (s.side ? 0.5 : 1), 0);
+      for (const [m, factor] of Object.entries(contributions)) {
         if (!byMuscle[m]) byMuscle[m] = { vol: 0, sets: 0 };
         byMuscle[m].vol += vol * factor;
         byMuscle[m].sets += setCount * factor;
-      });
+      }
     }
   }
   return byMuscle;
@@ -442,22 +611,29 @@ function heatColor(intensity) {
 }
 
 function renderBodyHeatmap(userId) {
+  // 14-day window divided by 2 ≈ weekly average; this is the number we
+  // compare against MEV/MAV/MRV landmarks.
   const data = getRecentMuscleVolume(userId, 14);
   const muscles = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core"];
-  const maxSets = Math.max(0.001, ...muscles.map(m => data[m]?.sets || 0));
-  if (maxSets < 0.5) return ""; // not enough data to be meaningful
+  const totalSets = muscles.reduce((s, m) => s + (data[m]?.sets || 0), 0);
+  if (totalSets < 1) return ""; // not enough data to be meaningful
 
-  const intensity = (m) => Math.min(1, (data[m]?.sets || 0) / maxSets);
-  const fill = (m) => heatColor(intensity(m));
+  const weeklySets = (m) => (data[m]?.sets || 0) / 2; // 14d → per-week
+  const status = (m) => classifyVolumeStatus(m, weeklySets(m));
+  const fill = (m) => status(m).color;
   const units = getPrefs(userId).units;
   const tooltip = (m) => {
     const d = data[m];
-    if (!d || d.sets < 0.5) return `${m}: no work`;
-    const setsRounded = Math.round(d.sets);
+    const ws = weeklySets(m);
+    const st = status(m);
+    if (!d || d.sets < 0.5) {
+      const lm = VOLUME_LANDMARKS[m];
+      return lm ? `${m}: 0 sets/wk (MEV ${lm.mev})` : `${m}: no work`;
+    }
     const volDisplay = d.vol > 0
-      ? ` · ${Math.round(toDisplay(d.vol, units)).toLocaleString()} ${units}`
+      ? ` · ${Math.round(toDisplay(d.vol, units)).toLocaleString()} ${units}/2wk`
       : "";
-    return `${m}: ${setsRounded} sets${volDisplay} (last 14 days)`;
+    return `${m}: ${ws.toFixed(1)} sets/wk · ${st.message}${volDisplay}`;
   };
 
   // Region helper: emit a muscle shape with a <title> tooltip child.
@@ -470,7 +646,7 @@ function renderBodyHeatmap(userId) {
 
   return `
     <div class="body-heatmap">
-      <h3 class="volume-chart-title">Body heatmap <span class="volume-chart-sub">last 14 days · hover for details</span></h3>
+      <h3 class="volume-chart-title">${t("history.bodyHeatmap")} <span class="volume-chart-sub">${t("history.bodyHeatmapSub")}</span></h3>
       <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
         <!-- FRONT -->
         <g class="figure-front">
@@ -517,17 +693,54 @@ function renderBodyHeatmap(userId) {
           <ellipse cx="120" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
         </g>
       </svg>
-      <div class="heatmap-legend">
-        <span class="heatmap-legend-label">No work</span>
-        <div class="heatmap-legend-bar"></div>
-        <span class="heatmap-legend-label">Hammered</span>
+      <div class="heatmap-legend landmarks">
+        <span class="lm-swatch" style="background:#1e2230"></span><span>${t("vol.underMev")}</span>
+        <span class="lm-swatch" style="background:#9a8c2b"></span><span>${t("vol.approaching")}</span>
+        <span class="lm-swatch" style="background:#3da35d"></span><span>${t("vol.optimal")}</span>
+        <span class="lm-swatch" style="background:#d68f2c"></span><span>${t("vol.high")}</span>
+        <span class="lm-swatch" style="background:#c0392b"></span><span>${t("vol.overMrv")}</span>
       </div>
+      ${renderVolumeStatusList(userId, data)}
     </div>
   `;
 }
 
-// Walk all of a user's exercise_stats history and aggregate by primary muscle,
-// bucketed into ISO weeks. Returns { muscle: { weekStartMs: { kg, sets } } }.
+// Compact list below the body diagram: each muscle's per-week sets and status,
+// sorted by how problematic it is (over MRV first, then under MEV, then OK).
+function renderVolumeStatusList(userId, data) {
+  const muscles = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core"];
+  const rows = muscles.map(m => {
+    const weeklySets = (data[m]?.sets || 0) / 2;
+    const st = classifyVolumeStatus(m, weeklySets);
+    const lm = VOLUME_LANDMARKS[m];
+    const target = lm ? `MEV ${lm.mev} · MAV ${lm.mavLow}–${lm.mavHigh}` : "";
+    return {
+      muscle: m,
+      weeklySets,
+      status: st,
+      target,
+      sortOrder: { over: 0, under: 1, high: 2, approaching: 3, optimal: 4, unknown: 5 }[st.status] ?? 5,
+    };
+  }).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return `
+    <div class="volume-status-list">
+      ${rows.map(r => `
+        <div class="vol-status-row status-${r.status.status}">
+          <span class="vol-status-dot" style="background:${r.status.color}"></span>
+          <span class="vol-status-muscle">${MUSCLE_LABELS[r.muscle]}</span>
+          <span class="vol-status-sets">${r.weeklySets.toFixed(1)} ${t("vol.setsPerWeek")}</span>
+          <span class="vol-status-msg">${r.status.message || ""}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+// Walk all of a user's exercise_stats history and aggregate by muscle,
+// bucketed into ISO weeks. Uses fractional synergist credit (compounds
+// distribute work across multiple muscles). Returns
+// { muscle: { weekStartMs: { kg, sets } } }.
 function getWeeklyVolume(userId, weeksBack = 8) {
   const stats = getStats(userId);
   const cutoffMs = weekStartOf(Date.now()) - (weeksBack - 1) * 7 * 86400000;
@@ -536,8 +749,7 @@ function getWeeklyVolume(userId, weeksBack = 8) {
   for (const [exName, stat] of Object.entries(stats)) {
     const ex = EXERCISES.find(e => e.name === exName);
     if (!ex) continue;
-    const primary = ex.muscle[0];
-    if (!primary) continue;
+    const contributions = getMuscleContributions(ex);
 
     for (const entry of (stat.history || [])) {
       const n = normalizeHistoryEntry(entry);
@@ -545,11 +757,15 @@ function getWeeklyVolume(userId, weeksBack = 8) {
       if (ws < cutoffMs) continue;
       const vol = n.sets.reduce((sum, s) =>
         sum + (Number(s.weightKg) || 0) * (Number(s.reps) || 0), 0);
-      const setCount = n.sets.length;
-      if (!byMuscle[primary]) byMuscle[primary] = {};
-      if (!byMuscle[primary][ws]) byMuscle[primary][ws] = { kg: 0, sets: 0 };
-      byMuscle[primary][ws].kg += vol;
-      byMuscle[primary][ws].sets += setCount;
+      // Unilateral sides count as 0.5 each.
+      const setCount = n.sets.reduce((c, s) => c + (s.side ? 0.5 : 1), 0);
+
+      for (const [muscle, factor] of Object.entries(contributions)) {
+        if (!byMuscle[muscle]) byMuscle[muscle] = {};
+        if (!byMuscle[muscle][ws]) byMuscle[muscle][ws] = { kg: 0, sets: 0 };
+        byMuscle[muscle][ws].kg += vol * factor;
+        byMuscle[muscle][ws].sets += setCount * factor;
+      }
     }
   }
   return byMuscle;
@@ -600,7 +816,7 @@ function renderWeeklyVolumeChart(userId, weeksBack = 8) {
     }).join("");
     return `
       <div class="vol-row">
-        <span class="vol-muscle">${muscle.replace("_", " ")}${targetMark}</span>
+        <span class="vol-muscle">${MUSCLE_LABELS[muscle]}${targetMark}</span>
         <div class="vol-bars">${bars}</div>
         <span class="vol-latest">${latestDisplay}</span>
       </div>
@@ -609,7 +825,7 @@ function renderWeeklyVolumeChart(userId, weeksBack = 8) {
 
   return `
     <div class="volume-chart">
-      <h3 class="volume-chart-title">Weekly volume <span class="volume-chart-sub">last ${weeksBack} weeks · per primary muscle</span></h3>
+      <h3 class="volume-chart-title">${t("history.weeklyVolume")} <span class="volume-chart-sub">${t("history.weeklyVolumeSub", { n: weeksBack })}</span></h3>
       <div class="vol-rows">${rows}</div>
     </div>
   `;
@@ -802,6 +1018,82 @@ function progressionIncrementKg(pattern) {
   return pattern === "isolation" ? 1.25 : 2.5;
 }
 
+// Real-world equipment doesn't increment in 2.5kg steps. Snap the suggested
+// next weight to the smallest realistic jump for the actual equipment.
+// For kettlebells specifically, the user can list what they own in Settings
+// (e.g. "10, 12, 16, 24, 32") — the algorithm picks the next available.
+function nextRealisticWeight(currentKg, exerciseName, userId) {
+  const ex = EXERCISES.find(e => e.name === exerciseName);
+  const eqs = ex?.equipment || [];
+
+  // Honor user's actual kettlebell inventory if set
+  if (eqs.includes("kettlebell") && userId) {
+    const loads = getLoads(userId);
+    const inventory = loads.availableKettlebellsKg;
+    if (Array.isArray(inventory) && inventory.length > 0) {
+      const sorted = [...inventory].sort((a, b) => a - b);
+      const next = sorted.find(w => w > currentKg);
+      if (next) return next;
+      // Already at max — return the same so caller sees no jump available
+      return currentKg;
+    }
+  }
+
+  let stepKg;
+  if (eqs.includes("kettlebell")) stepKg = 4;
+  else if (eqs.includes("dumbbells")) stepKg = 2;
+  else if (eqs.includes("barbell")) stepKg = 5;
+  else if (eqs.includes("machine")) stepKg = 2.5;
+  else return currentKg + progressionIncrementKg(ex?.pattern || "compound");
+  return Math.ceil((currentKg + 0.001) / stepKg) * stepKg;
+}
+
+// Double progression with EXTENDED ranges — applied in every scenario.
+// Rationale: pushing reps to topOfRange + 5 before adding weight banks more
+// volume, smooths the next jump (real equipment increments are often 2.5–8kg,
+// which is non-trivial relative to working weight), and avoids the rep crater
+// that follows a premature load increase. This is the best tradeoff whether
+// the jump is 5% (barbell adding 5kg) or 50% (kettlebell 16→24).
+function smartProgression(currentKg, exerciseName, topOfRange, userId, lastReps) {
+  const extensionTarget = topOfRange + 5;
+  const nextKg = nextRealisticWeight(currentKg, exerciseName, userId);
+  const hasEarnedJump = lastReps != null && lastReps >= extensionTarget;
+  const jumpPct = currentKg > 0 ? (nextKg - currentKg) / currentKg : 0;
+
+  // Haven't hit the extended target yet — keep pushing reps at current weight.
+  if (!hasEarnedJump) {
+    const noteTail = nextKg > currentKg
+      ? `then jump to ${nextKg}kg${jumpPct > 0.30 ? ` (+${Math.round(jumpPct * 100)}%)` : ""}`
+      : `at max weight available`;
+    return {
+      mode: "extend-reps",
+      weight: currentKg,
+      reps: extensionTarget,
+      note: `push to ${extensionTarget} reps · ${noteTail}`,
+    };
+  }
+
+  // Earned the jump but nothing heavier exists — keep climbing reps.
+  if (nextKg <= currentKg) {
+    return {
+      mode: "extend-reps",
+      weight: currentKg,
+      reps: Math.max(extensionTarget, (lastReps || 0) + 1),
+      note: `at max available weight · keep extending reps`,
+    };
+  }
+
+  // Take the jump. Warn if it's a big one so user knows to expect fewer reps.
+  return {
+    mode: "add-weight",
+    weight: nextKg,
+    reps: null,
+    note: jumpPct > 0.30
+      ? `big jump to ${nextKg}kg (+${Math.round(jumpPct * 100)}%) · expect fewer reps`
+      : null,
+  };
+}
+
 function exerciseUsesWeight(name) {
   const ex = EXERCISES.find(e => e.name === name);
   if (!ex) return false;
@@ -886,21 +1178,69 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
     }
   }
 
+  // RIR (Reps In Reserve) signal — average across the last-session's sets
+  // that logged it. Lower = closer to failure. Used to autoregulate:
+  //   • Hit-top + high RIR (≥3) → "you had reps left, push harder before jumping"
+  //   • In-range + low RIR (0-1) → "you're already near failure, hold weight"
+  //   • Miss-bottom + high RIR (≥3) → reps low but easy — likely a logging issue,
+  //     not a weight issue; don't deload.
+  //   • Miss-bottom + low RIR (0-1) → genuine deload signal
+  const setsWithRir = lastSession.sets.filter(s => s.rir != null);
+  const avgRir = setsWithRir.length
+    ? setsWithRir.reduce((s, x) => s + x.rir, 0) / setsWithRir.length
+    : null;
+
   let nextKg = lastKg;
   let nextReps = lastReps;
   let trend = "same";
 
+  let progressionNote = null;
   if (lo > 0 && lastReps >= hi) {
-    if (usesWeight) { nextKg = lastKg + inc; nextReps = lo; }
-    else { nextReps = lastReps + 1; }
-    trend = "up";
+    // Hit top of range. If RIR was high (≥3), we have evidence the user
+    // didn't push — defer the jump and ask for more reps at current weight.
+    if (avgRir != null && avgRir >= 3 && usesWeight) {
+      nextKg = lastKg;
+      nextReps = Math.min(hi + 5, lastReps + 3);
+      progressionNote = `last session avg RIR ${avgRir.toFixed(1)} · reps in the tank · push harder before adding weight`;
+      trend = "same";
+    } else if (usesWeight) {
+      const smart = smartProgression(lastKg, exerciseName, hi, userId, lastReps);
+      nextKg = smart.weight;
+      nextReps = smart.reps != null ? smart.reps : lo;
+      progressionNote = smart.note;
+      trend = "up";
+    } else {
+      nextReps = lastReps + 1;
+      trend = "up";
+    }
   } else if (lo > 0 && lastReps < lo) {
-    if (usesWeight) { nextKg = Math.max(0, lastKg - inc); nextReps = Math.round((lo + hi) / 2); }
-    else { nextReps = Math.max(1, lastReps - 1); }
-    trend = "down";
+    // Missed bottom of range. Distinguish "weight genuinely too heavy"
+    // (low RIR — hit failure early) from "didn't push" (high RIR).
+    if (avgRir != null && avgRir >= 3) {
+      // High RIR + missed bottom = inconsistency, not weight problem.
+      // Hold the weight; ask for a real effort next session.
+      nextKg = lastKg;
+      nextReps = Math.round((lo + hi) / 2);
+      progressionNote = `RIR ${avgRir.toFixed(1)} with low reps · push closer to failure next time`;
+      trend = "same";
+    } else if (usesWeight) {
+      nextKg = Math.max(0, lastKg - inc);
+      nextReps = Math.round((lo + hi) / 2);
+      trend = "down";
+    } else {
+      nextReps = Math.max(1, lastReps - 1);
+      trend = "down";
+    }
   } else {
-    // In range or time-based — push for one more rep at same weight.
+    // In range — default is push for one more rep. But if RIR was very high,
+    // hint that the user should push harder rather than just creep up.
     if (lo > 0) nextReps = Math.min(hi, Math.max(lo, lastReps + 1));
+    if (avgRir != null && avgRir >= 3) {
+      progressionNote = `RIR ${avgRir.toFixed(1)} · room to push harder`;
+    } else if (avgRir != null && avgRir <= 1 && lastReps < hi) {
+      // Already at/near failure mid-range — don't add weight, hold and grind.
+      progressionNote = `RIR ${avgRir.toFixed(1)} · near failure · hold weight, build reps`;
+    }
     trend = "same";
   }
 
@@ -910,12 +1250,14 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
     nextKg = Math.max(0, Math.round(lastKg * 0.55 * 2) / 2);
     nextReps = Math.round((lo + hi) / 2);
     trend = "recovery";
+    progressionNote = null;
   }
 
   return {
-    last: { weightKg: lastKg, reps: lastReps, date: lastSession.date, allSets: lastSession.sets },
+    last: { weightKg: lastKg, reps: lastReps, date: lastSession.date, allSets: lastSession.sets, avgRir },
     next: { weightKg: nextKg, reps: nextReps },
     trend,
+    note: progressionNote,
   };
 }
 
@@ -1162,13 +1504,13 @@ function refreshSleepPrompt() {
   }
   el.sleepPrompt.classList.remove("hidden");
   el.sleepPrompt.innerHTML = `
-    <div class="sleep-prompt-title">How did you sleep last night?</div>
+    <div class="sleep-prompt-title">${t("sleep.promptTitle")}</div>
     <div class="sleep-prompt-options">
-      <button class="sleep-btn" data-sleep="5" title="8+ hours, deep, refreshed">😴 Great</button>
-      <button class="sleep-btn" data-sleep="4" title="6-8 hours, decent">🙂 OK</button>
-      <button class="sleep-btn" data-sleep="2" title="5-6 hours or restless">😐 Meh</button>
-      <button class="sleep-btn" data-sleep="1" title="Under 5 hours or terrible">😩 Bad</button>
-      <button class="sleep-btn skip" data-sleep="skip">Skip</button>
+      <button class="sleep-btn" data-sleep="5" title="${t("sleep.greatDesc")}">😴 ${t("sleep.great")}</button>
+      <button class="sleep-btn" data-sleep="4" title="${t("sleep.okDesc")}">🙂 ${t("sleep.ok")}</button>
+      <button class="sleep-btn" data-sleep="2" title="${t("sleep.mehDesc")}">😐 ${t("sleep.meh")}</button>
+      <button class="sleep-btn" data-sleep="1" title="${t("sleep.badDesc")}">😩 ${t("sleep.bad")}</button>
+      <button class="sleep-btn skip" data-sleep="skip">${t("common.skip")}</button>
     </div>
   `;
   el.sleepPrompt.querySelectorAll(".sleep-btn").forEach(btn => {
@@ -1393,7 +1735,7 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
     document.querySelectorAll(".auth-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
     authMode = tab.dataset.tab;
-    el.authSubmit.textContent = authMode === "login" ? "Log in" : "Create account";
+    el.authSubmit.textContent = authMode === "login" ? t("auth.submitLogin") : t("auth.submitSignup");
     el.password.setAttribute("autocomplete", authMode === "login" ? "current-password" : "new-password");
     el.authError.textContent = "";
     el.authError.style.color = "";
@@ -1413,7 +1755,7 @@ el.authForm.addEventListener("submit", async (e) => {
   // ─── Cloud path: Supabase email/password ────────────────────────────
   if (HAS_SUPABASE) {
     el.authSubmit.disabled = true;
-    el.authSubmit.textContent = authMode === "signup" ? "Creating…" : "Logging in…";
+    el.authSubmit.textContent = authMode === "signup" ? t("auth.creating") : t("auth.loggingIn");
     try {
       let result;
       try {
@@ -1459,7 +1801,7 @@ el.authForm.addEventListener("submit", async (e) => {
       showApp("generator");
     } finally {
       el.authSubmit.disabled = false;
-      el.authSubmit.textContent = authMode === "signup" ? "Create account" : "Log in";
+      el.authSubmit.textContent = authMode === "signup" ? t("auth.submitSignup") : t("auth.submitLogin");
       el.authError.style.color = "";
     }
     return;
@@ -2343,33 +2685,25 @@ function enforceTimeBudget(exercises, durationMin) {
 }
 
 // ─── RENDERING ───────────────────────────────────────────────────────────
-const GOAL_LABELS = {
-  strength: "Strength",
-  hypertrophy: "Hypertrophy",
-  fat_loss: "Fat Loss",
-  endurance: "Endurance",
-  mobility: "Mobility",
-  recovery: "Recovery",
-};
-const TARGET_LABELS = {
-  full_body: "Full Body",
-  upper: "Upper Body",
-  lower: "Lower Body",
-  push: "Push",
-  pull: "Pull",
-  legs: "Legs",
-  core: "Core",
-  cardio: "Cardio",
-};
-const EQUIP_LABELS = {
-  bodyweight: "Bodyweight",
-  dumbbells: "Dumbbells",
-  barbell: "Barbell",
-  kettlebell: "Kettlebell",
-  bands: "Bands",
-  machine: "Machine",
-  cardio_machine: "Cardio Machine",
-};
+// Labels now come from the i18n dictionary; these are Proxies so that
+// `LABEL[key]` syntax keeps working in existing call sites while always
+// returning the currently-active language. Falls back to the key (humanized)
+// when the translation is missing.
+const _humanize = (k) => String(k).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+const _labelProxy = (prefix) => new Proxy({}, {
+  get(_, key) {
+    if (typeof key !== "string") return undefined;
+    const fromDict = window.t ? window.t(`${prefix}.${key}`) : null;
+    // window.t returns the key itself when missing; detect & humanize.
+    if (!fromDict || fromDict === `${prefix}.${key}`) return _humanize(key);
+    return fromDict;
+  },
+});
+
+const GOAL_LABELS = _labelProxy("goal");
+const TARGET_LABELS = _labelProxy("target");
+const EQUIP_LABELS = _labelProxy("eq");
+const MUSCLE_LABELS = _labelProxy("muscle");
 
 function escapeAttr(s) {
   return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -2423,12 +2757,15 @@ function renderExerciseLog(ex, units) {
       suggestion.trend === "down" ? "down" :
       suggestion.trend === "recovery" ? "down" : "";
     const trendLabel =
-      suggestion.trend === "up" ? "progress" :
-      suggestion.trend === "down" ? "deload" :
-      suggestion.trend === "recovery" ? "recovery — light" :
-      "push reps";
+      suggestion.trend === "up" ? t("wo.progress") :
+      suggestion.trend === "down" ? t("wo.deload") :
+      suggestion.trend === "recovery" ? t("wo.recoveryLight") :
+      t("wo.pushReps");
+    const noteHtml = suggestion.note
+      ? `<span class="progress-note">${suggestion.note}</span>` : "";
     pill = `<span class="last-pill">${summary}</span>
-            <span class="progress-hint ${trendClass}">${trendArrow} ${trendLabel}</span>`;
+            <span class="progress-hint ${trendClass}">${trendArrow} ${trendLabel}</span>
+            ${noteHtml}`;
   }
 
   // Build set rows. For unilateral exercises, render two rows per set
@@ -2449,7 +2786,17 @@ function renderExerciseLog(ex, units) {
               : (entryIdx === 0 ? defaultWeight : "");
       const r = restored ? restored.reps
               : (entryIdx === 0 ? defaultRep : "");
+      const restoredRir = restored?.rir;
       const label = side ? `Set ${setN} <span class="side-tag side-${side.toLowerCase()}">${side}</span>` : `Set ${setN}`;
+      // RIR (Reps In Reserve) — only meaningful on the LAST set of each side,
+      // since prior sets are usually held in reserve. Show it on every row
+      // anyway but make it cleanly optional (defaults to —).
+      const rirHtml = `
+        <div class="rir-picker" data-log-set="rir-group" title="Reps In Reserve — how many reps did you have left? (0 = to failure, 3+ = easy)">
+          ${[0, 1, 2, 3, 4].map(n =>
+            `<button type="button" class="rir-btn ${restoredRir === n ? "active" : ""}" data-rir="${n}">${n}</button>`
+          ).join("")}
+        </div>`;
       rows.push(`
         <div class="set-row" data-set-idx="${entryIdx}" ${side ? `data-side="${side}"` : ""}>
           <span class="set-num">${label}</span>
@@ -2464,6 +2811,10 @@ function renderExerciseLog(ex, units) {
                    placeholder="${defaultRep}" value="${r || ""}" />
             <span class="log-field-suffix">reps</span>
           </label>
+          <div class="rir-wrap">
+            <span class="rir-label" title="Reps In Reserve">RIR</span>
+            ${rirHtml}
+          </div>
         </div>
       `);
       entryIdx++;
@@ -2617,14 +2968,14 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   const intensityFlag = inputs.style === "intensity"
     ? `<span class="intensity-flag">Intensity Mode</span>` : "";
   const deloadFlag = inputs.deload
-    ? `<span class="deload-flag">Deload</span>` : "";
+    ? `<span class="deload-flag">${t("wo.deloadFlag")}</span>` : "";
 
   const notesText = workout.notes || "";
   const notesHtml = `
     <details class="workout-notes" ${notesText ? "open" : ""}>
-      <summary><span class="notes-summary">📝 ${notesText ? "Notes" : "Add notes"}</span></summary>
+      <summary><span class="notes-summary">📝 ${notesText ? t("wo.notes") : t("wo.addNotes")}</span></summary>
       <textarea class="notes-input" id="workoutNotes" rows="3"
-        placeholder="How did the session feel? Sticking points, energy, sleep, anything worth remembering.">${notesText.replace(/</g, "&lt;")}</textarea>
+        placeholder="${t("wo.notesPlaceholder")}">${notesText.replace(/</g, "&lt;")}</textarea>
       <div class="notes-status" id="notesStatus" aria-live="polite"></div>
     </details>
   `;
@@ -2637,10 +2988,10 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
-        <button class="primary-btn" id="startWorkoutBtn">▶ Start Workout</button>
-        ${showSave ? `<button class="secondary-btn" id="saveBtn">Save</button>` : ""}
-        <button class="secondary-btn" id="shareBtn">🔗 Share</button>
-        <button class="secondary-btn" id="regenBtn">Regenerate</button>
+        <button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>
+        ${showSave ? `<button class="secondary-btn" id="saveBtn">${t("settings.save")}</button>` : ""}
+        <button class="secondary-btn" id="shareBtn">🔗 ${t("wo.share")}</button>
+        <button class="secondary-btn" id="regenBtn">${t("wo.regenerate")}</button>
       </div>
     </div>
     ${notesHtml}
@@ -2768,7 +3119,7 @@ function attachWorkoutActions() {
     saveBtn.addEventListener("click", () => {
       if (!currentWorkout || !session) return;
       addWorkout(session.username, currentWorkout);
-      saveBtn.textContent = "Saved ✓";
+      saveBtn.textContent = t("settings.saved");
       saveBtn.disabled = true;
       workoutIsSaved = true;
     });
@@ -2809,13 +3160,13 @@ function attachWorkoutActions() {
         updateWorkout(session.username, currentWorkout.id, { notes: val });
         const status = document.getElementById("notesStatus");
         if (status) {
-          status.textContent = "Saved ✓";
+          status.textContent = t("settings.saved");
           setTimeout(() => { if (status) status.textContent = ""; }, 1500);
         }
       }
       // Update the summary label
       const summary = notesEl.parentElement?.querySelector(".notes-summary");
-      if (summary) summary.textContent = `📝 ${val.trim() ? "Notes" : "Add notes"}`;
+      if (summary) summary.textContent = `📝 ${val.trim() ? t("wo.notes") : t("wo.addNotes")}`;
     };
     notesEl.addEventListener("input", () => {
       clearTimeout(notesTimer);
@@ -2915,6 +3266,18 @@ function attachWorkoutActions() {
     });
   });
 
+  // Wire RIR pickers: clicking a number activates it, clicking the same
+  // number again clears it (so the user can un-log RIR if needed).
+  document.querySelectorAll(".rir-picker .rir-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const group = btn.closest(".rir-picker");
+      const wasActive = btn.classList.contains("active");
+      group.querySelectorAll(".rir-btn").forEach(b => b.classList.remove("active"));
+      if (!wasActive) btn.classList.add("active");
+    });
+  });
+
   // ─── EXERCISE LOG BUTTONS ──────────────────────────────────────────────
   document.querySelectorAll("[data-action='log-set']").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -2935,8 +3298,11 @@ function attachWorkoutActions() {
         const weightDisplay = weightInput ? Number(weightInput.value) : 0;
         const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
         const side = row.dataset.side; // "R" or "L" for unilateral, undefined otherwise
+        const rirBtn = row.querySelector(".rir-picker .rir-btn.active");
+        const rir = rirBtn ? Number(rirBtn.dataset.rir) : null;
         const entry = { weightKg, reps };
         if (side) entry.side = side;
+        if (rir != null && !Number.isNaN(rir)) entry.rir = rir;
         sets.push(entry);
       });
 
@@ -3011,8 +3377,8 @@ function renderHistory() {
       ${volumeChartHtml}
       <div class="empty-state">
         <div class="empty-state-icon">🏋️</div>
-        <div class="empty-state-title">No saved workouts yet</div>
-        <div class="empty-state-sub">Generate one and hit Save to see it here.</div>
+        <div class="empty-state-title">${t("history.empty")}</div>
+        <div class="empty-state-sub">${t("history.emptySub")}</div>
       </div>
     `;
     return;
@@ -3087,16 +3453,15 @@ const LIBRARY_FILTER_OPTIONS = {
   difficulty: ["beginner", "intermediate", "advanced"],
 };
 
-const PATTERN_LABELS = {
-  compound: "Compound", isolation: "Isolation", ballistic: "Ballistic",
-  conditioning: "Conditioning", mobility: "Mobility",
-};
+const PATTERN_LABELS = _labelProxy("pattern");
 
 function initLibraryFilters() {
   if (libraryInitialized) return;
   libraryInitialized = true;
 
-  document.getElementById("libraryTotal").textContent = EXERCISES.length;
+  // Render the count + surrounding text via i18n so both update on language switch.
+  const subEl = document.getElementById("libraryViewSub");
+  if (subEl) subEl.textContent = t("lib.sub", { count: EXERCISES.length });
 
   Object.entries(LIBRARY_FILTER_OPTIONS).forEach(([field, values]) => {
     const row = document.querySelector(`.library-filter[data-lib-filter="${field}"]`);
@@ -3189,7 +3554,7 @@ function renderLibrary() {
       </div>
       ${renderFormCues(ex.name)}
     </div>
-  `).join("") || `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">No exercises match</div><div class="empty-state-sub">Try clearing some filters.</div></div>`;
+  `).join("") || `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">${t("lib.empty")}</div><div class="empty-state-sub">${t("lib.emptySub")}</div></div>`;
 
   // Wire form-cues toggles inside the library
   document.querySelectorAll(".library-card [data-action='toggle-cues']").forEach(btn => {
@@ -3209,6 +3574,9 @@ function renderSettings() {
   const loads = getLoads(session.username);
 
   document.querySelectorAll("[data-unit-label]").forEach(s => s.textContent = units);
+  // Available KB label has a nested unit span — re-render it with i18n + unit.
+  const kbLabel = document.getElementById("availableKBLabel");
+  if (kbLabel) kbLabel.textContent = t("settings.availableKB", { unit: units });
 
   const dbInput = document.getElementById("maxDumbbell");
   const kbInput = document.getElementById("maxKettlebell");
@@ -3217,11 +3585,62 @@ function renderSettings() {
   dbInput.value = loads.maxDumbbellKg ? toDisplay(loads.maxDumbbellKg, units) : "";
   kbInput.value = loads.maxKettlebellKg ? toDisplay(loads.maxKettlebellKg, units) : "";
   bbCheck.checked = !!loads.hasHeavyBarbell;
+  const kbList = document.getElementById("availableKettlebells");
+  if (kbList) {
+    const arr = loads.availableKettlebellsKg;
+    kbList.value = Array.isArray(arr)
+      ? arr.map(w => toDisplay(w, units)).join(", ")
+      : "";
+  }
 
   renderSettingsSoreness();
   renderVolumeTargets();
   renderSettingsSleep();
   renderCloudToggle();
+  renderLanguageChips();
+}
+
+// Highlight the active language chip and wire clicks. Changing language
+// re-applies static HTML translations and re-renders any currently visible
+// dynamic view so labels update without a hard reload.
+function renderLanguageChips() {
+  const wrap = document.getElementById("languageChips");
+  if (!wrap) return;
+  const current = window.i18n?.getLang() || "en";
+  wrap.querySelectorAll("[data-lang-value]").forEach(btn => {
+    btn.classList.toggle("selected", btn.dataset.langValue === current);
+    btn.onclick = () => {
+      const newLang = btn.dataset.langValue;
+      if (!newLang || newLang === window.i18n?.getLang()) return;
+      window.i18n.setLang(newLang);
+      window.i18n.applyI18n(document);
+      // Re-render dynamic content
+      refreshActiveView();
+    };
+  });
+}
+
+// Force a re-render of whatever view is currently active so dynamic strings
+// (built inside JS template literals) pick up the new language.
+function refreshActiveView() {
+  // Static HTML attrs already updated by applyI18n. Re-render the rest.
+  if (el.settingsView && !el.settingsView.classList.contains("hidden")) renderSettings();
+  if (el.historyView && !el.historyView.classList.contains("hidden")) renderHistory();
+  if (el.libraryView && !el.libraryView.classList.contains("hidden")) {
+    libraryInitialized = false;
+    initLibraryFilters();
+    renderLibrary();
+  }
+  // Library sub has an injected count — needs JS-side retranslation
+  const libSub = document.getElementById("libraryViewSub");
+  if (libSub) libSub.textContent = t("lib.sub", { count: EXERCISES.length });
+  // If a workout is being viewed, re-render it
+  if (currentWorkout && el.workoutResult && !el.workoutResult.classList.contains("hidden")) {
+    renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
+    attachWorkoutActions();
+  }
+  // Guided mode
+  if (guided?.active) renderGuided();
 }
 
 function renderCloudToggle() {
@@ -3259,10 +3678,10 @@ function renderSettingsSleep() {
   if (!grid || !session) return;
   const current = getSleepRating(session.username);
   const opts = [
-    { q: 5, label: "😴 Great", desc: "8+ hrs, refreshed" },
-    { q: 4, label: "🙂 OK",    desc: "6-8 hrs" },
-    { q: 2, label: "😐 Meh",   desc: "5-6 hrs / restless" },
-    { q: 1, label: "😩 Bad",   desc: "Under 5 hrs / terrible" },
+    { q: 5, label: `😴 ${t("sleep.great")}`, desc: t("sleep.greatDesc") },
+    { q: 4, label: `🙂 ${t("sleep.ok")}`,    desc: t("sleep.okDesc") },
+    { q: 2, label: `😐 ${t("sleep.meh")}`,   desc: t("sleep.mehDesc") },
+    { q: 1, label: `😩 ${t("sleep.bad")}`,   desc: t("sleep.badDesc") },
   ];
   grid.innerHTML = opts.map(o => `
     <button class="sleep-btn ${current?.quality === o.q ? "selected" : ""}"
@@ -3483,10 +3902,18 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const units = getPrefs(session.username).units;
   const dbVal = Number(document.getElementById("maxDumbbell").value) || 0;
   const kbVal = Number(document.getElementById("maxKettlebell").value) || 0;
+  // Parse comma-separated KB list into kg numbers
+  const kbListRaw = document.getElementById("availableKettlebells").value;
+  const kbInventory = kbListRaw
+    .split(/[,;\s]+/)
+    .map(s => Number(s))
+    .filter(n => n > 0)
+    .map(n => fromDisplay(n, units));
   setLoads(session.username, {
     maxDumbbellKg: dbVal ? fromDisplay(dbVal, units) : 0,
     maxKettlebellKg: kbVal ? fromDisplay(kbVal, units) : 0,
     hasHeavyBarbell: document.getElementById("hasHeavyBarbell").checked,
+    availableKettlebellsKg: kbInventory.length > 0 ? kbInventory : undefined,
   });
   const saved = document.getElementById("settingsSaved");
   saved.classList.remove("hidden");
@@ -3827,10 +4254,10 @@ function exitGuided() {
 }
 
 function getSection(pattern) {
-  if (pattern === "mobility") return "WARM-UP / MOBILITY";
-  if (pattern === "ballistic") return "POWER / BALLISTIC";
-  if (pattern === "conditioning") return "CONDITIONING / FINISHER";
-  return "MAIN WORK";
+  if (pattern === "mobility") return t("guided.warmup");
+  if (pattern === "ballistic") return t("guided.power");
+  if (pattern === "conditioning") return t("guided.conditioning");
+  return t("guided.mainWork");
 }
 
 function renderGuided() {
@@ -3859,9 +4286,9 @@ function renderGuided() {
   if (suggestion.last) {
     const w = suggestion.last.weightKg
       ? `${toDisplay(suggestion.last.weightKg, units)} ${units}` : "bw";
-    const trendLabel = suggestion.trend === "up" ? "↑ progress"
-      : suggestion.trend === "down" ? "↓ deload" : "· push reps";
-    lastLine = `<div class="guided-last">Last: <strong>${
+    const trendLabel = suggestion.trend === "up" ? `↑ ${t("wo.progress")}`
+      : suggestion.trend === "down" ? `↓ ${t("wo.deload")}` : `· ${t("wo.pushReps")}`;
+    lastLine = `<div class="guided-last">${t("guided.last")} <strong>${
       usesWeight ? `${w} × ${suggestion.last.reps}` : `${suggestion.last.reps} reps`
     }</strong> &nbsp;${trendLabel}</div>`;
   }
@@ -3891,6 +4318,14 @@ function renderGuided() {
           <span class="log-field-suffix">reps</span>
         </label>
       </div>
+      <div class="guided-rir-row" title="Reps In Reserve — how many reps left in the tank? 0 = to failure, 3+ = easy">
+        <span class="guided-rir-label">RIR</span>
+        <div class="rir-picker" id="guidedRirPicker">
+          ${[0, 1, 2, 3, 4].map(n =>
+            `<button type="button" class="rir-btn" data-rir="${n}">${n}</button>`
+          ).join("")}
+        </div>
+      </div>
     `;
   }
 
@@ -3905,15 +4340,15 @@ function renderGuided() {
 
   const muscleStr = ex.muscle.map(m => m.replace("_", " ")).join(" · ");
   const doneLabel = isLastSet
-    ? (isLastExercise ? "✓ Finish Workout" : "✓ Done Set — Next Exercise →")
-    : "✓ Done Set";
+    ? (isLastExercise ? t("guided.finish") : t("guided.doneNext"))
+    : t("guided.doneSet");
 
   const inGroup = !!ex.groupId;
   const positionLetter = inGroup ? String.fromCharCode(65 + (ex.groupPosition || 0)) : "";
   const groupContext = inGroup
     ? `<div class="guided-group-context">${ex.groupSize === 2 ? "SUPERSET" : "CIRCUIT"} · POSITION ${positionLetter} of ${ex.groupSize}</div>`
     : "";
-  const setLabel = inGroup ? "Round" : "Set";
+  const setLabel = inGroup ? t("guided.round") : t("guided.set");
 
   document.getElementById("guidedContent").innerHTML = `
     <div class="guided-section-badge">${getSection(ex.pattern)}</div>
@@ -3929,9 +4364,9 @@ function renderGuided() {
       <div class="guided-set-num">
         <span class="guided-set-label">${setLabel}</span>
         <span class="guided-set-big">${guided.set}</span>
-        <span class="guided-set-of">of ${ex.sets}</span>
+        <span class="guided-set-of">${t("guided.of")} ${ex.sets}</span>
       </div>
-      <div class="guided-target"><strong>${ex.reps}</strong> reps · ${inGroup ? `rest after the ${ex.groupSize === 2 ? "pair" : "circuit"}` : `rest <strong>${ex.rest}s</strong>`}</div>
+      <div class="guided-target"><strong>${ex.reps}</strong> ${t("guided.reps")} · ${inGroup ? (ex.groupSize === 2 ? t("guided.restAfterPair") : t("guided.restAfterCircuit")) : `${t("wo.rest")} <strong>${ex.rest}s</strong>`}</div>
     </div>
 
     ${lastLine}
@@ -3939,12 +4374,21 @@ function renderGuided() {
 
     <div class="guided-actions">
       <button class="primary-btn big" data-guided-action="done">${doneLabel}</button>
-      <button class="ghost-btn" data-guided-action="skip">Skip ${isLastSet ? "Exercise" : "Set"}</button>
+      <button class="ghost-btn" data-guided-action="skip">${isLastSet ? t("guided.skipExercise") : t("guided.skipSet")}</button>
     </div>
   `;
 
   document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
   document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
+  // Wire guided RIR picker (single-select, toggle off on re-click)
+  document.querySelectorAll("#guidedRirPicker .rir-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const wasActive = btn.classList.contains("active");
+      document.querySelectorAll("#guidedRirPicker .rir-btn").forEach(b => b.classList.remove("active"));
+      if (!wasActive) btn.classList.add("active");
+    });
+  });
   // Wire form-cues + progress chart toggles inside the guided card
   document.querySelectorAll("#guidedContent [data-action='toggle-cues']").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -3990,12 +4434,18 @@ function onDoneSet() {
   if (trackable) {
     const rEl = document.getElementById("guidedReps");
     const wEl = document.getElementById("guidedWeight");
+    const rirBtn = document.querySelector("#guidedRirPicker .rir-btn.active");
     const reps = Number(rEl?.value || 0);
     if (reps > 0) {
       const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
       const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
+      const setEntry = { weightKg, reps };
+      if (rirBtn) {
+        const rir = Number(rirBtn.dataset.rir);
+        if (!Number.isNaN(rir)) setEntry.rir = rir;
+      }
       if (!guidedSession.exerciseSets[ex.name]) guidedSession.exerciseSets[ex.name] = [];
-      guidedSession.exerciseSets[ex.name].push({ weightKg, reps });
+      guidedSession.exerciseSets[ex.name].push(setEntry);
     }
   }
 
@@ -4034,7 +4484,7 @@ function onDoneSet() {
 
   // At last position OR a single exercise: rest now.
   if (ex.rest > 0) {
-    const label = inGroup ? `Rest — Round of group` : `Rest — ${ex.name}`;
+    const label = inGroup ? t("guided.restGroup") : `${t("rest.label")} — ${ex.name}`;
     startRestTimer(ex.rest, label);
   }
 

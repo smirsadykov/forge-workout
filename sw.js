@@ -3,7 +3,7 @@
 // cache-busting; cache-first for the icon and manifest. Falls back to cached
 // app shell entirely when offline.
 
-const CACHE_NAME = "forge-cache-v6";
+const CACHE_NAME = "forge-cache-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "./app.js",
   "./exercises.js",
   "./config.js",
+  "./i18n.js",
   "./supabase.min.js",
   "./manifest.json",
   "./icon.svg",
