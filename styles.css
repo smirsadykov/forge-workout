@@ -310,6 +310,14 @@ input {
   font-size: 14px;
   font-weight: 500;
   min-height: 18px;
+  line-height: 1.45;
+}
+
+.auth-forgot {
+  align-self: flex-start;
+  font-size: 13px;
+  padding: 8px 0;
+  margin-top: -8px;
 }
 
 /* ─── BUTTONS ─────────────────────────────────────────────────────────── */

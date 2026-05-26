@@ -1054,6 +1054,10 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
     el.authSubmit.textContent = authMode === "login" ? "Log in" : "Create account";
     el.password.setAttribute("autocomplete", authMode === "login" ? "current-password" : "new-password");
     el.authError.textContent = "";
+    el.authError.style.color = "";
+    // Forgot password only makes sense on login + cloud mode
+    const forgot = document.getElementById("forgotPasswordBtn");
+    if (forgot) forgot.classList.toggle("hidden", authMode !== "login" || !HAS_SUPABASE);
   });
 });
 
@@ -1130,14 +1134,93 @@ el.authForm.addEventListener("submit", async (e) => {
   }
 
   const user = users[username];
-  if (!user || user.passwordHash !== hashPassword(password, user.salt)) {
-    el.authError.textContent = "Invalid username or password.";
+  if (!user) {
+    el.authError.textContent = "No account with that username on this device. Sign up to create one, or check that the app loaded cloud mode (says 'Email' instead of 'Username').";
+    return;
+  }
+  if (user.passwordHash !== hashPassword(password, user.salt)) {
+    el.authError.textContent = "Wrong password.";
     return;
   }
   session = { username, loggedInAt: Date.now() };
   save(STORAGE_KEYS.session, session);
   showApp("generator");
 });
+
+// ─── PASSWORD RESET (cloud mode only) ────────────────────────────────────
+const forgotBtn = document.getElementById("forgotPasswordBtn");
+if (forgotBtn) {
+  forgotBtn.addEventListener("click", async () => {
+    if (!HAS_SUPABASE) return;
+    const email = el.username.value.trim();
+    if (!email) {
+      el.authError.textContent = "Enter your email above first, then click Forgot password.";
+      return;
+    }
+    forgotBtn.disabled = true;
+    forgotBtn.textContent = "Sending…";
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + location.pathname,
+      });
+      if (error) {
+        el.authError.textContent = error.message;
+        el.authError.style.color = "";
+      } else {
+        el.authError.textContent = `Reset link sent to ${email}. Check your inbox (and spam folder).`;
+        el.authError.style.color = "var(--success)";
+      }
+    } catch (e) {
+      el.authError.textContent = "Network error — try again.";
+    } finally {
+      forgotBtn.disabled = false;
+      forgotBtn.textContent = "Forgot password?";
+    }
+  });
+}
+
+// Handle the password-update form (shown after Supabase redirects with a
+// recovery hash).
+const resetForm = document.getElementById("resetForm");
+if (resetForm) {
+  resetForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!HAS_SUPABASE) return;
+    const resetError = document.getElementById("resetError");
+    const newPw = document.getElementById("resetPassword").value;
+    if (!newPw || newPw.length < 6) {
+      resetError.textContent = "Password must be at least 6 characters.";
+      return;
+    }
+    const submitBtn = resetForm.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Updating…";
+    try {
+      const { error } = await sb.auth.updateUser({ password: newPw });
+      if (error) {
+        resetError.textContent = error.message;
+        return;
+      }
+      // Re-fetch session — should be signed in now via the recovery token.
+      const { data } = await sb.auth.getSession();
+      if (data?.session) {
+        const user = data.session.user;
+        session = {
+          username: user.email,
+          userId: user.id,
+          loggedInAt: Date.now(),
+        };
+        save(STORAGE_KEYS.session, session);
+        history.replaceState(null, "", location.pathname);
+        await syncFromCloud();
+        showApp("generator");
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Update password";
+    }
+  });
+}
 
 // Pull all data for the current user from Supabase into localStorage so
 // subsequent reads (which are sync) see fresh cloud state.
@@ -3743,6 +3826,28 @@ async function bootstrap() {
       el.username.autocomplete = "email";
       el.username.removeAttribute("minlength");
       el.username.removeAttribute("maxlength");
+    }
+    // Show 'Forgot password?' under the login form by default (mode = login).
+    const forgot = document.getElementById("forgotPasswordBtn");
+    if (forgot) forgot.classList.remove("hidden");
+
+    // Password recovery flow: Supabase appends #access_token=...&type=recovery
+    // to the redirect. If we see that, show the reset form instead of login.
+    if (location.hash.includes("type=recovery") || location.hash.includes("access_token")) {
+      try {
+        // The SDK reads the hash automatically; give it a tick.
+        await new Promise(r => setTimeout(r, 200));
+        const { data } = await sb.auth.getSession();
+        if (data?.session) {
+          // Show reset-password form
+          document.querySelector(".auth-tabs")?.classList.add("hidden");
+          document.getElementById("authForm")?.classList.add("hidden");
+          document.getElementById("resetForm")?.classList.remove("hidden");
+          el.authView.classList.remove("hidden");
+          el.nav.classList.add("hidden");
+          return;
+        }
+      } catch {}
     }
   }
 
