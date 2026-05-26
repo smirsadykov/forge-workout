@@ -12,6 +12,26 @@ const STORAGE_KEYS = {
   loads: "forge:loads",   // per-user available equipment loads (kg)
 };
 
+// ─── SUPABASE BACKEND (optional) ─────────────────────────────────────────
+const HAS_SUPABASE = !!(
+  window.FORGE_CONFIG?.SUPABASE_URL &&
+  window.FORGE_CONFIG?.SUPABASE_ANON_KEY &&
+  window.supabase
+);
+const sb = HAS_SUPABASE
+  ? window.supabase.createClient(
+      window.FORGE_CONFIG.SUPABASE_URL,
+      window.FORGE_CONFIG.SUPABASE_ANON_KEY
+    )
+  : null;
+
+// Fire-and-forget cloud push. Catches errors so a missing network or
+// schema mismatch never breaks the local UX.
+function cloudPush(fn) {
+  if (!sb || !session?.userId) return;
+  Promise.resolve(fn()).catch(() => {});
+}
+
 // ─── STORAGE HELPERS ─────────────────────────────────────────────────────
 const load = (key, fallback) => {
   try {
@@ -53,12 +73,19 @@ function addWorkout(userId, workout) {
   if (!all[userId]) all[userId] = [];
   all[userId].unshift(workout);
   save(STORAGE_KEYS.workouts, all);
+  cloudPush(() => sb.from("workouts").insert({
+    id: workout.id,
+    user_id: session.userId,
+    data: workout,
+    created_at: new Date(workout.createdAt).toISOString(),
+  }));
 }
 function deleteWorkout(userId, workoutId) {
   const all = load(STORAGE_KEYS.workouts, {});
   if (!all[userId]) return;
   all[userId] = all[userId].filter(w => w.id !== workoutId);
   save(STORAGE_KEYS.workouts, all);
+  cloudPush(() => sb.from("workouts").delete().eq("id", workoutId));
 }
 
 // ─── PROGRESSION: stats + prefs ──────────────────────────────────────────
@@ -104,6 +131,14 @@ function logExercise(userId, exName, { weightKg, reps }) {
   existing.history = (existing.history || []).concat([entry]).slice(-30);
   all[userId][exName] = existing;
   save(STORAGE_KEYS.stats, all);
+  cloudPush(() => sb.from("exercise_stats").upsert({
+    user_id: session.userId,
+    exercise_name: exName,
+    weight_kg: existing.weightKg,
+    reps: existing.reps,
+    date: new Date(existing.date).toISOString(),
+    history: existing.history,
+  }));
   return { pr };
 }
 
@@ -115,6 +150,11 @@ function setPrefs(userId, prefs) {
   const all = load(STORAGE_KEYS.prefs, {});
   all[userId] = { ...getPrefs(userId), ...prefs };
   save(STORAGE_KEYS.prefs, all);
+  cloudPush(() => sb.from("user_prefs").upsert({
+    user_id: session.userId,
+    units: all[userId].units,
+    updated_at: new Date().toISOString(),
+  }));
 }
 
 // ─── EQUIPMENT LOADS ─────────────────────────────────────────────────────
@@ -127,6 +167,13 @@ function setLoads(userId, loads) {
   const all = load(STORAGE_KEYS.loads, {});
   all[userId] = { ...getLoads(userId), ...loads };
   save(STORAGE_KEYS.loads, all);
+  cloudPush(() => sb.from("user_loads").upsert({
+    user_id: session.userId,
+    max_dumbbell_kg: all[userId].maxDumbbellKg || 0,
+    max_kettlebell_kg: all[userId].maxKettlebellKg || 0,
+    has_heavy_barbell: !!all[userId].hasHeavyBarbell,
+    updated_at: new Date().toISOString(),
+  }));
 }
 
 // Decide whether the user's available equipment can support the chosen goal +
@@ -386,13 +433,57 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
   });
 });
 
-el.authForm.addEventListener("submit", (e) => {
+el.authForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   el.authError.textContent = "";
-  const username = el.username.value.trim().toLowerCase();
+  const identifier = el.username.value.trim();
   const password = el.password.value;
-  if (!username || !password) return;
+  if (!identifier || !password) return;
 
+  // ─── Cloud path: Supabase email/password ────────────────────────────
+  if (HAS_SUPABASE) {
+    el.authSubmit.disabled = true;
+    el.authSubmit.textContent = authMode === "signup" ? "Creating…" : "Logging in…";
+    try {
+      let result;
+      if (authMode === "signup") {
+        result = await sb.auth.signUp({ email: identifier, password });
+        if (result.error) {
+          el.authError.textContent = result.error.message;
+          return;
+        }
+        // If email confirmation is on, user must verify before signing in.
+        if (!result.data.session) {
+          el.authError.textContent = "Check your email for a confirmation link.";
+          el.authError.style.color = "var(--success)";
+          return;
+        }
+      } else {
+        result = await sb.auth.signInWithPassword({ email: identifier, password });
+        if (result.error) {
+          el.authError.textContent = result.error.message;
+          return;
+        }
+      }
+      const user = result.data.user;
+      session = {
+        username: user.email,
+        userId: user.id,
+        loggedInAt: Date.now(),
+      };
+      save(STORAGE_KEYS.session, session);
+      await syncFromCloud();
+      showApp("generator");
+    } finally {
+      el.authSubmit.disabled = false;
+      el.authSubmit.textContent = authMode === "signup" ? "Create account" : "Log in";
+      el.authError.style.color = "";
+    }
+    return;
+  }
+
+  // ─── Local path: legacy localStorage auth ───────────────────────────
+  const username = identifier.toLowerCase();
   const users = getUsers();
 
   if (authMode === "signup") {
@@ -414,7 +505,6 @@ el.authForm.addEventListener("submit", (e) => {
     return;
   }
 
-  // login
   const user = users[username];
   if (!user || user.passwordHash !== hashPassword(password, user.salt)) {
     el.authError.textContent = "Invalid username or password.";
@@ -425,7 +515,75 @@ el.authForm.addEventListener("submit", (e) => {
   showApp("generator");
 });
 
-el.logoutBtn.addEventListener("click", () => {
+// Pull all data for the current user from Supabase into localStorage so
+// subsequent reads (which are sync) see fresh cloud state.
+async function syncFromCloud() {
+  if (!sb || !session?.userId) return;
+  const uid = session.userId;
+  const username = session.username;
+
+  try {
+    // Workouts
+    const { data: ws } = await sb.from("workouts")
+      .select("data, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+    if (ws) {
+      const all = load(STORAGE_KEYS.workouts, {});
+      all[username] = ws.map(r => r.data);
+      save(STORAGE_KEYS.workouts, all);
+    }
+
+    // Stats
+    const { data: stats } = await sb.from("exercise_stats")
+      .select("exercise_name, weight_kg, reps, date, history")
+      .eq("user_id", uid);
+    if (stats) {
+      const all = load(STORAGE_KEYS.stats, {});
+      all[username] = {};
+      for (const row of stats) {
+        all[username][row.exercise_name] = {
+          weightKg: Number(row.weight_kg) || 0,
+          reps: Number(row.reps) || 0,
+          date: new Date(row.date).getTime(),
+          history: row.history || [],
+        };
+      }
+      save(STORAGE_KEYS.stats, all);
+    }
+
+    // Prefs
+    const { data: pf } = await sb.from("user_prefs")
+      .select("units")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (pf) {
+      const all = load(STORAGE_KEYS.prefs, {});
+      all[username] = { units: pf.units || "kg" };
+      save(STORAGE_KEYS.prefs, all);
+    }
+
+    // Loads
+    const { data: ld } = await sb.from("user_loads")
+      .select("max_dumbbell_kg, max_kettlebell_kg, has_heavy_barbell")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (ld) {
+      const all = load(STORAGE_KEYS.loads, {});
+      all[username] = {
+        maxDumbbellKg: Number(ld.max_dumbbell_kg) || 0,
+        maxKettlebellKg: Number(ld.max_kettlebell_kg) || 0,
+        hasHeavyBarbell: !!ld.has_heavy_barbell,
+      };
+      save(STORAGE_KEYS.loads, all);
+    }
+  } catch { /* offline or schema mismatch — fall back to local cache */ }
+}
+
+el.logoutBtn.addEventListener("click", async () => {
+  if (HAS_SUPABASE) {
+    try { await sb.auth.signOut(); } catch {}
+  }
   session = null;
   localStorage.removeItem(STORAGE_KEYS.session);
   el.username.value = "";
@@ -1918,13 +2076,51 @@ document.querySelectorAll("[data-rest-action]").forEach(btn => {
 });
 
 // ─── INIT ────────────────────────────────────────────────────────────────
-if (session && getUsers()[session.username]) {
-  showApp("generator");
-} else {
-  session = null;
-  localStorage.removeItem(STORAGE_KEYS.session);
-  showAuth();
+async function bootstrap() {
+  // Auth UI label tweak when running in cloud mode.
+  if (HAS_SUPABASE) {
+    const usernameLabel = el.username.closest("label");
+    if (usernameLabel) {
+      const text = Array.from(usernameLabel.childNodes).find(n => n.nodeType === 3);
+      if (text) text.textContent = "\n            Email\n            ";
+      el.username.type = "email";
+      el.username.autocomplete = "email";
+      el.username.removeAttribute("minlength");
+      el.username.removeAttribute("maxlength");
+    }
+  }
+
+  if (HAS_SUPABASE) {
+    // Restore Supabase session if one exists.
+    try {
+      const { data } = await sb.auth.getSession();
+      if (data?.session) {
+        const user = data.session.user;
+        session = {
+          username: user.email,
+          userId: user.id,
+          loggedInAt: Date.now(),
+        };
+        save(STORAGE_KEYS.session, session);
+        await syncFromCloud();
+        showApp("generator");
+        return;
+      }
+    } catch {}
+    showAuth();
+    return;
+  }
+
+  // Local-only mode: existing localStorage session path.
+  if (session && getUsers()[session.username]) {
+    showApp("generator");
+  } else {
+    session = null;
+    localStorage.removeItem(STORAGE_KEYS.session);
+    showAuth();
+  }
 }
+bootstrap();
 
 // ─── SERVICE WORKER REGISTRATION ────────────────────────────────────────
 // Enables PWA install + offline support. SW won't register on file:// — only
