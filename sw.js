@@ -3,7 +3,7 @@
 // cache-busting; cache-first for the icon and manifest. Falls back to cached
 // app shell entirely when offline.
 
-const CACHE_NAME = "forge-cache-v4";
+const CACHE_NAME = "forge-cache-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -46,16 +46,19 @@ self.addEventListener("fetch", (event) => {
   const isShellAsset = /\.(html|js|css|json|svg)$/.test(url.pathname) || url.pathname.endsWith("/");
 
   if (isShellAsset) {
-    // Network-first: try live, fall back to cache if offline.
+    // Network-first with a TIGHT timeout. Many users get stuck on stale
+    // caches because the SW's fetch hangs (slow / blocked network) then
+    // silently falls back to the cache. Race a 2.5s timeout so we either
+    // get a fresh response or fall through quickly.
     event.respondWith(
-      fetch(req)
-        .then((resp) => {
-          // Stash a fresh copy for offline.
+      Promise.race([
+        fetch(req).then((resp) => {
           const copy = resp.clone();
           caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
           return resp;
-        })
-        .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("sw-timeout")), 2500)),
+      ]).catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
     );
     return;
   }
