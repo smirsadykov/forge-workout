@@ -1202,6 +1202,99 @@ input {
   color: var(--text);
 }
 
+/* ─── SET TIMER START BUTTON (time-based exercises) ──────────────────── */
+.start-set-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(255, 214, 51, 0.4);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.15s;
+}
+
+.start-set-btn:hover {
+  background: var(--accent);
+  color: #1a1500;
+}
+
+.start-set-btn.inline {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* ─── VOLUME TARGETS (Settings + Chart) ──────────────────────────────── */
+.volume-targets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.volume-targets-grid .settings-field > span {
+  text-transform: capitalize;
+  font-size: 13px;
+}
+
+.settings-input.narrow {
+  max-width: 140px;
+}
+
+.vol-target {
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.vol-target.met {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.vol-target.miss {
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+/* ─── SHARED WORKOUT HINT ────────────────────────────────────────────── */
+.shared-hint {
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.10), rgba(255, 214, 51, 0.05));
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shared-hint-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--success);
+}
+
+.shared-hint-body {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.shared-hint .primary-btn {
+  align-self: flex-start;
+}
+
 /* ─── SORENESS GRID ──────────────────────────────────────────────────── */
 .soreness-grid {
   display: flex;

@@ -11,7 +11,11 @@ const STORAGE_KEYS = {
   prefs: "forge:prefs",   // per-user preferences (units, etc.)
   loads: "forge:loads",   // per-user available equipment loads (kg)
   soreness: "forge:soreness", // per-user, per-muscle soreness (decays over time)
+  volumeTargets: "forge:volumeTargets", // per-user weekly sets target per muscle
 };
+
+// Muscle groups we expose in soreness + volume target UI.
+const MAJOR_MUSCLES = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "core"];
 
 // ─── SUPABASE BACKEND (optional) ─────────────────────────────────────────
 const HAS_SUPABASE = !!(
@@ -219,9 +223,8 @@ function weekStartOf(d) {
   return date.getTime();
 }
 
-// Walk all of a user's exercise_stats history and aggregate (weight × reps)
-// by primary muscle, then bucketed into ISO weeks. Returns an object
-// shaped like { muscle: { weekStartMs → totalKg } }.
+// Walk all of a user's exercise_stats history and aggregate by primary muscle,
+// bucketed into ISO weeks. Returns { muscle: { weekStartMs: { kg, sets } } }.
 function getWeeklyVolume(userId, weeksBack = 8) {
   const stats = getStats(userId);
   const cutoffMs = weekStartOf(Date.now()) - (weeksBack - 1) * 7 * 86400000;
@@ -230,8 +233,6 @@ function getWeeklyVolume(userId, weeksBack = 8) {
   for (const [exName, stat] of Object.entries(stats)) {
     const ex = EXERCISES.find(e => e.name === exName);
     if (!ex) continue;
-    // Use primary muscle (first in the list). full_body lifts spread across
-    // the whole body so we attribute them to the "full body" bucket.
     const primary = ex.muscle[0];
     if (!primary) continue;
 
@@ -241,9 +242,11 @@ function getWeeklyVolume(userId, weeksBack = 8) {
       if (ws < cutoffMs) continue;
       const vol = n.sets.reduce((sum, s) =>
         sum + (Number(s.weightKg) || 0) * (Number(s.reps) || 0), 0);
-      if (vol <= 0) continue;
+      const setCount = n.sets.length;
       if (!byMuscle[primary]) byMuscle[primary] = {};
-      byMuscle[primary][ws] = (byMuscle[primary][ws] || 0) + vol;
+      if (!byMuscle[primary][ws]) byMuscle[primary][ws] = { kg: 0, sets: 0 };
+      byMuscle[primary][ws].kg += vol;
+      byMuscle[primary][ws].sets += setCount;
     }
   }
   return byMuscle;
@@ -253,34 +256,39 @@ function getWeeklyVolume(userId, weeksBack = 8) {
 // week of volume. Empty data → returns "" so the section can be omitted.
 function renderWeeklyVolumeChart(userId, weeksBack = 8) {
   const byMuscle = getWeeklyVolume(userId, weeksBack);
+  const targets = getVolumeTargets(userId);
   const muscleNames = Object.keys(byMuscle).sort((a, b) => {
-    const totalA = Object.values(byMuscle[a]).reduce((s, v) => s + v, 0);
-    const totalB = Object.values(byMuscle[b]).reduce((s, v) => s + v, 0);
+    const totalA = Object.values(byMuscle[a]).reduce((s, v) => s + v.kg, 0);
+    const totalB = Object.values(byMuscle[b]).reduce((s, v) => s + v.kg, 0);
     return totalB - totalA;
   });
   if (muscleNames.length === 0) return "";
 
   const units = getPrefs(userId).units;
-  // Build the X-axis: the most recent N weeks in chronological order.
   const thisWeek = weekStartOf(Date.now());
   const weekStarts = Array.from({ length: weeksBack }, (_, i) =>
     thisWeek - (weeksBack - 1 - i) * 7 * 86400000);
 
-  // Find the global max for consistent bar heights.
-  const allValues = muscleNames.flatMap(m => weekStarts.map(w => byMuscle[m][w] || 0));
-  const globalMax = Math.max(1, ...allValues);
+  const allKg = muscleNames.flatMap(m => weekStarts.map(w => byMuscle[m][w]?.kg || 0));
+  const globalMax = Math.max(1, ...allKg);
 
   const rows = muscleNames.map(muscle => {
-    const values = weekStarts.map(w => byMuscle[muscle][w] || 0);
-    const latest = values[values.length - 1];
-    const latestDisplay = latest > 0
-      ? `${Math.round(toDisplay(latest, units)).toLocaleString()} ${units}`
+    const cells = weekStarts.map(w => byMuscle[muscle][w] || { kg: 0, sets: 0 });
+    const latest = cells[cells.length - 1];
+    const target = targets[muscle] || 0;
+    const targetMet = target > 0 && latest.sets >= target;
+    const targetMark = target > 0
+      ? `<span class="vol-target ${targetMet ? "met" : "miss"}">${latest.sets}/${target}${targetMet ? " ✓" : ""}</span>`
+      : "";
+    const latestDisplay = latest.kg > 0
+      ? `${Math.round(toDisplay(latest.kg, units)).toLocaleString()} ${units}`
       : "—";
-    const bars = values.map((v, idx) => {
-      const height = (v / globalMax) * 100;
-      const cls = v > 0 ? "bar-filled" : "bar-empty";
-      const display = v > 0
-        ? `${Math.round(toDisplay(v, units)).toLocaleString()} ${units}`
+    const bars = cells.map((c, idx) => {
+      const height = (c.kg / globalMax) * 100;
+      const cls = c.kg > 0 ? "bar-filled" : "bar-empty";
+      const setsTxt = c.sets ? ` · ${c.sets} sets` : "";
+      const display = c.kg > 0
+        ? `${Math.round(toDisplay(c.kg, units)).toLocaleString()} ${units}${setsTxt}`
         : "no work";
       const weekDate = new Date(weekStarts[idx]).toLocaleDateString();
       return `<div class="vol-bar-wrap" title="${display} · week of ${weekDate}">
@@ -289,7 +297,7 @@ function renderWeeklyVolumeChart(userId, weeksBack = 8) {
     }).join("");
     return `
       <div class="vol-row">
-        <span class="vol-muscle">${muscle.replace("_", " ")}</span>
+        <span class="vol-muscle">${muscle.replace("_", " ")}${targetMark}</span>
         <div class="vol-bars">${bars}</div>
         <span class="vol-latest">${latestDisplay}</span>
       </div>
@@ -313,6 +321,16 @@ function getLoads(userId) {
 // ─── SORENESS TRACKING ───────────────────────────────────────────────────
 // Stores per-muscle soreness levels (0-3 scale). Decays over time so old
 // soreness doesn't poison future generations.
+function getVolumeTargets(userId) {
+  const all = load(STORAGE_KEYS.volumeTargets, {});
+  return all[userId] || {};
+}
+function setVolumeTargets(userId, targets) {
+  const all = load(STORAGE_KEYS.volumeTargets, {});
+  all[userId] = { ...all[userId], ...targets };
+  save(STORAGE_KEYS.volumeTargets, all);
+}
+
 function setSoreness(userId, muscle, level) {
   const all = load(STORAGE_KEYS.soreness, {});
   if (!all[userId]) all[userId] = {};
@@ -410,6 +428,22 @@ function roundHalf(x) { return Math.round(x * 2) / 2; }
 // If user hit top of rep range → add weight (or reps for bodyweight).
 // If user was inside rep range → same weight, push for one more rep.
 // If user fell below bottom of range → suggest a deload.
+// Parse time-based reps strings into seconds. Handles "30-60 sec",
+// "X sec", "X-Y min", "X min steady state", etc. Returns null when
+// the reps string isn't time-based.
+function parseTimeReps(reps) {
+  if (typeof reps !== "string") return null;
+  let m = reps.match(/(\d+)\s*[\-–]\s*(\d+)\s*sec/);
+  if (m) return Math.round((Number(m[1]) + Number(m[2])) / 2);
+  m = reps.match(/(\d+)\s*sec/);
+  if (m) return Number(m[1]);
+  m = reps.match(/(\d+)\s*[\-–]\s*(\d+)\s*min/);
+  if (m) return Math.round((Number(m[1]) + Number(m[2])) / 2) * 60;
+  m = reps.match(/(\d+)\s*min/);
+  if (m) return Number(m[1]) * 60;
+  return null;
+}
+
 function parseRepRange(repsStr) {
   if (typeof repsStr !== "string") return [8, 12];
   if (/sec/i.test(repsStr)) return [0, 0]; // time-based; no rep progression
@@ -690,14 +724,19 @@ function refreshDeloadBanner() {
     return;
   }
   const weeks = weeksSinceLastDeload(session.username);
+  const reason = deloadReason(session.username);
+  const bodyText = reason.kind === "soreness"
+    ? `Multiple muscles are still flagged as highly sore in recent sessions. Pushing through
+       cumulative fatigue is the fastest way to a plateau. A planned light week now (~30% less
+       volume, slightly more rest) lets your nervous system catch up.`
+    : `You've trained <strong>${weeks} weeks</strong> in a row since your last deload.
+       A planned light week (~30% less volume, slightly more rest) lets your nervous system
+       catch up and primes the next training block. Highly recommended for sustained progress.`;
+
   el.deloadBanner.classList.remove("hidden");
   el.deloadBanner.innerHTML = `
-    <div class="deload-banner-title">Deload week recommended</div>
-    <div class="deload-banner-body">
-      You've trained <strong>${weeks} weeks</strong> in a row since your last deload.
-      A planned light week (~30% less volume, slightly more rest) lets your nervous system
-      catch up and primes the next training block. Highly recommended for sustained progress.
-    </div>
+    <div class="deload-banner-title">${reason.title}</div>
+    <div class="deload-banner-body">${bodyText}</div>
     <div class="deload-banner-actions">
       <button class="primary-btn" data-deload-action="start">Plan this as a deload week</button>
       <button class="secondary-btn" data-deload-action="dismiss">Not yet</button>
@@ -943,8 +982,27 @@ function weeksSinceLastDeload(userId) {
   return weekBuckets.size;
 }
 
+// Auto-trigger: if 3+ muscles are still at level ≥ 2 after decay, that's
+// cumulative fatigue — recommend a deload regardless of week count.
+function hasHighAccumulatedSoreness(userId) {
+  const all = load(STORAGE_KEYS.soreness, {});
+  const us = all[userId] || {};
+  let high = 0;
+  for (const muscle of Object.keys(us)) {
+    if (getCurrentSoreness(userId, muscle) >= 2.0) high++;
+  }
+  return high >= 3;
+}
+
 function shouldSuggestDeload(userId) {
-  return weeksSinceLastDeload(userId) >= 4;
+  return weeksSinceLastDeload(userId) >= 4 || hasHighAccumulatedSoreness(userId);
+}
+
+function deloadReason(userId) {
+  if (hasHighAccumulatedSoreness(userId)) {
+    return { kind: "soreness", title: "Cumulative fatigue detected" };
+  }
+  return { kind: "weeks", title: "Deload week recommended" };
 }
 
 document.querySelectorAll(".chip-row").forEach(row => {
@@ -1588,11 +1646,20 @@ function renderExerciseCard(ex, units, opts = {}) {
     restLine = `${ex.reps}`;
   } else if (ex.isTimeBlock) {
     // Cardio block: single time-based prescription, no sets×reps frame.
-    restLine = `<span class="time-block-prescription">${ex.reps}</span>${
+    const cardioSec = parseTimeReps(ex.reps);
+    const startBtn = !workoutReadOnly && cardioSec
+      ? `<button class="start-set-btn" data-action="start-set" data-duration="${cardioSec}" data-name="${escapeAttr(ex.name)}" title="Start set timer">▶ Start</button>`
+      : "";
+    restLine = `<span class="time-block-prescription">${ex.reps}</span> ${startBtn}${
       ex.rest > 0 ? `<br /><span class="exercise-rest">rest ${ex.rest}s</span>` : ""
     }`;
   } else {
-    restLine = `${ex.sets} × ${ex.reps}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
+    // Detect time-based reps (planks, holds, mobility) and offer a set timer.
+    const setSec = parseTimeReps(ex.reps);
+    const setBtn = !workoutReadOnly && setSec
+      ? `<button class="start-set-btn inline" data-action="start-set" data-duration="${setSec}" data-name="${escapeAttr(ex.name)}" title="Start set timer">▶</button>`
+      : "";
+    restLine = `${ex.sets} × ${ex.reps} ${setBtn}<br /><span class="exercise-rest">rest ${ex.rest}s${workoutReadOnly ? "" : `<button class="start-rest-btn" data-action="start-rest" data-rest="${ex.rest}" data-name="${escapeAttr(ex.name)}" title="Start rest timer">⏱</button>`}</span>`;
   }
   return `
     <div class="exercise${inGroup ? " in-group" : ""}" data-name="${escapeAttr(ex.name)}">
@@ -1721,6 +1788,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
       <div class="workout-actions">
         <button class="primary-btn" id="startWorkoutBtn">▶ Start Workout</button>
         ${showSave ? `<button class="secondary-btn" id="saveBtn">Save</button>` : ""}
+        <button class="secondary-btn" id="shareBtn">🔗 Share</button>
         <button class="secondary-btn" id="regenBtn">Regenerate</button>
       </div>
     </div>
@@ -1769,6 +1837,68 @@ el.generateBtn.addEventListener("click", () => {
 });
 
 let workoutIsSaved = false;
+
+// ─── SHARE WORKOUT ───────────────────────────────────────────────────────
+// Encodes a workout into a URL hash so anyone can open it without an account.
+// Strips muscle/pattern fields that we can re-derive from EXERCISES on load.
+function buildShareLink(workout) {
+  const compact = {
+    n: `${TARGET_LABELS[workout.inputs.target]} · ${GOAL_LABELS[workout.inputs.goal]}`,
+    i: workout.inputs,
+    e: workout.exercises.map(e => ({
+      n: e.name,
+      s: e.sets,
+      r: e.reps,
+      x: e.rest,
+      t: e.technique || null,
+      f: e.finisher || null,
+      g: e.groupId || null,
+      gp: e.groupPosition,
+      gs: e.groupSize,
+      tb: e.isTimeBlock || false,
+    })),
+    notes: workout.notes || "",
+  };
+  const json = JSON.stringify(compact);
+  // UTF-8-safe base64 via encodeURIComponent → escape → btoa idiom.
+  const encoded = btoa(unescape(encodeURIComponent(json)));
+  return `${location.origin}${location.pathname}#w=${encoded}`;
+}
+
+function decodeSharedWorkoutFromHash() {
+  if (!location.hash.startsWith("#w=")) return null;
+  try {
+    const encoded = location.hash.slice(3);
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const c = JSON.parse(json);
+    if (!c || !Array.isArray(c.e)) return null;
+    // Rehydrate exercise muscle/pattern from the exercise library.
+    const exercises = c.e.map(e => {
+      const lib = EXERCISES.find(x => x.name === e.n);
+      return {
+        name: e.n,
+        muscle: lib ? lib.muscle : ["full_body"],
+        pattern: lib ? lib.pattern : "compound",
+        sets: e.s, reps: e.r, rest: e.x,
+        technique: e.t || null, finisher: e.f || null,
+        groupId: e.g || undefined,
+        groupPosition: e.gp,
+        groupSize: e.gs,
+        isTimeBlock: !!e.tb,
+      };
+    });
+    return {
+      id: `shared_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: Date.now(),
+      inputs: c.i,
+      exercises,
+      notes: c.notes || "",
+      isShared: true,
+    };
+  } catch { return null; }
+}
+
+let sharedWorkoutPending = null;
 // Track exercises logged during the current viewing pass so the "edit" affordance
 // restores the values the user just entered (instead of the progression suggestion
 // for next session).
@@ -1796,6 +1926,22 @@ function attachWorkoutActions() {
     regenBtn.addEventListener("click", () => {
       workoutIsSaved = false;
       el.generateBtn.click();
+    });
+  }
+
+  const shareBtn = document.getElementById("shareBtn");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", async () => {
+      if (!currentWorkout) return;
+      const link = buildShareLink(currentWorkout);
+      try {
+        await navigator.clipboard.writeText(link);
+        shareBtn.textContent = "✓ Link copied";
+        setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1800);
+      } catch {
+        // Fallback: show in a prompt the user can copy manually
+        prompt("Copy this link to share the workout:", link);
+      }
     });
   }
 
@@ -1856,6 +2002,16 @@ function attachWorkoutActions() {
       const seconds = parseInt(btn.dataset.rest, 10) || 60;
       const exName = btn.dataset.name || "Rest";
       startRestTimer(seconds, `Rest — ${exName}`);
+    });
+  });
+
+  // ─── SET TIMER (time-based exercises like planks / carries / cardio) ──
+  document.querySelectorAll("[data-action='start-set']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const seconds = parseInt(btn.dataset.duration, 10) || 30;
+      const exName = btn.dataset.name || "Active set";
+      startRestTimer(seconds, `Set — ${exName}`);
     });
   });
 
@@ -2050,7 +2206,70 @@ function renderSettings() {
   dbInput.value = loads.maxDumbbellKg ? toDisplay(loads.maxDumbbellKg, units) : "";
   kbInput.value = loads.maxKettlebellKg ? toDisplay(loads.maxKettlebellKg, units) : "";
   bbCheck.checked = !!loads.hasHeavyBarbell;
+
+  renderSettingsSoreness();
+  renderVolumeTargets();
 }
+
+function renderSettingsSoreness() {
+  const grid = document.getElementById("settingsSorenessGrid");
+  if (!grid || !session) return;
+  grid.innerHTML = MAJOR_MUSCLES.map(m => {
+    const current = Math.round(getCurrentSoreness(session.username, m) * 10) / 10;
+    return `
+      <div class="soreness-row" data-muscle="${m}">
+        <span class="soreness-muscle">${m} <span class="soreness-current">${current > 0 ? `(${current})` : ""}</span></span>
+        <div class="soreness-buttons">
+          ${[0,1,2,3].map(l => `<button class="soreness-btn" data-settings-soreness data-muscle="${m}" data-level="${l}" title="${["Not sore","A bit sore","Properly sore","Wrecked"][l]}">${["😌","😐","😣","😱"][l]}</button>`).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  grid.querySelectorAll("[data-settings-soreness]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const muscle = btn.dataset.muscle;
+      const level = Number(btn.dataset.level);
+      setSoreness(session.username, muscle, level);
+      // Update display
+      const row = btn.closest(".soreness-row");
+      row.querySelectorAll(".soreness-btn").forEach(b =>
+        b.classList.toggle("selected", b === btn));
+      const label = row.querySelector(".soreness-current");
+      if (label) label.textContent = level > 0 ? `(${level})` : "";
+    });
+  });
+}
+
+function renderVolumeTargets() {
+  const grid = document.getElementById("volumeTargetsGrid");
+  if (!grid || !session) return;
+  const targets = getVolumeTargets(session.username);
+  grid.innerHTML = MAJOR_MUSCLES.map(m => `
+    <label class="settings-field">
+      <span>${m}</span>
+      <div class="settings-input narrow">
+        <input type="number" min="0" max="40" step="1" data-vt-muscle="${m}"
+               value="${targets[m] || ""}" placeholder="0" />
+        <span class="settings-unit">sets / wk</span>
+      </div>
+    </label>
+  `).join("");
+}
+
+document.getElementById("saveTargetsBtn").addEventListener("click", () => {
+  if (!session) return;
+  const targets = {};
+  document.querySelectorAll("[data-vt-muscle]").forEach(inp => {
+    const m = inp.dataset.vtMuscle;
+    const v = Number(inp.value) || 0;
+    if (v > 0) targets[m] = v;
+  });
+  setVolumeTargets(session.username, targets);
+  const saved = document.getElementById("targetsSaved");
+  saved.classList.remove("hidden");
+  setTimeout(() => saved.classList.add("hidden"), 1500);
+});
 
 // ─── PLATE CALCULATOR ───────────────────────────────────────────────────
 function calculatePlates(totalDisplay, units) {
@@ -3035,8 +3254,49 @@ document.querySelectorAll("[data-rest-action]").forEach(btn => {
   });
 });
 
+// Show a shared workout (from a #w= hash) on the generator view. Read-only.
+function showSharedWorkout(workout) {
+  currentWorkout = workout;
+  workoutIsSaved = false;
+  workoutReadOnly = true;
+  recentlyLogged = {};
+  showApp("generator");
+  el.workoutResult.classList.remove("hidden");
+  // Banner-style hint above the workout card
+  const existingHint = document.getElementById("sharedHint");
+  if (existingHint) existingHint.remove();
+  const hint = document.createElement("div");
+  hint.id = "sharedHint";
+  hint.className = "shared-hint";
+  hint.innerHTML = `
+    <div class="shared-hint-title">Shared workout</div>
+    <div class="shared-hint-body">Someone shared this session with you. Tap <strong>Save</strong> to add it to your library, or <strong>▶ Start Workout</strong> to run it right now.</div>
+    <button class="primary-btn" id="saveSharedBtn">Save to my library</button>
+  `;
+  el.workoutResult.parentElement.insertBefore(hint, el.workoutResult);
+  renderWorkout(workout, el.workoutResult, { showSave: false });
+  attachWorkoutActions();
+  document.getElementById("saveSharedBtn").addEventListener("click", () => {
+    if (!session) return;
+    // Clone with fresh id + timestamp so it owns the entry
+    const cloned = { ...workout, id: `w_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, createdAt: Date.now(), isShared: false };
+    addWorkout(session.username, cloned);
+    workoutIsSaved = true;
+    workoutReadOnly = false;
+    currentWorkout = cloned;
+    hint.remove();
+    history.replaceState(null, "", location.pathname);
+    renderWorkout(cloned, el.workoutResult, { showSave: false });
+    attachWorkoutActions();
+  });
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────
 async function bootstrap() {
+  // Detect a shared-workout link first — process AFTER auth so it shows once
+  // the user is in. Stash for now.
+  sharedWorkoutPending = decodeSharedWorkoutFromHash();
+
   // Auth UI label tweak when running in cloud mode.
   if (HAS_SUPABASE) {
     const usernameLabel = el.username.closest("label");
@@ -3064,6 +3324,10 @@ async function bootstrap() {
         save(STORAGE_KEYS.session, session);
         await syncFromCloud();
         showApp("generator");
+        if (sharedWorkoutPending) {
+          showSharedWorkout(sharedWorkoutPending);
+          sharedWorkoutPending = null;
+        }
         return;
       }
     } catch {}
@@ -3074,6 +3338,10 @@ async function bootstrap() {
   // Local-only mode: existing localStorage session path.
   if (session && getUsers()[session.username]) {
     showApp("generator");
+    if (sharedWorkoutPending) {
+      showSharedWorkout(sharedWorkoutPending);
+      sharedWorkoutPending = null;
+    }
   } else {
     session = null;
     localStorage.removeItem(STORAGE_KEYS.session);

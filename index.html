@@ -17,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
 </head>
 <body>
   <header class="topbar">
@@ -214,6 +214,22 @@
         </div>
 
         <div class="settings-card">
+          <h2 class="settings-section">Current soreness</h2>
+          <p class="settings-help">Set how sore each muscle feels right now. The algorithm deprioritizes highly-sore muscles in your next workout. Soreness decays over time — full strength for 18 hours, then halves every 24 hours after.</p>
+          <div id="settingsSorenessGrid" class="soreness-grid"></div>
+        </div>
+
+        <div class="settings-card">
+          <h2 class="settings-section">Weekly volume targets</h2>
+          <p class="settings-help">Sets per week per primary muscle group. Hitting the target lights up a ✓ on the History volume chart. Leave blank for muscles you're not specifically programming.</p>
+          <div id="volumeTargetsGrid" class="volume-targets-grid"></div>
+          <div class="settings-actions">
+            <button id="saveTargetsBtn" class="primary-btn">Save targets</button>
+            <span id="targetsSaved" class="settings-saved hidden">Saved ✓</span>
+          </div>
+        </div>
+
+        <div class="settings-card">
           <h2 class="settings-section">Tools</h2>
           <p class="settings-help">Quick utilities. Don't change any saved data.</p>
 
@@ -291,9 +307,9 @@
     </div>
   </div>
 
-  <script src="config.js?v=21"></script>
+  <script src="config.js?v=22"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="exercises.js?v=21"></script>
-  <script src="app.js?v=21"></script>
+  <script src="exercises.js?v=22"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>
