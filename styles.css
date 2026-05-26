@@ -1523,6 +1523,100 @@ input {
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 
+/* ─── RPE PROMPT (summary screen) ────────────────────────────────────── */
+.rpe-prompt {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  max-width: 460px;
+  margin: 0 auto 24px;
+}
+
+.rpe-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rpe-emoji { font-size: 24px; line-height: 1; }
+.rpe-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rpe-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.rpe-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+
+.rpe-btn.selected .rpe-label { color: #1a1500; }
+
+/* ─── LEVEL RECOMMENDATION BANNER ────────────────────────────────────── */
+.level-banner {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.10), rgba(255, 214, 51, 0.05));
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.level-banner-icon {
+  font-size: 28px;
+  font-weight: 900;
+  color: #c4b5fd;
+}
+
+.level-banner-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #c4b5fd;
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.level-banner-body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.level-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+
+@media (max-width: 700px) {
+  .level-banner { grid-template-columns: auto 1fr; }
+  .level-banner-actions { grid-column: 1 / -1; flex-direction: row; }
+  .rpe-prompt { gap: 4px; }
+  .rpe-btn { padding: 10px 4px; }
+  .rpe-emoji { font-size: 20px; }
+  .rpe-label { font-size: 9px; }
+}
+
 /* ─── RECOVERY BANNER ────────────────────────────────────────────────── */
 .recovery-banner {
   background: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(167, 139, 250, 0.08));

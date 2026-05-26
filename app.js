@@ -917,6 +917,7 @@ const el = {
   recommendationBanner: document.getElementById("recommendationBanner"),
   sleepPrompt: document.getElementById("sleepPrompt"),
   recoveryBanner: document.getElementById("recoveryBanner"),
+  levelBanner: document.getElementById("levelBanner"),
   authForm: document.getElementById("authForm"),
   authSubmit: document.getElementById("authSubmit"),
   authError: document.getElementById("authError"),
@@ -971,7 +972,87 @@ function showApp(view = "generator") {
     refreshStreakBadge();
     refreshSleepPrompt();
     refreshRecoveryBanner();
+    refreshLevelBanner();
   }
+}
+
+// Look at the user's recent RPE ratings and recommend bumping difficulty
+// up (sessions felt easy) or down (sessions felt all-out). Returns null if
+// not enough data yet.
+const DIFFICULTY_ORDER = ["beginner", "intermediate", "advanced"];
+
+function getLevelRecommendation(userId) {
+  const workouts = getWorkouts(userId);
+  // Only look at the last 5 workouts that have an RPE rating
+  const rated = workouts.filter(w => typeof w.rpe === "number").slice(0, 5);
+  if (rated.length < 2) return null;
+
+  const avgRpe = rated.reduce((s, w) => s + w.rpe, 0) / rated.length;
+  // Mode of difficulty across rated workouts (what they've been training at)
+  const diffCounts = {};
+  rated.forEach(w => {
+    const d = w.inputs?.difficulty;
+    if (d) diffCounts[d] = (diffCounts[d] || 0) + 1;
+  });
+  const currentDiff = Object.keys(diffCounts).sort((a, b) => diffCounts[b] - diffCounts[a])[0];
+  if (!currentDiff) return null;
+  const idx = DIFFICULTY_ORDER.indexOf(currentDiff);
+
+  if (avgRpe >= 4.3 && idx > 0) {
+    return {
+      direction: "down",
+      from: currentDiff,
+      to: DIFFICULTY_ORDER[idx - 1],
+      reason: `Your last ${rated.length} sessions averaged ${avgRpe.toFixed(1)}/5 effort — consistently maxing out. Dropping to ${DIFFICULTY_ORDER[idx - 1]} for a couple weeks will let you build back stronger.`,
+    };
+  }
+  if (avgRpe <= 2 && idx < DIFFICULTY_ORDER.length - 1) {
+    return {
+      direction: "up",
+      from: currentDiff,
+      to: DIFFICULTY_ORDER[idx + 1],
+      reason: `Your last ${rated.length} sessions averaged ${avgRpe.toFixed(1)}/5 effort — too easy. Try ${DIFFICULTY_ORDER[idx + 1]} for real progress.`,
+    };
+  }
+  return null;
+}
+
+function refreshLevelBanner() {
+  if (!session || !el.levelBanner) return;
+  // Don't show if user already picked a difficulty
+  if (formState.difficulty) {
+    el.levelBanner.classList.add("hidden");
+    el.levelBanner.innerHTML = "";
+    return;
+  }
+  const rec = getLevelRecommendation(session.username);
+  if (!rec) {
+    el.levelBanner.classList.add("hidden");
+    el.levelBanner.innerHTML = "";
+    return;
+  }
+  el.levelBanner.classList.remove("hidden");
+  const arrow = rec.direction === "up" ? "↑" : "↓";
+  el.levelBanner.innerHTML = `
+    <div class="level-banner-icon">${arrow}</div>
+    <div class="level-banner-content">
+      <div class="level-banner-title">Time to ${rec.direction === "up" ? "level up" : "ease off"}?</div>
+      <div class="level-banner-body">${rec.reason}</div>
+    </div>
+    <div class="level-banner-actions">
+      <button class="primary-btn" data-level-action="apply" data-target="${rec.to}">Try ${rec.to}</button>
+      <button class="secondary-btn" data-level-action="dismiss">Skip</button>
+    </div>
+  `;
+  el.levelBanner.querySelector("[data-level-action='apply']").addEventListener("click", (e) => {
+    const target = e.target.dataset.target;
+    const chip = document.querySelector(`.chip[data-value="${target}"]`);
+    if (chip) chip.click();
+    el.levelBanner.classList.add("hidden");
+  });
+  el.levelBanner.querySelector("[data-level-action='dismiss']").addEventListener("click", () => {
+    el.levelBanner.classList.add("hidden");
+  });
 }
 
 // Pick a target the user hasn't trained recently. Body-part balance.
@@ -1628,6 +1709,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshLoadWarning();
       refreshRecommendationBanner();
       refreshRecoveryBanner();
+      refreshLevelBanner();
     });
   });
 });
@@ -4018,6 +4100,16 @@ function finishGuidedWorkout() {
       </div>
 
       ${prsHtml}
+
+      <h3 class="summary-prs-title">How was that?</h3>
+      <div class="rpe-prompt" id="rpePrompt">
+        <button class="rpe-btn" data-rpe="1"><span class="rpe-emoji">😎</span><span class="rpe-label">Easy</span></button>
+        <button class="rpe-btn" data-rpe="2"><span class="rpe-emoji">🙂</span><span class="rpe-label">Light</span></button>
+        <button class="rpe-btn" data-rpe="3"><span class="rpe-emoji">😤</span><span class="rpe-label">Right effort</span></button>
+        <button class="rpe-btn" data-rpe="4"><span class="rpe-emoji">😣</span><span class="rpe-label">Hard</span></button>
+        <button class="rpe-btn" data-rpe="5"><span class="rpe-emoji">🥵</span><span class="rpe-label">Maxed</span></button>
+      </div>
+
       ${sorenessHtml}
 
       <div class="guided-actions">
@@ -4026,6 +4118,20 @@ function finishGuidedWorkout() {
     </div>
   `;
   document.getElementById("guidedFinishBtn").addEventListener("click", exitGuided);
+
+  // Wire RPE buttons
+  document.querySelectorAll(".rpe-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const rpe = Number(btn.dataset.rpe);
+      if (!currentWorkout) return;
+      currentWorkout.rpe = rpe;
+      if (workoutIsSaved && session?.username) {
+        updateWorkout(session.username, currentWorkout.id, { rpe });
+      }
+      document.querySelectorAll(".rpe-btn").forEach(b =>
+        b.classList.toggle("selected", b === btn));
+    });
+  });
 
   // Wire soreness buttons
   document.querySelectorAll(".soreness-row").forEach(row => {
