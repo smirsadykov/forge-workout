@@ -1222,10 +1222,11 @@ if (forgotBtn) {
 }
 
 // Handle the password-update form (shown after Supabase redirects with a
-// recovery hash).
-const resetForm = document.getElementById("resetForm");
-if (resetForm) {
-  resetForm.addEventListener("submit", async (e) => {
+// recovery hash). Renamed from `resetForm` to avoid colliding with the
+// earlier `resetForm()` function that clears the generator chips.
+const resetPasswordForm = document.getElementById("resetForm");
+if (resetPasswordForm) {
+  resetPasswordForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!HAS_SUPABASE) return;
     const resetError = document.getElementById("resetError");
@@ -1234,7 +1235,7 @@ if (resetForm) {
       resetError.textContent = "Password must be at least 6 characters.";
       return;
     }
-    const submitBtn = resetForm.querySelector("button[type=submit]");
+    const submitBtn = resetPasswordForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     submitBtn.textContent = "Updating…";
     try {
@@ -1243,7 +1244,6 @@ if (resetForm) {
         resetError.textContent = error.message;
         return;
       }
-      // Re-fetch session — should be signed in now via the recovery token.
       const { data } = await sb.auth.getSession();
       if (data?.session) {
         const user = data.session.user;
