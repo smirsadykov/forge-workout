@@ -2556,11 +2556,35 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
     sets = difficulty === "beginner" ? 3 : difficulty === "advanced" ? 5 : 4;
     // Cap by duration so short workouts don't blow past the time budget.
     sets = Math.min(sets, maxSetsForDuration(duration));
-    let reps;
-    if (goal === "endurance") reps = "20–30";
-    else if (goal === "fat_loss") reps = "15–25";
-    else if (goal === "strength") reps = "5–8";
-    else reps = "10–15";
+    let lo, hi;
+    if (goal === "endurance") { lo = 20; hi = 30; }
+    else if (goal === "fat_loss") { lo = 15; hi = 25; }
+    else if (goal === "strength") { lo = 5; hi = 8; }
+    else { lo = 10; hi = 15; }
+
+    // Light-load ballistic scaling: the same KB swing at 16kg vs 32kg are
+    // wildly different stimuli — gravity does half the work in a swing, so
+    // load matters less than in a press or squat. If the user's max KB is
+    // below the "challenging" threshold (24kg), scale reps UP to compensate
+    // for the load gap. Otherwise advanced users with light KBs get 5×8
+    // swings that're barely warm-ups.
+    const isKB = exercise.equipment?.includes("kettlebell");
+    if (isKB && session?.username) {
+      const userMaxKB = getLoads(session.username).maxKettlebellKg || 0;
+      const challengingKB = 24; // Rough threshold where a swing is genuinely heavy
+      if (userMaxKB > 0 && userMaxKB < challengingKB) {
+        const scale = Math.min(2.0, challengingKB / userMaxKB);
+        lo = Math.round(lo * scale);
+        hi = Math.round(hi * scale);
+      }
+    }
+    // Unilateral ballistic (one-arm swing, alternating clean): halve reps
+    // per side so total volume matches the bilateral equivalent.
+    if (isUnilateralExercise(exercise.name)) {
+      lo = Math.max(5, Math.round(lo * 0.6));
+      hi = Math.max(8, Math.round(hi * 0.6));
+    }
+    const reps = `${lo}–${hi}`;
     // Short sessions get tighter rest too (60s vs 90s).
     const ballisticRest = duration && duration <= 20 ? 60 : 90;
     return { sets, reps, rest: roundRest(ballisticRest) };
@@ -2634,6 +2658,24 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
 
   // Final guard: cap sets by requested duration so the time budget holds.
   sets = Math.min(sets, maxSetsForDuration(duration));
+
+  // Unilateral scaling: "15-20 reps" on a single-leg Bulgarian split squat
+  // means 30-40 reps total across both sides — way more demand than a
+  // bilateral exercise at the same prescribed count. Scale down per-side
+  // reps to ~60% so total volume matches the intended bilateral target.
+  // Applied last so it covers both the standard rep range AND the
+  // intensity-mode override values.
+  if (isUnilateralExercise(exercise.name)
+      && exercise.pattern !== "mobility"
+      && typeof reps === "string"
+      && !/sec|min/i.test(reps)) {
+    const m = reps.match(/(\d+)\s*[\-–]\s*(\d+)/);
+    if (m) {
+      const lo = Math.max(3, Math.round(Number(m[1]) * 0.6));
+      const hi = Math.max(5, Math.round(Number(m[2]) * 0.6));
+      reps = `${lo}–${hi}`;
+    }
+  }
 
   return { sets, reps, rest: roundRest(rest), technique, finisher };
 }
