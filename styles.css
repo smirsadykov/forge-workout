@@ -2349,6 +2349,20 @@ input {
   font-size: 13px;
 }
 
+.guided-timer-row {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 10px;
+}
+.guided-timer-row .timer-btn {
+  width: 100%;
+  max-width: 380px;
+  padding: 16px 24px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
 .guided-actions {
   display: flex;
   flex-direction: column;

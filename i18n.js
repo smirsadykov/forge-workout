@@ -281,6 +281,8 @@
     "guided.restAfterCircuit": { en: "rest after the circuit", ru: "отдых после круга" },
     "guided.restGroup": { en: "Rest — Round of group", ru: "Отдых — после круга" },
     "guided.last": { en: "Last:", ru: "Прошлая:" },
+    "guided.startTimer": { en: "Start timer", ru: "Запустить таймер" },
+    "guided.setTimerLabel": { en: "Set", ru: "Подход" },
     "guided.warmup": { en: "WARM-UP / MOBILITY", ru: "РАЗМИНКА / МОБИЛЬНОСТЬ" },
     "guided.power": { en: "POWER / BALLISTIC", ru: "СИЛА / ВЗРЫВНОЕ" },
     "guided.conditioning": { en: "CONDITIONING / FINISHER", ru: "КОНДИЦИЯ / ФИНИШЕР" },
@@ -323,6 +325,59 @@
     "sleep.skipToday": { en: "Skip today", ru: "Пропустить сегодня" },
 
     // ─── Misc ─────────────────────────────────────────────────────────
+    // Time units (used inside reps strings: "30–60 sec", "5 min")
+    "time.sec": { en: "sec", ru: "сек" },
+    "time.min": { en: "min", ru: "мин" },
+    "wo.perSide": { en: "per side", ru: "на сторону" },
+
+    // ─── Banners ──────────────────────────────────────────────────────
+    // Load warning
+    "warn.loadTitle": { en: "Equipment may be too light for {diff} strength", ru: "Возможно, веса малы для уровня «{diff}»" },
+    "warn.intensityHint": { en: "Or use Intensity Mode — tempo and pause reps create real strength stimulus even at lighter loads.", ru: "Или включи Intensity Mode — темп и паузы дают силовой стимул даже на лёгких весах." },
+    "warn.switchTo": { en: "Switch to {goal}", ru: "Перейти на {goal}" },
+    "warn.useIntensity": { en: "Use Intensity Mode ⚡", ru: "Включить Intensity ⚡" },
+    "warn.openSettings": { en: "Open Settings", ru: "Открыть Настройки" },
+    "warn.reasonNoneSelected": { en: "You haven't selected any equipment that can be loaded heavy (barbell, dumbbells, kettlebell, or machine).", ru: "Не выбран инвентарь, который можно загрузить тяжело (штанга, гантели, гири, тренажёр)." },
+    "warn.reasonUnknownMax": { en: "You haven't told us how heavy your dumbbells / kettlebells go. Set this in Settings for accurate recommendations.", ru: "Не указаны максимальные веса гантелей/гирь. Укажи в Настройках для точных рекомендаций." },
+    "warn.reasonTooLight": { en: "Your heaviest available weight ({weight} {units}) is too light for {diff} strength training.", ru: "Максимальный доступный вес ({weight} {units}) слишком мал для силовой на уровне «{diff}»." },
+    "warn.recommendation": { en: "Switch to Hypertrophy or Endurance — with limited load, high-volume training is where you'll actually grow.", ru: "Перейди на массу или выносливость — при ограниченных весах рост даёт высокий объём." },
+
+    // Recovery banner
+    "rec.title": { en: "You're under-recovered.", ru: "Восстановление не завершено." },
+    "rec.body": {
+      en: "Detected: {reasons}. A Recovery session — ~55% of your usual weights, 2-3 sets of 10-15 reps with short rest — keeps momentum without digging the hole deeper. Better than skipping.",
+      ru: "Признаки: {reasons}. Восстановительная тренировка — ~55% обычных весов, 2-3 подхода по 10-15 повторов с коротким отдыхом — сохраняет ритм, не углубляя усталость. Лучше, чем пропуск.",
+    },
+    "rec.reasonBadSleep": { en: "you slept badly", ru: "плохой сон" },
+    "rec.reasonSore": { en: "{n} muscles still sore", ru: "забитых мышц: {n}" },
+    "rec.start": { en: "Start Recovery", ru: "Начать восстановление" },
+    "rec.dismiss": { en: "Train anyway", ru: "Тренироваться всё равно" },
+
+    // Recommendation banner
+    "recm.title": { en: "Recommended for today:", ru: "Рекомендовано на сегодня:" },
+    "recm.apply": { en: "Apply", ru: "Применить" },
+    "recm.dismiss": { en: "Dismiss", ru: "Скрыть" },
+    "recm.reasonFirst": { en: "Start your first session with a full body workout to baseline everything.", ru: "Первую тренировку сделай на всё тело — это даст базовую точку отсчёта." },
+    "recm.reasonRecent": { en: "You trained {last} recently — a mobility session lets you keep moving while you recover.", ru: "Недавно тренировал {last} — мобильность позволит двигаться, пока идёт восстановление." },
+    "recm.reasonBalance": { en: "Last session was {last} — train {opp} today to keep your body balanced.", ru: "Прошлая тренировка — {last}. Сегодня {opp}, чтобы держать тело в балансе." },
+
+    // Deload banner
+    "deload.titleSoreness": { en: "Multiple muscles sore — consider a deload", ru: "Несколько мышц забиты — пора разгрузиться" },
+    "deload.titleWeeks": { en: "Consider a deload this week", ru: "Возможно, разгрузочная неделя" },
+    "deload.bodySoreness": { en: "Multiple muscles are still flagged as highly sore in recent sessions. Pushing through cumulative fatigue is the fastest way to a plateau. A planned light week now (~30% less volume, slightly more rest) lets your nervous system catch up.", ru: "Несколько мышц по-прежнему сильно забиты. Тренировка через накопленную усталость — самый быстрый путь к застою. Запланированная лёгкая неделя (~30% меньше объёма, чуть больше отдыха) даст нервной системе восстановиться." },
+    "deload.bodyWeeks": { en: "You've trained {weeks} weeks in a row since your last deload. A planned light week (~30% less volume, slightly more rest) lets your nervous system catch up and primes the next training block. Highly recommended for sustained progress.", ru: "Ты тренируешься {weeks} недель подряд без разгрузки. Лёгкая неделя (~30% меньше объёма, чуть больше отдыха) даст нервной системе восстановиться и подготовит следующий блок. Очень рекомендуется." },
+    "deload.start": { en: "Plan this as a deload week", ru: "Сделать эту неделю разгрузочной" },
+    "deload.notYet": { en: "Not yet", ru: "Не сейчас" },
+
+    // Level banner
+    "level.titleUp": { en: "Time to level up?", ru: "Пора повысить уровень?" },
+    "level.titleDown": { en: "Time to ease off?", ru: "Пора снизить уровень?" },
+    "level.try": { en: "Try {level}", ru: "Перейти на {level}" },
+    "level.skip": { en: "Skip", ru: "Пропустить" },
+    "level.reasonDown": { en: "Your last {n} sessions averaged {avg}/5 effort — consistently maxing out. Dropping to {next} for a couple weeks will let you build back stronger.", ru: "Последние {n} тренировок в среднем на {avg}/5 — постоянно на максимуме. Снизься до уровня «{next}» на пару недель, чтобы потом вернуться сильнее." },
+    "level.reasonUp": { en: "Your last {n} sessions averaged {avg}/5 effort — too easy. Try {next} for real progress.", ru: "Последние {n} тренировок в среднем на {avg}/5 — слишком легко. Попробуй уровень «{next}» для реального прогресса." },
+
+    // Common controls
     "common.cancel": { en: "Cancel", ru: "Отмена" },
     "common.confirm": { en: "Confirm", ru: "Подтвердить" },
     "common.close": { en: "Close", ru: "Закрыть" },

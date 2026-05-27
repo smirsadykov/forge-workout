@@ -971,18 +971,18 @@ function checkLoadAdequacy({ goal, equipment, difficulty, style }, loads) {
   // Mismatch — figure out the best summary line.
   let reason;
   if (maxDB === 0 && maxKB === 0 && !equipment.includes("barbell") && !hasMachine) {
-    reason = "You haven't selected any equipment that can be loaded heavy (barbell, dumbbells, kettlebell, or machine).";
+    reason = t("warn.reasonNoneSelected");
   } else if (maxDB === 0 && maxKB === 0) {
-    reason = "You haven't told us how heavy your dumbbells / kettlebells go. Set this in Settings for accurate recommendations.";
+    reason = t("warn.reasonUnknownMax");
   } else {
     const units = session ? getPrefs(session.username).units : "kg";
     const limit = Math.max(maxDB, maxKB);
-    reason = `Your heaviest available weight (${toDisplay(limit, units)} ${units}) is too light for ${difficulty} strength training.`;
+    reason = t("warn.reasonTooLight", { weight: toDisplay(limit, units), units, diff: t(`diff.${difficulty}`) });
   }
 
   return {
     reason,
-    recommendation: "Switch to Hypertrophy or Endurance — with limited load, high-volume training is where you'll actually grow.",
+    recommendation: t("warn.recommendation"),
     suggestedGoal: "hypertrophy",
   };
 }
@@ -1019,6 +1019,15 @@ function parseTimeReps(reps) {
   m = reps.match(/(\d+)\s*min/);
   if (m) return Number(m[1]) * 60;
   return null;
+}
+
+// Pretty-print seconds. 45 → "45s", 90 → "1:30", 180 → "3:00".
+function formatSecs(s) {
+  if (s == null || isNaN(s)) return "";
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
 }
 
 function parseRepRange(repsStr) {
@@ -1392,19 +1401,21 @@ function getLevelRecommendation(userId) {
   const idx = DIFFICULTY_ORDER.indexOf(currentDiff);
 
   if (avgRpe >= 4.3 && idx > 0) {
+    const to = DIFFICULTY_ORDER[idx - 1];
     return {
       direction: "down",
       from: currentDiff,
-      to: DIFFICULTY_ORDER[idx - 1],
-      reason: `Your last ${rated.length} sessions averaged ${avgRpe.toFixed(1)}/5 effort — consistently maxing out. Dropping to ${DIFFICULTY_ORDER[idx - 1]} for a couple weeks will let you build back stronger.`,
+      to,
+      reason: t("level.reasonDown", { n: rated.length, avg: avgRpe.toFixed(1), next: t(`diff.${to}`) }),
     };
   }
   if (avgRpe <= 2 && idx < DIFFICULTY_ORDER.length - 1) {
+    const to = DIFFICULTY_ORDER[idx + 1];
     return {
       direction: "up",
       from: currentDiff,
-      to: DIFFICULTY_ORDER[idx + 1],
-      reason: `Your last ${rated.length} sessions averaged ${avgRpe.toFixed(1)}/5 effort — too easy. Try ${DIFFICULTY_ORDER[idx + 1]} for real progress.`,
+      to,
+      reason: t("level.reasonUp", { n: rated.length, avg: avgRpe.toFixed(1), next: t(`diff.${to}`) }),
     };
   }
   return null;
@@ -1429,12 +1440,12 @@ function refreshLevelBanner() {
   el.levelBanner.innerHTML = `
     <div class="level-banner-icon">${arrow}</div>
     <div class="level-banner-content">
-      <div class="level-banner-title">Time to ${rec.direction === "up" ? "level up" : "ease off"}?</div>
+      <div class="level-banner-title">${rec.direction === "up" ? t("level.titleUp") : t("level.titleDown")}</div>
       <div class="level-banner-body">${rec.reason}</div>
     </div>
     <div class="level-banner-actions">
-      <button class="primary-btn" data-level-action="apply" data-target="${rec.to}">Try ${rec.to}</button>
-      <button class="secondary-btn" data-level-action="dismiss">Skip</button>
+      <button class="primary-btn" data-level-action="apply" data-target="${rec.to}">${t("level.try", { level: t(`diff.${rec.to}`) })}</button>
+      <button class="secondary-btn" data-level-action="dismiss">${t("level.skip")}</button>
     </div>
   `;
   el.levelBanner.querySelector("[data-level-action='apply']").addEventListener("click", (e) => {
@@ -1452,7 +1463,7 @@ function refreshLevelBanner() {
 function getRecommendedTarget(userId) {
   const workouts = getWorkouts(userId);
   if (!workouts.length) {
-    return { target: "full_body", reason: "Start your first session with a full body workout to baseline everything." };
+    return { target: "full_body", reason: t("recm.reasonFirst") };
   }
   const last = workouts[0];
   const lastTarget = last.inputs?.target;
@@ -1461,7 +1472,7 @@ function getRecommendedTarget(userId) {
   if (hoursSince < 12) {
     return {
       target: "mobility",
-      reason: `You trained ${TARGET_LABELS[lastTarget] || lastTarget} recently — a mobility session lets you keep moving while you recover.`,
+      reason: t("recm.reasonRecent", { last: TARGET_LABELS[lastTarget] || lastTarget }),
     };
   }
 
@@ -1475,7 +1486,7 @@ function getRecommendedTarget(userId) {
 
   return {
     target: opposite,
-    reason: `Last session was ${TARGET_LABELS[lastTarget] || lastTarget} — train ${TARGET_LABELS[opposite]} today to keep your body balanced.`,
+    reason: t("recm.reasonBalance", { last: TARGET_LABELS[lastTarget] || lastTarget, opp: TARGET_LABELS[opposite] }),
   };
 }
 
@@ -1632,20 +1643,18 @@ function refreshRecoveryBanner() {
     return;
   }
   const reasons = [];
-  if (status.badSleep) reasons.push("you slept badly");
-  if (status.highSore >= 3) reasons.push(`${status.highSore} muscles still sore`);
+  if (status.badSleep) reasons.push(t("rec.reasonBadSleep"));
+  if (status.highSore >= 3) reasons.push(t("rec.reasonSore", { n: status.highSore }));
   el.recoveryBanner.classList.remove("hidden");
   el.recoveryBanner.innerHTML = `
     <div class="recovery-banner-icon">🌙</div>
     <div class="recovery-banner-content">
-      <div class="recovery-banner-title">You're under-recovered.</div>
-      <div class="recovery-banner-body">
-        Detected: <strong>${reasons.join(" + ")}</strong>. A <strong>Recovery</strong> session — ~55% of your usual weights, 2-3 sets of 10-15 reps with short rest — keeps momentum without digging the hole deeper. Better than skipping.
-      </div>
+      <div class="recovery-banner-title">${t("rec.title")}</div>
+      <div class="recovery-banner-body">${t("rec.body", { reasons: reasons.join(" + ") })}</div>
     </div>
     <div class="recovery-banner-actions">
-      <button class="primary-btn" data-rec-action="apply">Start Recovery</button>
-      <button class="secondary-btn" data-rec-action="dismiss">Train anyway</button>
+      <button class="primary-btn" data-rec-action="apply">${t("rec.start")}</button>
+      <button class="secondary-btn" data-rec-action="dismiss">${t("rec.dismiss")}</button>
     </div>
   `;
   el.recoveryBanner.querySelector("[data-rec-action='apply']").addEventListener("click", () => {
@@ -1678,12 +1687,12 @@ function refreshRecommendationBanner() {
   el.recommendationBanner.innerHTML = `
     <div class="rec-banner-icon">★</div>
     <div class="rec-banner-content">
-      <div class="rec-banner-title">Recommended for today: <strong>${TARGET_LABELS[rec.target]}</strong></div>
+      <div class="rec-banner-title">${t("recm.title")} <strong>${TARGET_LABELS[rec.target]}</strong></div>
       <div class="rec-banner-body">${rec.reason}</div>
     </div>
     <div class="rec-banner-actions">
-      <button class="primary-btn" data-rec-action="apply" data-target="${rec.target}">Apply</button>
-      <button class="secondary-btn" data-rec-action="dismiss">Dismiss</button>
+      <button class="primary-btn" data-rec-action="apply" data-target="${rec.target}">${t("recm.apply")}</button>
+      <button class="secondary-btn" data-rec-action="dismiss">${t("recm.dismiss")}</button>
     </div>
   `;
   el.recommendationBanner.querySelector("[data-rec-action='apply']").addEventListener("click", (e) => {
@@ -1707,20 +1716,16 @@ function refreshDeloadBanner() {
   const weeks = weeksSinceLastDeload(session.username);
   const reason = deloadReason(session.username);
   const bodyText = reason.kind === "soreness"
-    ? `Multiple muscles are still flagged as highly sore in recent sessions. Pushing through
-       cumulative fatigue is the fastest way to a plateau. A planned light week now (~30% less
-       volume, slightly more rest) lets your nervous system catch up.`
-    : `You've trained <strong>${weeks} weeks</strong> in a row since your last deload.
-       A planned light week (~30% less volume, slightly more rest) lets your nervous system
-       catch up and primes the next training block. Highly recommended for sustained progress.`;
+    ? t("deload.bodySoreness")
+    : t("deload.bodyWeeks", { weeks: `<strong>${weeks}</strong>` });
 
   el.deloadBanner.classList.remove("hidden");
   el.deloadBanner.innerHTML = `
     <div class="deload-banner-title">${reason.title}</div>
     <div class="deload-banner-body">${bodyText}</div>
     <div class="deload-banner-actions">
-      <button class="primary-btn" data-deload-action="start">Plan this as a deload week</button>
-      <button class="secondary-btn" data-deload-action="dismiss">Not yet</button>
+      <button class="primary-btn" data-deload-action="start">${t("deload.start")}</button>
+      <button class="secondary-btn" data-deload-action="dismiss">${t("deload.notYet")}</button>
     </div>
   `;
   el.deloadBanner.querySelector("[data-deload-action='start']").addEventListener("click", () => {
@@ -2234,9 +2239,9 @@ function shouldSuggestDeload(userId) {
 
 function deloadReason(userId) {
   if (hasHighAccumulatedSoreness(userId)) {
-    return { kind: "soreness", title: "Cumulative fatigue detected" };
+    return { kind: "soreness", title: t("deload.titleSoreness") };
   }
-  return { kind: "weeks", title: "Deload week recommended" };
+  return { kind: "weeks", title: t("deload.titleWeeks") };
 }
 
 document.querySelectorAll(".chip-row").forEach(row => {
@@ -2297,12 +2302,12 @@ function refreshLoadWarning() {
   }
   el.loadWarning.classList.remove("hidden");
   el.loadWarning.innerHTML = `
-    <div class="load-warning-title">Equipment may be too light for ${difficulty} strength</div>
-    <div class="load-warning-body">${issue.reason} ${issue.recommendation} <strong>Or use Intensity Mode</strong> — tempo and pause reps create real strength stimulus even at lighter loads.</div>
+    <div class="load-warning-title">${t("warn.loadTitle", { diff: t(`diff.${difficulty}`) })}</div>
+    <div class="load-warning-body">${issue.reason} ${issue.recommendation} <strong>${t("warn.intensityHint")}</strong></div>
     <div class="load-warning-actions">
-      <button class="primary-btn" data-warn-action="switch-goal" data-goal="${issue.suggestedGoal}">Switch to ${GOAL_LABELS[issue.suggestedGoal]}</button>
-      <button class="secondary-btn" data-warn-action="use-intensity">Use Intensity Mode ⚡</button>
-      <button class="secondary-btn" data-warn-action="open-settings">Open Settings</button>
+      <button class="primary-btn" data-warn-action="switch-goal" data-goal="${issue.suggestedGoal}">${t("warn.switchTo", { goal: GOAL_LABELS[issue.suggestedGoal] })}</button>
+      <button class="secondary-btn" data-warn-action="use-intensity">${t("warn.useIntensity")}</button>
+      <button class="secondary-btn" data-warn-action="open-settings">${t("warn.openSettings")}</button>
     </div>
   `;
   el.loadWarning.querySelector("[data-warn-action='switch-goal']").addEventListener("click", (e) => {
@@ -2421,11 +2426,19 @@ function isUnilateralExercise(name) {
 // "X reps" → "X reps per side" when unilateral. Time-based reps get
 // "per side" too. For ballistic ranges keep the per-side suffix.
 function displayReps(ex) {
-  const reps = ex.reps;
+  let reps = ex.reps;
+  // Localize time units for display. The stored value stays English so the
+  // parser (parseTimeReps) keeps working regardless of UI language.
+  if (typeof reps === "string") {
+    const secWord = t("time.sec");
+    const minWord = t("time.min");
+    if (secWord !== "sec") reps = reps.replace(/\bsec\b/g, secWord);
+    if (minWord !== "min") reps = reps.replace(/\bmin\b/g, minWord);
+  }
   if (!ex.unilateral) return reps;
   // Don't double up if 'per side' is already in the string somehow
-  if (/per side|each side|each arm|each leg/i.test(reps)) return reps;
-  return `${reps} per side`;
+  if (/per side|each side|each arm|each leg|на сторону|на руку|на ногу/i.test(reps)) return reps;
+  return `${reps} ${t("wo.perSide")}`;
 }
 
 // Cap sets based on requested workout duration so short sessions don't
@@ -4542,6 +4555,24 @@ function renderGuided() {
     : "";
   const setLabel = inGroup ? t("guided.round") : t("guided.set");
 
+  // Time-based exercise? (planks, holds, cardio blocks, mobility holds, etc.)
+  // Show a "Start timer" button that runs a countdown using the same bottom
+  // bar as the rest timer. Without this, Guided Mode left the user with no
+  // way to time these sets — they had to use a phone clock.
+  const setTimeSec = parseTimeReps(ex.reps);
+  const timerHtml = setTimeSec
+    ? `<div class="guided-timer-row">
+        <button class="primary-btn timer-btn" data-guided-action="start-set-timer" data-duration="${setTimeSec}">
+          ▶ ${t("guided.startTimer")} · ${formatSecs(setTimeSec)}
+        </button>
+      </div>`
+    : "";
+
+  // For time-based exercises the reps "input" doesn't make sense (user can't
+  // type "30 sec" as a number). Show repsHtml but hide the inputs row when
+  // we already have a timer — the auto-fill on Done Set covers it.
+  const inputsBlock = setTimeSec ? "" : inputsHtml;
+
   document.getElementById("guidedContent").innerHTML = `
     <div class="guided-section-badge">${getSection(ex.pattern)}</div>
     ${groupContext}
@@ -4558,11 +4589,12 @@ function renderGuided() {
         <span class="guided-set-big">${guided.set}</span>
         <span class="guided-set-of">${t("guided.of")} ${ex.sets}</span>
       </div>
-      <div class="guided-target"><strong>${ex.reps}</strong> ${t("guided.reps")} · ${inGroup ? (ex.groupSize === 2 ? t("guided.restAfterPair") : t("guided.restAfterCircuit")) : `${t("wo.rest")} <strong>${ex.rest}s</strong>`}</div>
+      <div class="guided-target"><strong>${displayReps(ex)}</strong>${setTimeSec ? "" : ` ${t("guided.reps")}`} · ${inGroup ? (ex.groupSize === 2 ? t("guided.restAfterPair") : t("guided.restAfterCircuit")) : `${t("wo.rest")} <strong>${ex.rest}s</strong>`}</div>
     </div>
 
     ${lastLine}
-    ${inputsHtml}
+    ${timerHtml}
+    ${inputsBlock}
 
     <div class="guided-actions">
       <button class="primary-btn big" data-guided-action="done">${doneLabel}</button>
@@ -4572,6 +4604,14 @@ function renderGuided() {
 
   document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
   document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
+  // Wire set-timer for time-based exercises in Guided Mode
+  document.querySelectorAll("[data-guided-action='start-set-timer']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const seconds = parseInt(btn.dataset.duration, 10) || 30;
+      startRestTimer(seconds, `${t("guided.setTimerLabel")} — ${ex.name}`);
+    });
+  });
   // Wire guided RIR picker (single-select, toggle off on re-click)
   document.querySelectorAll("#guidedRirPicker .rir-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
