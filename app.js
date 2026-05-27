@@ -879,11 +879,28 @@ function setSleepRating(userId, quality) {
   save(STORAGE_KEYS.sleep, all);
 }
 
+// Mark "user explicitly chose not to rate today." Stored as quality: null
+// with skipped: true so it's distinguishable from a real rating but still
+// satisfies the "have we asked today" check.
+function setSleepSkipped(userId) {
+  const all = load(STORAGE_KEYS.sleep, {});
+  if (!all[userId]) all[userId] = {};
+  all[userId][dateKey()] = { quality: null, skipped: true, recordedAt: Date.now() };
+  save(STORAGE_KEYS.sleep, all);
+}
+
+// Returns true if user has a real numeric rating for today (not skip-marker).
+function hasRealSleepRating(record) {
+  return !!(record && typeof record.quality === "number" && record.quality > 0);
+}
+
 // Detect under-recovery from sleep + accumulated soreness. Returns an
 // object describing the reasons, or null if we're fine.
 function getUnderRecoveryStatus(userId) {
   const sleep = getSleepRating(userId);
-  const badSleep = sleep && sleep.quality <= 2;
+  // Only count sleep as bad if we have an actual numeric rating ≤2.
+  // Skipped/null ratings shouldn't trigger the recovery banner.
+  const badSleep = hasRealSleepRating(sleep) && sleep.quality <= 2;
   const all = load(STORAGE_KEYS.soreness, {});
   const us = all[userId] || {};
   let highSore = 0;
@@ -1347,6 +1364,9 @@ function showApp(view = "generator") {
     refreshRecoveryBanner();
     refreshLevelBanner();
   }
+  // Daily sleep modal — fires once per session, any view, if today is unrated.
+  // Don't pop it during a Guided session (would interrupt mid-workout).
+  if (view !== "guided") maybeShowDailySleepModal();
 }
 
 // Look at the user's recent RPE ratings and recommend bumping difficulty
@@ -1506,11 +1526,69 @@ function refreshStreakBadge() {
   badge.title = `${streak} day training streak — keep it going`;
 }
 
-// One-tap sleep prompt that appears once per day until rated.
+// ─── DAILY SLEEP MODAL ───────────────────────────────────────────────────
+// Pops a modal once per day on app open if today's sleep isn't logged yet.
+// Fires from any entry view (Generator, History, Library, Settings) — the
+// inline banner on Generator was easy to miss if users headed straight to
+// another tab.
+//
+// Once shown in a session, it doesn't re-show even if user dismisses with
+// X (avoids spam). They can still rate later from Settings → Sleep.
+let _sleepModalShownThisSession = false;
+
+function maybeShowDailySleepModal() {
+  if (_sleepModalShownThisSession) return;
+  if (!session) return;
+  const modal = document.getElementById("sleepModal");
+  if (!modal) return;
+  const today = getSleepRating(session.username);
+  if (today) return; // already rated or explicitly skipped today
+
+  _sleepModalShownThisSession = true;
+
+  // Reset listener state (each open binds fresh)
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden"; // prevent background scroll on iOS
+
+  const closeModal = () => {
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+  };
+
+  modal.querySelectorAll("[data-sleep-modal]").forEach(btn => {
+    btn.onclick = () => {
+      const q = Number(btn.dataset.sleepModal);
+      setSleepRating(session.username, q);
+      closeModal();
+      // Refresh dependent UI
+      refreshSleepPrompt();
+      refreshRecoveryBanner();
+    };
+  });
+
+  const skipBtn = document.getElementById("sleepModalSkip");
+  const closeBtn = document.getElementById("sleepModalClose");
+  if (skipBtn) skipBtn.onclick = () => {
+    setSleepSkipped(session.username);
+    closeModal();
+    refreshSleepPrompt();
+  };
+  // X just dismisses for this session — does NOT mark skip, so the inline
+  // Generator banner will still nudge them.
+  if (closeBtn) closeBtn.onclick = () => closeModal();
+
+  // Click outside the card also closes (same as X — non-committing).
+  modal.onclick = (e) => {
+    if (e.target === modal) closeModal();
+  };
+}
+
+// One-tap sleep prompt that appears once per day until rated OR skipped.
 function refreshSleepPrompt() {
   if (!session || !el.sleepPrompt) return;
   const today = getSleepRating(session.username);
   if (today) {
+    // Already rated or explicitly skipped — don't re-prompt until tomorrow.
     el.sleepPrompt.classList.add("hidden");
     el.sleepPrompt.innerHTML = "";
     return;
@@ -1529,7 +1607,8 @@ function refreshSleepPrompt() {
   el.sleepPrompt.querySelectorAll(".sleep-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.sleep;
-      if (v !== "skip") setSleepRating(session.username, Number(v));
+      if (v === "skip") setSleepSkipped(session.username);
+      else setSleepRating(session.username, Number(v));
       el.sleepPrompt.classList.add("hidden");
       refreshRecoveryBanner();
     });
@@ -2107,6 +2186,7 @@ el.logoutBtn.addEventListener("click", async () => {
   try { releaseWakeLock?.(); } catch {}
   if (typeof guided === "object" && guided) guided.active = false;
   currentWorkout = null;
+  _sleepModalShownThisSession = false; // re-fire for next user on this device
   resetForm();
   showAuth();
 });

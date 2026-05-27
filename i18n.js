@@ -319,6 +319,8 @@
     "sleep.mehDesc": { en: "5-6 hrs / restless", ru: "5-6 часов / беспокойно" },
     "sleep.bad": { en: "Bad", ru: "Плохо" },
     "sleep.badDesc": { en: "Under 5 hrs / terrible", ru: "Меньше 5 часов / ужасно" },
+    "sleep.modalSub": { en: "Daily check-in. Feeds the recovery algorithm.", ru: "Ежедневная отметка. Влияет на алгоритм восстановления." },
+    "sleep.skipToday": { en: "Skip today", ru: "Пропустить сегодня" },
 
     // ─── Misc ─────────────────────────────────────────────────────────
     "common.cancel": { en: "Cancel", ru: "Отмена" },
