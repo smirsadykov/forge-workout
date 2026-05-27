@@ -2349,6 +2349,31 @@ input {
   font-size: 13px;
 }
 
+/* Unilateral side-by-side reps in Guided Mode */
+.guided-log-row.uni {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.guided-log-row.uni .log-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.guided-log-row.uni .log-field input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.guided-log-row.uni .log-field.side-r {
+  border-color: rgba(255, 214, 51, 0.35);
+}
+.guided-log-row.uni .log-field.side-l {
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
 .guided-timer-row {
   display: flex;
   justify-content: center;

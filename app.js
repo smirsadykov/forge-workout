@@ -2826,6 +2826,16 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   // ballistic + isolation combos can still overflow.
   enforceTimeBudget(exercises, duration);
 
+  // Reverse problem: recovery/mobility/endurance goals often UNDER-fill the
+  // budget (each exercise is fast). User picks 30 min, workout estimates
+  // 22 min. Top up by bumping sets or pulling more candidates until we
+  // land in 85-110% of the requested duration.
+  const pickedNames = new Set(picked.map(e => e.name));
+  const leftoverCandidates = scored
+    .filter(s => !pickedNames.has(s.ex.name))
+    .map(s => s.ex);
+  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates);
+
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
@@ -2886,6 +2896,61 @@ function enforceTimeBudget(exercises, durationMin) {
     }
     if (worstIdx === -1) break;
     exercises[worstIdx].sets -= 1;
+  }
+}
+
+// Counterpart to enforceTimeBudget: when the generated workout falls SHORT
+// of the requested duration (common for recovery/mobility/endurance goals
+// where each exercise is fast), top up by either:
+//   1. Adding a set to under-set exercises (cheaper, keeps variety low)
+//   2. Pulling more exercises from the candidate pool
+// Aims to land in the 85-110% band of the requested duration.
+function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficulty, style, deload, extraCandidates = []) {
+  if (!durationMin) return;
+  const budgetSec = durationMin * 60;
+  const floor = budgetSec * 0.85;
+  let attempts = 0;
+  const maxExercises = Math.min(14, exercises.length + 8);
+
+  while (estimateWorkoutSeconds(exercises) < floor && attempts < 20) {
+    attempts++;
+    const currentSec = estimateWorkoutSeconds(exercises);
+    const gap = budgetSec - currentSec;
+
+    // Strategy A: if gap is small (<3 min), bump a set on an existing exercise
+    // (less disruptive than a new movement).
+    if (gap < 180) {
+      // Pick an exercise with room to grow — not mobility, not already at 5 sets
+      let bumpIdx = -1, bumpSec = Infinity;
+      for (let i = 0; i < exercises.length; i++) {
+        const ex = exercises[i];
+        if (ex.pattern === "mobility") continue;
+        if ((ex.sets || 1) >= 5) continue;
+        const sec = estimateExerciseSeconds(ex);
+        if (sec < bumpSec) { bumpSec = sec; bumpIdx = i; }
+      }
+      if (bumpIdx >= 0) {
+        exercises[bumpIdx].sets = (exercises[bumpIdx].sets || 1) + 1;
+        continue;
+      }
+    }
+
+    // Strategy B: pull another exercise from the candidate pool.
+    if (exercises.length >= maxExercises) break;
+    const usedNames = new Set(exercises.map(e => e.name));
+    const next = extraCandidates.find(c => !usedNames.has(c.name));
+    if (!next) break;
+    const p = pickPrescription(goal, difficulty, next, style, deload, durationMin);
+    exercises.push({
+      name: next.name,
+      muscle: next.muscle,
+      pattern: next.pattern,
+      unilateral: isUnilateralExercise(next.name),
+      sets: p.sets,
+      reps: p.reps,
+      rest: p.rest,
+      technique: p.technique || null,
+    });
   }
 }
 
@@ -4501,9 +4566,21 @@ function renderGuided() {
   // Inputs visible on every set so the user can log per-set actuals.
   // Pre-fill: carry the previous set's values forward, or use progression
   // suggestion on the very first set.
+  //
+  // For unilateral exercises (kettlebell suitcase deadlift, single-arm rows,
+  // Bulgarian split squats…) we render TWO reps inputs — Right + Left —
+  // because reps usually differ slightly per side. Weight is shared (the
+  // same kettlebell either way). On Done Set we save two entries with
+  // side="R" / side="L". Without this the user has to log 12 reps total
+  // for "10 per side" which destroys the per-side progression data.
   let inputsHtml = "";
   if (trackable) {
     const buffered = guidedSession.exerciseSets?.[ex.name] || [];
+    // For unilateral, find last R / L separately so each side pre-fills its
+    // own previous reps.
+    const isUni = !!ex.unilateral;
+    const lastR = isUni ? [...buffered].reverse().find(s => s.side === "R") : null;
+    const lastL = isUni ? [...buffered].reverse().find(s => s.side === "L") : null;
     const prevSet = buffered[buffered.length - 1];
     const sugW = prevSet
       ? toDisplay(prevSet.weightKg, units)
@@ -4511,27 +4588,62 @@ function renderGuided() {
     const sugR = prevSet
       ? prevSet.reps
       : (suggestion.next ? suggestion.next.reps : parseRepRange(ex.reps)[0]);
-    inputsHtml = `
-      <div class="guided-log-row">
-        ${usesWeight ? `
-          <label class="log-field">
-            <input type="number" id="guidedWeight" min="0" step="${units === "lb" ? 5 : 2.5}" value="${sugW || ""}" placeholder="weight"/>
-            <span class="log-field-suffix">${units}</span>
-          </label>` : ""}
-        <label class="log-field">
-          <input type="number" id="guidedReps" min="0" step="1" value="${sugR || ""}" placeholder="reps"/>
-          <span class="log-field-suffix">reps</span>
-        </label>
-      </div>
-      <div class="guided-rir-row" title="Reps In Reserve — how many reps left in the tank? 0 = to failure, 3+ = easy">
-        <span class="guided-rir-label">RIR</span>
-        <div class="rir-picker" id="guidedRirPicker">
-          ${[0, 1, 2, 3, 4].map(n =>
-            `<button type="button" class="rir-btn" data-rir="${n}">${n}</button>`
-          ).join("")}
+
+    if (isUni) {
+      const sugRepsR = lastR?.reps || sugR;
+      const sugRepsL = lastL?.reps || sugR;
+      inputsHtml = `
+        <div class="guided-log-row">
+          ${usesWeight ? `
+            <label class="log-field">
+              <input type="number" id="guidedWeight" min="0" step="${units === "lb" ? 5 : 2.5}" value="${sugW || ""}" placeholder="weight"/>
+              <span class="log-field-suffix">${units}</span>
+            </label>` : ""}
         </div>
-      </div>
-    `;
+        <div class="guided-log-row uni">
+          <label class="log-field side-r">
+            <span class="side-tag side-r">R</span>
+            <input type="number" id="guidedRepsR" min="0" step="1" value="${sugRepsR || ""}" placeholder="reps"/>
+            <span class="log-field-suffix">${t("guided.reps")}</span>
+          </label>
+          <label class="log-field side-l">
+            <span class="side-tag side-l">L</span>
+            <input type="number" id="guidedRepsL" min="0" step="1" value="${sugRepsL || ""}" placeholder="reps"/>
+            <span class="log-field-suffix">${t("guided.reps")}</span>
+          </label>
+        </div>
+        <div class="guided-rir-row" title="${t("rir.guidedTooltip")}">
+          <span class="guided-rir-label">${t("rir.label")}</span>
+          <div class="rir-picker" id="guidedRirPicker">
+            ${[0, 1, 2, 3, 4].map(n =>
+              `<button type="button" class="rir-btn" data-rir="${n}">${n}</button>`
+            ).join("")}
+          </div>
+        </div>
+      `;
+    } else {
+      inputsHtml = `
+        <div class="guided-log-row">
+          ${usesWeight ? `
+            <label class="log-field">
+              <input type="number" id="guidedWeight" min="0" step="${units === "lb" ? 5 : 2.5}" value="${sugW || ""}" placeholder="weight"/>
+              <span class="log-field-suffix">${units}</span>
+            </label>` : ""}
+          <label class="log-field">
+            <input type="number" id="guidedReps" min="0" step="1" value="${sugR || ""}" placeholder="reps"/>
+            <span class="log-field-suffix">${t("guided.reps")}</span>
+          </label>
+        </div>
+        <div class="guided-rir-row" title="${t("rir.guidedTooltip")}">
+          <span class="guided-rir-label">${t("rir.label")}</span>
+          <div class="rir-picker" id="guidedRirPicker">
+            ${[0, 1, 2, 3, 4].map(n =>
+              `<button type="button" class="rir-btn" data-rir="${n}">${n}</button>`
+            ).join("")}
+          </div>
+        </div>
+      `;
+    }
   }
 
   // Technique badge
@@ -4663,21 +4775,42 @@ function onDoneSet() {
   // Always capture this set's actuals into a per-exercise buffer. We log
   // the full sets[] array when the exercise (or group) completes so each
   // session has one history entry with all the work in it.
+  // For unilateral exercises we read two inputs (R + L) and push as two
+  // separate entries with side="R"/"L"; bilateral reads a single input.
   if (trackable) {
-    const rEl = document.getElementById("guidedReps");
     const wEl = document.getElementById("guidedWeight");
     const rirBtn = document.querySelector("#guidedRirPicker .rir-btn.active");
-    const reps = Number(rEl?.value || 0);
-    if (reps > 0) {
-      const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
-      const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
-      const setEntry = { weightKg, reps };
-      if (rirBtn) {
-        const rir = Number(rirBtn.dataset.rir);
-        if (!Number.isNaN(rir)) setEntry.rir = rir;
+    const weightDisplay = wEl ? Number(wEl.value || 0) : 0;
+    const weightKg = wEl ? fromDisplay(weightDisplay, units) : 0;
+    let rir = null;
+    if (rirBtn) {
+      const n = Number(rirBtn.dataset.rir);
+      if (!Number.isNaN(n)) rir = n;
+    }
+
+    if (!guidedSession.exerciseSets[ex.name]) guidedSession.exerciseSets[ex.name] = [];
+
+    if (ex.unilateral) {
+      const rR = Number(document.getElementById("guidedRepsR")?.value || 0);
+      const rL = Number(document.getElementById("guidedRepsL")?.value || 0);
+      if (rR > 0) {
+        const e = { weightKg, reps: rR, side: "R" };
+        if (rir != null) e.rir = rir;
+        guidedSession.exerciseSets[ex.name].push(e);
       }
-      if (!guidedSession.exerciseSets[ex.name]) guidedSession.exerciseSets[ex.name] = [];
-      guidedSession.exerciseSets[ex.name].push(setEntry);
+      if (rL > 0) {
+        const e = { weightKg, reps: rL, side: "L" };
+        if (rir != null) e.rir = rir;
+        guidedSession.exerciseSets[ex.name].push(e);
+      }
+    } else {
+      const rEl = document.getElementById("guidedReps");
+      const reps = Number(rEl?.value || 0);
+      if (reps > 0) {
+        const setEntry = { weightKg, reps };
+        if (rir != null) setEntry.rir = rir;
+        guidedSession.exerciseSets[ex.name].push(setEntry);
+      }
     }
   }
 
