@@ -1120,6 +1120,30 @@ function smartProgression(currentKg, exerciseName, topOfRange, userId, lastReps)
   };
 }
 
+// Can this exercise actually deliver a strength stimulus?
+//   - Loaded compounds with real weight: yes (BB, DB, KB, machine)
+//   - Bands: only at advanced (heavy bands)
+//   - Bodyweight: only specific advanced moves that are intrinsically near-max
+//     effort (pistol squat, one-arm push-up, handstand push-up, planche…).
+//     A bog-standard bodyweight squat at 4-6 reps with 3 min rest is junk —
+//     a 75kg person doing 6 BW squats works at ~20% of 1RM, far below the
+//     ~80%+ threshold the literature says strength adaptations require.
+function canDeliverStrength(exercise) {
+  if (!exercise) return false;
+  const eqs = exercise.equipment || [];
+  // Anything with real external load → strength-capable
+  if (eqs.some(e => ["dumbbells", "barbell", "kettlebell", "machine"].includes(e))) return true;
+  // Bands only at advanced (assume heavy resistance bands)
+  if (eqs.includes("bands")) return exercise.difficulty === "advanced";
+  // Bodyweight: only specific advanced moves
+  if (eqs.includes("bodyweight")) {
+    if (exercise.difficulty !== "advanced") return false;
+    const n = (exercise.name || "").toLowerCase();
+    return /pistol|one-?arm|handstand|planche|archer|lever|muscle-?up|deficit|nordic|shrimp|dragon|skater squat/.test(n);
+  }
+  return false;
+}
+
 // Strictly floor-only filter for hotel-room / "no equipment at all" mode.
 // The "bodyweight" tag is a broad bucket — it includes pull-ups (need bar),
 // dips (need chairs/bars), Bulgarian splits (need bench), step-ups (need
@@ -2514,7 +2538,15 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
   // Recovery goal disables intensity techniques (whole point is to be easy).
-  const intensity = goal !== "recovery" && style === "intensity";
+  // Strength goal with a strength-incompatible exercise (e.g. bodyweight
+  // squat) auto-applies intensity — without external load, time-under-
+  // tension (tempo, pause) is the only path to a strength-like stimulus.
+  const strengthMismatch = goal === "strength"
+    && exercise.pattern !== "mobility"
+    && exercise.pattern !== "conditioning"
+    && exercise.pattern !== "ballistic"
+    && !canDeliverStrength(exercise);
+  const intensity = goal !== "recovery" && (style === "intensity" || strengthMismatch);
 
   // Ballistic / explosive movements (KB swings, jumps, plyos) follow their own
   // template: moderate reps with explosive intent, generous rest for power
@@ -2815,6 +2847,16 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     if (goal === "recovery") {
       if (ex.pattern === "ballistic" || ex.pattern === "conditioning") score -= 100; // effectively excluded
       if (ex.pattern === "compound" || ex.pattern === "isolation") score += 5;
+    }
+
+    // Strength stimulus check: bodyweight squat 4x5 at 75kg bodyweight is
+    // ~20% 1RM — well below the ~80% threshold for strength adaptation.
+    // Hard-penalize strength-incompatible exercises so loaded options win
+    // when they're available. Only picked as last resort (e.g. floor-only
+    // hotel scenario), at which point we'll auto-apply tempo intensity in
+    // pickPrescription to recover some strength stimulus via TUT.
+    if (goal === "strength" && !canDeliverStrength(ex)) {
+      score -= 20;
     }
 
     // Anti-repeat penalty for exercises from the previous workout.
