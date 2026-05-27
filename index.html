@@ -18,7 +18,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=59" />
 </head>
 <body>
   <header class="topbar">
@@ -132,6 +132,7 @@
           <div class="form-group">
             <label class="group-label" data-i18n="gen.equipment">Equipment (select all you have)</label>
             <div class="chip-row" data-field="equipment" data-multi="true">
+              <button class="chip floor-only-chip" data-value="floor_only" data-i18n="eq.floor_only">🏨 Floor only</button>
               <button class="chip" data-value="bodyweight" data-i18n="eq.bodyweight">Bodyweight</button>
               <button class="chip" data-value="dumbbells" data-i18n="eq.dumbbells">Dumbbells</button>
               <button class="chip" data-value="barbell" data-i18n="eq.barbell">Barbell</button>
@@ -140,6 +141,7 @@
               <button class="chip" data-value="machine" data-i18n="eq.machine">Machines / Cable</button>
               <button class="chip" data-value="cardio_machine" data-i18n="eq.cardio_machine">Cardio Machine</button>
             </div>
+            <p class="form-hint floor-only-hint" data-i18n="eq.floorOnlyHint">Hotel room? Pick <strong>Floor only</strong> — pull-ups, dips, step-ups, and anything else needing a bar/bench/chair will be skipped.</p>
           </div>
 
           <div class="form-group">
@@ -450,10 +452,10 @@
     </div>
   </div>
 
-  <script src="config.js?v=58"></script>
-  <script src="supabase.min.js?v=58"></script>
-  <script src="i18n.js?v=58"></script>
-  <script src="exercises.js?v=58"></script>
-  <script src="app.js?v=58"></script>
+  <script src="config.js?v=59"></script>
+  <script src="supabase.min.js?v=59"></script>
+  <script src="i18n.js?v=59"></script>
+  <script src="exercises.js?v=59"></script>
+  <script src="app.js?v=59"></script>
 </body>
 </html>

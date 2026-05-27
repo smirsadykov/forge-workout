@@ -104,6 +104,8 @@
     "eq.machine": { en: "Machines / Cable", ru: "Тренажёры / Блоки" },
     "eq.machineShort": { en: "Machine", ru: "Тренажёр" },
     "eq.cardio_machine": { en: "Cardio Machine", ru: "Кардиотренажёр" },
+    "eq.floor_only": { en: "🏨 Floor only", ru: "🏨 Только пол" },
+    "eq.floorOnlyHint": { en: "Hotel room? Pick <strong>Floor only</strong> — pull-ups, dips, step-ups, and anything else needing a bar/bench/chair will be skipped.", ru: "Гостиничный номер? Выбери <strong>«Только пол»</strong> — подтягивания, отжимания на брусьях, зашагивания и всё, что требует турник/скамью/стул, будут пропущены." },
 
     // Difficulty
     "diff.beginner": { en: "Beginner", ru: "Новичок" },

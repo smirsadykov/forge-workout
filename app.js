@@ -1120,6 +1120,27 @@ function smartProgression(currentKg, exerciseName, topOfRange, userId, lastReps)
   };
 }
 
+// Strictly floor-only filter for hotel-room / "no equipment at all" mode.
+// The "bodyweight" tag is a broad bucket — it includes pull-ups (need bar),
+// dips (need chairs/bars), Bulgarian splits (need bench), step-ups (need
+// step), inverted rows (need bar). Identify these by name pattern so we
+// don't have to hand-tag every exercise in exercises.js.
+function requiresFurniture(name) {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  // Needs pull-up bar
+  if (/\b(pull-?ups?|chin-?ups?|muscle-?up|hanging|inverted row|toes to bar|knees to elbows|l-?sit hang)/i.test(n)) return true;
+  // Needs chairs / parallel bars / dipping surface
+  if (/\bdips?\b/i.test(n)) return true;
+  // Needs a step / elevated surface
+  if (/step-?up|box jump|box squat|bench (jump|step)|bulgarian|elevated/i.test(n)) return true;
+  // Needs a bench / elevated surface for incline/decline variants
+  if (/incline push|decline push|feet-elevated|hands-elevated/i.test(n)) return true;
+  // Needs something to row against (door, table)
+  if (/doorway row|towel row/i.test(n)) return true;
+  return false;
+}
+
 function exerciseUsesWeight(name) {
   const ex = EXERCISES.find(e => e.name === name);
   if (!ex) return false;
@@ -1135,9 +1156,13 @@ function findAlternativeExercise(currentName, inputs, excludeNames) {
   if (!current) return null;
   const exclude = new Set([currentName, ...(excludeNames || [])]);
 
+  const floorOnly = (inputs.equipment || []).includes("floor_only");
+  const effEquip = floorOnly ? ["bodyweight"] : inputs.equipment;
+
   const baseCandidates = EXERCISES.filter(ex => {
     if (exclude.has(ex.name)) return false;
-    const equipOk = ex.equipment.some(e => inputs.equipment.includes(e));
+    if (floorOnly && requiresFurniture(ex.name)) return false;
+    const equipOk = ex.equipment.some(e => effEquip.includes(e));
     const diffOk = matchesDifficulty(ex.difficulty, inputs.difficulty);
     const targetOk = matchesTarget(ex, inputs.target);
     return equipOk && diffOk && targetOk;
@@ -2253,10 +2278,40 @@ document.querySelectorAll(".chip-row").forEach(row => {
       const value = chip.dataset.value;
       if (multi) {
         const arr = formState[field];
-        const idx = arr.indexOf(value);
-        if (idx === -1) arr.push(value);
-        else arr.splice(idx, 1);
-        chip.classList.toggle("selected");
+        // Special rule for equipment: "floor_only" is mutually exclusive
+        // with everything else. Picking it clears all other equipment;
+        // picking any other equipment clears floor_only.
+        if (field === "equipment") {
+          if (value === "floor_only") {
+            if (arr.includes("floor_only")) {
+              // Toggle off
+              arr.length = 0;
+              row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
+            } else {
+              // Picking floor-only: clear everything else first
+              arr.length = 0;
+              arr.push("floor_only");
+              row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
+              chip.classList.add("selected");
+            }
+          } else {
+            // Picking a real equipment item: drop floor_only if present
+            const foIdx = arr.indexOf("floor_only");
+            if (foIdx !== -1) {
+              arr.splice(foIdx, 1);
+              row.querySelector('.chip[data-value="floor_only"]')?.classList.remove("selected");
+            }
+            const idx = arr.indexOf(value);
+            if (idx === -1) arr.push(value);
+            else arr.splice(idx, 1);
+            chip.classList.toggle("selected");
+          }
+        } else {
+          const idx = arr.indexOf(value);
+          if (idx === -1) arr.push(value);
+          else arr.splice(idx, 1);
+          chip.classList.toggle("selected");
+        }
       } else {
         row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
         chip.classList.add("selected");
@@ -2592,10 +2647,13 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
     ...pickPrescription(goal, difficulty, ex, "standard", false, duration),
   }));
 
+  const floorOnly = equipment.includes("floor_only");
+  const effEquip = floorOnly ? ["bodyweight"] : equipment;
   const cardioCandidates = EXERCISES.filter(e =>
     e.group.includes("cardio") &&
     e.pattern === "conditioning" &&
-    e.equipment.some(eq => equipment.includes(eq))
+    e.equipment.some(eq => effEquip.includes(eq)) &&
+    (!floorOnly || !requiresFurniture(e.name))
   );
 
   const cardioExercises = [];
@@ -2709,20 +2767,28 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   const count = COUNT_BY_DURATION[duration] || 6;
   const targetDiff = DIFF_ORDER[difficulty];
 
+  // "Floor only" mode: the floor_only chip is mutually exclusive with all
+  // other equipment. Internally we treat it as bodyweight + a strict furniture
+  // filter that drops pull-ups, dips, step-ups, anything needing a bar/bench.
+  const floorOnly = equipment.includes("floor_only");
+  const effectiveEquipment = floorOnly ? ["bodyweight"] : equipment;
+
   // Always prepend a brief dynamic warm-up unless the goal IS mobility
   // (in which case the whole workout is mobility-focused already).
   const warmupCount = goal === "mobility" ? 0 : (duration >= 30 ? 2 : 1);
   const mainCount = Math.max(1, count - warmupCount);
-  const warmups = pickWarmupExercises(target, warmupCount);
+  const warmups = pickWarmupExercises(target, warmupCount).filter(w => !floorOnly || !requiresFurniture(w.name));
   const warmupNames = new Set(warmups.map(w => w.name));
 
   // Filter by equipment + difficulty cap + target. Exclude warm-up picks
   // so the main pool can't double-pick a mobility move we already added.
   const candidates = EXERCISES.filter(ex => {
     if (warmupNames.has(ex.name)) return false;
-    const equipOk = ex.equipment.some(e => equipment.includes(e));
+    const equipOk = ex.equipment.some(e => effectiveEquipment.includes(e));
     const diffOk = matchesDifficulty(ex.difficulty, difficulty);
     const targetOk = matchesTarget(ex, target);
+    // Floor-only: filter out anything needing a bar / bench / step / etc.
+    if (floorOnly && requiresFurniture(ex.name)) return false;
     return equipOk && diffOk && targetOk;
   });
 
