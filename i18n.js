@@ -266,6 +266,8 @@
     "wo.deload": { en: "deload", ru: "снижение" },
     "wo.pushReps": { en: "push reps", ru: "добавь повторы" },
     "wo.recoveryLight": { en: "recovery — light", ru: "восстановление — лёгко" },
+    "wo.firstTime": { en: "First time", ru: "Первый раз" },
+    "wo.firstSessionNote": { en: "start here, adjust after set 1", ru: "начни отсюда, скорректируй после 1-го подхода" },
 
     // ─── Guided mode ─────────────────────────────────────────────────
     "guided.exit": { en: "← Exit", ru: "← Выйти" },

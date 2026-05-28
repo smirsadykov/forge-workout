@@ -2807,6 +2807,26 @@ input {
   color: var(--text-muted);
 }
 
+/* First-session pill — distinct from history-based suggestions */
+.last-pill.first {
+  background: rgba(96, 165, 250, 0.08);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #93c5fd;
+}
+.last-pill.first::before { content: "💡"; }
+.guided-last.first {
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #93c5fd;
+}
+.guided-last.first strong { color: #cfe0ff; }
+.guided-first-note {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
 .set-list {
   display: flex;
   flex-direction: column;

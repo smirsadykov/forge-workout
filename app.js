@@ -1059,6 +1059,86 @@ function progressionIncrementKg(pattern) {
 // next weight to the smallest realistic jump for the actual equipment.
 // For kettlebells specifically, the user can list what they own in Settings
 // (e.g. "10, 12, 16, 24, 32") — the algorithm picks the next available.
+// First-session starting weight when there's no history for this exercise.
+// Without this the user just sees the rep range with no weight cue and has
+// to guess — defaulting to their max KB is too aggressive for unfamiliar
+// movements (esp. unilateral pressing).
+//
+// Strategy: take user's max load for the relevant equipment, multiply by a
+// goal-driven percentage, then adjust for exercise type (pressing harder
+// per kg than squatting, ballistic ≈ max load, isolation lighter). Snap to
+// available kettlebell inventory if known.
+function getStartingWeight(exerciseName, userId, goal) {
+  const ex = EXERCISES.find(e => e.name === exerciseName);
+  if (!ex) return 0;
+  if (!exerciseUsesWeight(exerciseName)) return 0;
+
+  const loads = getLoads(userId);
+
+  // Pick the heaviest available load matching this exercise's equipment.
+  let maxKg = 0;
+  if (ex.equipment.includes("kettlebell")) maxKg = Math.max(maxKg, loads.maxKettlebellKg || 0);
+  if (ex.equipment.includes("dumbbells")) maxKg = Math.max(maxKg, loads.maxDumbbellKg || 0);
+  if (ex.equipment.includes("barbell") && loads.hasHeavyBarbell) maxKg = Math.max(maxKg, 60);
+  if (maxKg <= 0) return 0;
+
+  // Base percentage by goal — conservative on first session, user can adjust.
+  let pct;
+  if (goal === "strength") pct = 0.75;
+  else if (goal === "hypertrophy") pct = 0.65;
+  else if (goal === "fat_loss") pct = 0.55;
+  else if (goal === "endurance") pct = 0.50;
+  else if (goal === "recovery") pct = 0.45;
+  else pct = 0.60;
+
+  // Exercise-type adjustments. The same kg feels very different on a
+  // single-arm press vs a goblet squat vs a swing.
+  const name = exerciseName.toLowerCase();
+  const isPress = /press|push|bench|fly/.test(name);
+  const isPull = /row|pull|chin|curl/.test(name);
+  const isSquatHinge = /squat|deadlift|rdl|hip thrust|lunge|good morning|cossack/.test(name);
+  const isBallistic = ex.pattern === "ballistic"; // swings, cleans, snatches
+  const isIsolation = ex.pattern === "isolation";
+  const isUni = isUnilateralExercise(exerciseName);
+
+  if (isBallistic) pct = Math.min(0.95, pct * 1.4);          // KB swing can be near max
+  else if (isSquatHinge && !isUni) pct = Math.min(0.95, pct * 1.2); // bilateral lower-body
+  else if (isUni && isPress) pct = pct * 0.80;                // single-arm press = harder per kg
+  else if (isUni && isSquatHinge) pct = pct * 0.85;           // unilateral squats / hinges
+  else if (isIsolation) pct = pct * 0.80;                     // isolation work = less load
+
+  const targetKg = maxKg * pct;
+  return snapToEquipmentStep(targetKg, ex, userId, /* down */ true);
+}
+
+// Snap a target weight to a realistic increment for this exercise's equipment.
+// roundDown=true picks the highest step *at or below* the target — better for
+// first sessions ("err light"). For KB, prefer the user's actual inventory.
+function snapToEquipmentStep(kg, ex, userId, roundDown) {
+  if (kg <= 0) return 0;
+  if (ex.equipment.includes("kettlebell")) {
+    const loads = getLoads(userId);
+    const inv = loads.availableKettlebellsKg;
+    if (Array.isArray(inv) && inv.length > 0) {
+      const sorted = [...inv].sort((a, b) => a - b);
+      let best = sorted[0];
+      for (const w of sorted) {
+        if (roundDown ? w <= kg : w >= kg) { best = w; if (!roundDown) break; }
+        else if (!roundDown) break;
+      }
+      return best;
+    }
+    return Math.max(4, Math.floor(kg / 4) * 4);
+  }
+  if (ex.equipment.includes("dumbbells")) {
+    return Math.max(2, (roundDown ? Math.floor : Math.round)(kg / 2) * 2);
+  }
+  if (ex.equipment.includes("barbell")) {
+    return Math.max(20, (roundDown ? Math.floor : Math.round)(kg / 2.5) * 2.5);
+  }
+  return kg;
+}
+
 function nextRealisticWeight(currentKg, exerciseName, userId) {
   const ex = EXERCISES.find(e => e.name === exerciseName);
   const eqs = ex?.equipment || [];
@@ -1236,11 +1316,26 @@ function isTrackable(name) {
 
 function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   const stat = getExerciseStat(userId, exerciseName);
-  if (!stat || !stat.history?.length) return { last: null, next: null, trend: null };
-
   const [lo, hi] = parseRepRange(prescription.reps);
   const usesWeight = exerciseUsesWeight(exerciseName);
   const inc = progressionIncrementKg(pattern);
+
+  // No history for this exercise yet — return a first-session starting
+  // weight estimate so the user isn't left guessing (or worse, defaulting
+  // to their max KB on an unfamiliar single-arm pressing movement).
+  if (!stat || !stat.history?.length) {
+    const startKg = usesWeight ? getStartingWeight(exerciseName, userId, goal) : 0;
+    if (startKg > 0 || !usesWeight) {
+      const targetReps = lo > 0 ? Math.round((lo + hi) / 2) : 0;
+      return {
+        last: null,
+        next: { weightKg: startKg, reps: targetReps },
+        trend: "first",
+        note: "first time — start here, adjust after set 1",
+      };
+    }
+    return { last: null, next: null, trend: null };
+  }
 
   // Find the most recent "real" working session — skip recovery and deload
   // sessions, since those are intentionally sub-stimulus and would mislead
@@ -3172,9 +3267,18 @@ function renderExerciseLog(ex, units) {
   // not a single set. Falls back gracefully for older entries.
   const justLogged = recentlyLogged[ex.name];
 
-  // Last-session pill — summarises all sets if available
+  // First-session pill — shown when there's no history but we generated a
+  // starting-weight estimate. Renders a distinct "first time" tag so the
+  // user knows it's an estimate, not a progression-based suggestion.
   let pill = "";
-  if (last) {
+  if (!last && suggestion.trend === "first" && next) {
+    const w = next.weightKg ? `${toDisplay(next.weightKg, units)} ${units}` : "bw";
+    const startSummary = usesWeight ? `${w} × ${next.reps}` : `${next.reps} reps`;
+    const noteHtml = suggestion.note
+      ? `<span class="progress-note">${t("wo.firstSessionNote") || suggestion.note}</span>` : "";
+    pill = `<span class="last-pill first">${t("wo.firstTime")} · ${startSummary}</span>
+            ${noteHtml}`;
+  } else if (last) {
     let summary;
     const allSets = last.allSets || [];
     const hasSideData = allSets.some(s => s.side);
@@ -4733,7 +4837,7 @@ function renderGuided() {
   document.getElementById("guidedExTotal").textContent = total;
   document.getElementById("guidedProgressFill").style.width = `${Math.min(100, progress)}%`;
 
-  // Last-session line
+  // Last-session line (or first-session estimate if there's no history)
   let lastLine = "";
   if (suggestion.last) {
     const w = suggestion.last.weightKg
@@ -4743,6 +4847,14 @@ function renderGuided() {
     lastLine = `<div class="guided-last">${t("guided.last")} <strong>${
       usesWeight ? `${w} × ${suggestion.last.reps}` : `${suggestion.last.reps} reps`
     }</strong> &nbsp;${trendLabel}</div>`;
+  } else if (suggestion.trend === "first" && suggestion.next) {
+    // No history — show the starting-weight estimate so the user isn't
+    // staring at an empty pre-filled input wondering what to do.
+    const w = suggestion.next.weightKg
+      ? `${toDisplay(suggestion.next.weightKg, units)} ${units}` : "bw";
+    lastLine = `<div class="guided-last first">${t("wo.firstTime")} · <strong>${
+      usesWeight ? `${w} × ${suggestion.next.reps}` : `${suggestion.next.reps} reps`
+    }</strong> <span class="guided-first-note">${t("wo.firstSessionNote")}</span></div>`;
   }
 
   // Inputs visible on every set so the user can log per-set actuals.
