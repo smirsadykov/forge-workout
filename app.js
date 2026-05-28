@@ -3558,20 +3558,36 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
 
   // Filter by equipment + difficulty cap + target. Exclude warm-up picks
   // so the main pool can't double-pick a mobility move we already added.
+  // Bodyweight-fallback inclusion: when the user's equipment selection
+  // doesn't already cover bodyweight (and they didn't pick floor_only,
+  // which already routes through BW), include bodyweight exercises in the
+  // candidate pool as fallbacks. They score lower in scoring below, so
+  // equipment-matched options win Pass 1 picks; BW only fills buckets that
+  // the user's equipment can't (e.g., kettlebell+full_body+beginner has
+  // weak pull/hinge options, but BW inverted rows / glute bridges cover).
+  const userHasBodyweight = effectiveEquipment.includes("bodyweight");
   const candidates = EXERCISES.filter(ex => {
     if (warmupNames.has(ex.name)) return false;
-    const equipOk = ex.equipment.some(e => effectiveEquipment.includes(e));
+    if (floorOnly && requiresFurniture(ex.name)) return false;
+    const matchesUserEquip = ex.equipment.some(e => effectiveEquipment.includes(e));
+    const isBwFallback = !userHasBodyweight && !floorOnly && ex.equipment.includes("bodyweight");
+    if (!matchesUserEquip && !isBwFallback) return false;
     const diffOk = matchesDifficulty(ex.difficulty, difficulty);
     const targetOk = matchesTarget(ex, target);
-    // Floor-only: filter out anything needing a bar / bench / step / etc.
-    if (floorOnly && requiresFurniture(ex.name)) return false;
-    return equipOk && diffOk && targetOk;
+    return diffOk && targetOk;
   });
 
   // Score each candidate. Higher = preferred.
   const scored = candidates.map(ex => {
     let score = 0;
     const exDiff = DIFF_ORDER[ex.difficulty];
+
+    // Bodyweight fallback (not in user's equipment selection) — score lower
+    // so equipment-matched exercises dominate the early picks. BW only wins
+    // when a movement bucket has no equipment-matched candidates available.
+    const isBwFallback = !userHasBodyweight && !floorOnly
+      && !ex.equipment.some(e => effectiveEquipment.includes(e));
+    if (isBwFallback) score -= 8;
 
     // Strong bias toward exercises matching the chosen difficulty.
     const diffGap = targetDiff - exDiff;       // 0 = exact, 1 = one below, 2 = two below
@@ -3718,23 +3734,10 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     .filter(s => !pickedNames.has(s.ex.name))
     .map(s => s.ex);
 
-  // Bodyweight fallback pool — kicks in when the user's equipment pool is
-  // thin (e.g., kettlebell+push+beginner has 1 candidate). Bodyweight is
-  // always available unless user explicitly chose Floor only (and even then
-  // the bodyweight pool is what they get filtered through). Excludes warmup
-  // picks + the primary picks; honors floor-only furniture filter; honors
-  // target + difficulty as before.
-  const bodyweightFallback = effectiveEquipment.includes("bodyweight")
-    ? [] // bodyweight is already in the primary pool, no extra fallback needed
-    : EXERCISES.filter(ex => {
-        if (warmupNames.has(ex.name)) return false;
-        if (pickedNames.has(ex.name)) return false;
-        if (!ex.equipment.includes("bodyweight")) return false;
-        if (floorOnly && requiresFurniture(ex.name)) return false;
-        return matchesDifficulty(ex.difficulty, difficulty) && matchesTarget(ex, target);
-      });
-
-  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates, bodyweightFallback);
+  // Bodyweight fallback exercises are already in the scored candidates list
+  // (added in the candidate filter above with a score penalty). They flow
+  // through to leftoverCandidates naturally for fillTimeBudget.
+  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates);
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
