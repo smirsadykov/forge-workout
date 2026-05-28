@@ -2911,6 +2911,66 @@ const TARGET_MUSCLES = {
   cardio:    ["full_body", "quads", "calves"],
 };
 
+// Categorize an exercise into a movement-pattern bucket. Used to enforce
+// diversity in exercise selection — without this, a 4-exercise full-body
+// workout could end up as 2 rows + 2 lunges (no push, no hinge, no
+// bilateral squat). Standard strength programming wants one of each
+// major pattern (push, pull, squat, hinge) per session.
+function getMovementBucket(exercise) {
+  if (!exercise) return "other";
+  if (exercise.pattern === "mobility") return "mobility";
+  if (exercise.pattern === "conditioning") return "conditioning";
+  const name = (exercise.name || "").toLowerCase();
+  const primary = (exercise.muscle && exercise.muscle[0]) || "";
+
+  // Hinge — must precede squat (handles "deadlift squat" hybrids)
+  if (/deadlift|\brdl\b|romanian|swing|\bclean\b|snatch|hip thrust|good morning|hyperextension|kettlebell jerk|nordic/.test(name)) {
+    return "hinge";
+  }
+  // Squat / knee-dominant
+  if (/squat|lunge|step-?up|split squat|bulgarian|cossack|pistol|sissy|shrimp/.test(name)) {
+    return "squat";
+  }
+  // Pull (back-dominant; biceps curls go to arm_iso)
+  if (/pull-?up|chin-?up|pulldown|pull-?down|lat pull|inverted row|\brow\b|face pull|reverse fly|rear delt/.test(name)) {
+    return "pull";
+  }
+  // Push (chest / shoulder pressing, dips)
+  if (/press|push-?up|push up|bench|\bfly\b|\bflye\b|\bdip\b/.test(name)) {
+    return "push";
+  }
+  // Arm isolation (curls, extensions)
+  if (/curl|tricep extension|skull crusher|kickback|pushdown/.test(name)) {
+    return "arm_iso";
+  }
+  // Shoulder isolation
+  if (/lateral raise|front raise|shrug|upright row/.test(name)) {
+    return "shoulder_iso";
+  }
+  // Core
+  if (primary === "core" || /plank|crunch|sit-?up|leg raise|hollow|dead bug|bird dog|ab wheel|cable crunch|russian twist|wood chop|mountain climb|hanging knee|knees to elbows|toes to bar/.test(name)) {
+    return "core";
+  }
+  // Calf
+  if (primary === "calves" || /calf raise|calf press/.test(name)) {
+    return "calf";
+  }
+  return "other";
+}
+
+// Which movement buckets are RELEVANT for each target — the picker enforces
+// diversity within these buckets. (Buckets not in this list still get
+// picked if they score highly; they just don't get capped.)
+const TARGET_BUCKETS = {
+  full_body: ["push", "pull", "squat", "hinge"],
+  upper: ["push", "pull", "arm_iso", "shoulder_iso"],
+  lower: ["squat", "hinge", "calf"],
+  push: ["push", "arm_iso", "shoulder_iso"],
+  pull: ["pull", "arm_iso"],
+  legs: ["squat", "hinge", "calf"],
+  core: ["core"],
+};
+
 // Pair main-work exercises into supersets (size 2) or circuits (size 3).
 // Annotates exercises in-place with groupId / groupPosition / groupSize and
 // normalises sets + rest within a group so the round structure works.
@@ -3047,21 +3107,52 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
 
   scored.sort((a, b) => b.score - a.score);
 
-  // De-dup by primary muscle so we don't get an all-chest workout.
+  // De-dup by primary muscle AND by movement-pattern bucket. The muscle cap
+  // alone allowed e.g. 2 rows + 2 lunges (different muscles, same patterns)
+  // producing a workout with zero pushes and zero hinges. Bucket cap ensures
+  // a 4-exercise full-body workout spans push/pull/squat/hinge.
   const maxPerMuscle = duration >= 60 ? 3 : 2;
+  const relevantBuckets = TARGET_BUCKETS[target] || [];
+  const perBucketCap = relevantBuckets.length > 0
+    ? Math.max(1, Math.ceil(mainCount / relevantBuckets.length))
+    : Infinity;
+
   const muscleCount = {};
+  const bucketCount = {};
   const picked = [];
 
+  // Pass 1: strict — enforce muscle + bucket caps for diversity.
   for (const { ex } of scored) {
     if (picked.length >= mainCount) break;
     const primary = ex.muscle[0];
+    const bucket = getMovementBucket(ex);
+
     muscleCount[primary] = muscleCount[primary] || 0;
     if (muscleCount[primary] >= maxPerMuscle) continue;
+    if (relevantBuckets.includes(bucket)) {
+      bucketCount[bucket] = bucketCount[bucket] || 0;
+      if (bucketCount[bucket] >= perBucketCap) continue;
+      bucketCount[bucket]++;
+    }
     picked.push(ex);
     muscleCount[primary]++;
   }
 
-  // Fill from leftovers if muscle cap left us short.
+  // Pass 2: relax bucket cap if Pass 1 left us short (e.g., not enough
+  // candidates available in some buckets for the chosen equipment).
+  // Muscle cap still applies — don't double-up on the same muscle.
+  if (picked.length < mainCount) {
+    for (const { ex } of scored) {
+      if (picked.length >= mainCount) break;
+      if (picked.includes(ex)) continue;
+      const primary = ex.muscle[0];
+      if ((muscleCount[primary] || 0) >= maxPerMuscle) continue;
+      picked.push(ex);
+      muscleCount[primary] = (muscleCount[primary] || 0) + 1;
+    }
+  }
+
+  // Pass 3: last-resort fill if even Pass 2 came up short (small candidate pool).
   if (picked.length < mainCount) {
     for (const { ex } of scored) {
       if (picked.length >= mainCount) break;
