@@ -97,6 +97,9 @@
     "kbsport.mainSet": { en: "Main set", ru: "Основной сет" },
     "kbsport.cooldown": { en: "Cool-down", ru: "Заминка" },
     "kbsport.continuous": { en: "continuous — don't set the bell down", ru: "непрерывно — не ставь гирю" },
+    "kbsport.needKb": { en: "KB Sport needs a kettlebell. Add kettlebell to Equipment.", ru: "Гиревому спорту нужна гиря. Добавь гирю в Инвентарь." },
+    "kbsport.needIntermediate": { en: "KB Sport lifts (Jerk, Long Cycle, Snatch) are technical. Pick Intermediate or Advanced; start with a lighter bell.", ru: "Толчок, длинный цикл и рывок — техничные движения. Выбери Средний или Продвинутый; начни с лёгкой гири." },
+    "gen.nothingFits": { en: "Couldn't build a workout that fits these filters. Try a different goal or add more equipment.", ru: "Не получилось собрать тренировку под эти фильтры. Попробуй другую цель или добавь инвентарь." },
 
     // Targets
     "target.full_body": { en: "Full Body", ru: "Всё тело" },

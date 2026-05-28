@@ -3848,6 +3848,17 @@ el.generateBtn.addEventListener("click", () => {
   if (!duration) return el.formError.textContent = "Pick a duration.";
   if (!difficulty) return el.formError.textContent = "Pick a difficulty.";
   if (goal === "sport_prep" && !sport) return el.formError.textContent = t("sport.pickFirst") || "Pick a sport first.";
+  // KB Sport requires a kettlebell + intermediate skill — the lifts are
+  // technical (Jerk, Long Cycle, Snatch) and don't have beginner variants
+  // in the pool. Tell the user before we silently fail.
+  if (goal === "kb_sport") {
+    if (!equipment.includes("kettlebell")) {
+      return el.formError.textContent = t("kbsport.needKb") || "KB Sport needs a kettlebell. Add kettlebell to Equipment.";
+    }
+    if (difficulty === "beginner") {
+      return el.formError.textContent = t("kbsport.needIntermediate") || "KB Sport lifts (Jerk, Long Cycle, Snatch) are technical. Pick Intermediate or Advanced; start with a lighter bell.";
+    }
+  }
 
   currentWorkout = generateWorkout({
     goal, equipment, target,
@@ -3857,6 +3868,12 @@ el.generateBtn.addEventListener("click", () => {
     deload: !!formState.deload,
     sport,
   });
+  // Defensive: if a goal-specific generator returns null (pool empty after
+  // filters), show a clear error instead of leaving the user staring at
+  // nothing.
+  if (!currentWorkout) {
+    return el.formError.textContent = t("gen.nothingFits") || "Couldn't build a workout that fits these filters. Try a different goal or add more equipment.";
+  }
   workoutIsSaved = false;
   workoutReadOnly = false;
   recentlyLogged = {};
