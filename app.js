@@ -2957,13 +2957,23 @@ function generateKbSportWorkout({ equipment, duration, difficulty }) {
   const mainExercises = [];
   for (let i = 0; i < numBlocks && i < shuffled.length; i++) {
     const ex = shuffled[i];
+    const isUni = isUnilateralExercise(ex.name);
+    // KB Sport convention: one-arm lifts use a SINGLE set for the full
+    // block, switching hands once at the halfway mark. Total time stays as
+    // advertised; each side gets exactly half. Including "per side" in the
+    // reps string also stops displayReps() from tacking on a generic
+    // "per side" suffix that would imply 2× the time.
+    const halfMin = perBlockMin % 2 === 0 ? perBlockMin / 2 : (perBlockMin / 2).toFixed(1);
+    const repsStr = isUni
+      ? `${perBlockMin} min · switch hands at ${halfMin}:00 · pace ${paceLo}-${paceHi}/min per side`
+      : `${perBlockMin} min · pace ${paceLo}-${paceHi}/min`;
     mainExercises.push({
       name: ex.name,
       muscle: ex.muscle,
       pattern: ex.pattern,
-      unilateral: isUnilateralExercise(ex.name),
+      unilateral: isUni,
       sets: 1,
-      reps: `${perBlockMin} min · pace ${paceLo}-${paceHi}/min`,
+      reps: repsStr,
       rest: i < numBlocks - 1 ? 180 : 0,  // 3 min between blocks; standard KB Sport rest
       isTimeBlock: true,
     });
@@ -3609,7 +3619,15 @@ function renderExerciseLog(ex, units) {
   // (one for each side) so the user can track R/L independently.
   const totalSets = ex.sets || 1;
   const stepW = units === "lb" ? 5 : 2.5;
-  const defaultRep = next ? next.reps : parseRepRange(ex.reps)[0];
+  // For time-block exercises (KB Sport, cardio blocks, planks), the
+  // "reps" field is "X min · pace …" — parseRepRange would extract
+  // bogus digits like "8" or "14" from the time/pace text and pre-fill
+  // a nonsensical number. Leave reps empty for these; the user types
+  // total reps achieved after the timer ends.
+  const isTimeBlock = !!ex.isTimeBlock || parseTimeReps(ex.reps) != null;
+  const defaultRep = isTimeBlock
+    ? ""
+    : (next ? next.reps : parseRepRange(ex.reps)[0]);
   const defaultWeight = next ? toDisplay(next.weightKg, units) : "";
   const isUni = !!ex.unilateral;
   const sidesPerSet = isUni ? ["R", "L"] : [null];
