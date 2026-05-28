@@ -3905,10 +3905,20 @@ function renderExerciseLog(ex, units) {
   // First-session pill — shown when there's no history but we generated a
   // starting-weight estimate. Renders a distinct "first time" tag so the
   // user knows it's an estimate, not a progression-based suggestion.
+  // For time-based exercises (carries, planks, cardio blocks) we DON'T
+  // show "× reps" since the prescription is a duration, not a rep count.
   let pill = "";
   if (!last && suggestion.trend === "first" && next) {
     const w = next.weightKg ? `${toDisplay(next.weightKg, units)} ${units}` : "bw";
-    const startSummary = usesWeight ? `${w} × ${next.reps}` : `${next.reps} reps`;
+    const isTimeBased = !!ex.isTimeBlock || parseTimeReps(ex.reps) != null;
+    let startSummary;
+    if (isTimeBased) {
+      // For a loaded carry / plank with weight, just show the weight.
+      // For pure bodyweight time work, show the prescribed duration.
+      startSummary = usesWeight ? w : (ex.reps || "");
+    } else {
+      startSummary = usesWeight ? `${w} × ${next.reps}` : `${next.reps} reps`;
+    }
     const noteHtml = suggestion.note
       ? `<span class="progress-note">${t("wo.firstSessionNote") || suggestion.note}</span>` : "";
     pill = `<span class="last-pill first">${t("wo.firstTime")} · ${startSummary}</span>
@@ -3917,24 +3927,37 @@ function renderExerciseLog(ex, units) {
     let summary;
     const allSets = last.allSets || [];
     const hasSideData = allSets.some(s => s.side);
+    // Format the "reps" portion of a logged set — time-based sets stored
+    // their duration in seconds (under reps), so render as min/sec instead
+    // of a bare integer that'd be misread as a rep count.
+    const fmtReps = (n, isTime) => {
+      if (!isTime) return `${n}`;
+      return n >= 60 ? `${Math.round(n / 60)} min` : `${n} sec`;
+    };
+    const isLastTimeBased = allSets.some(s => s.timeBased);
     if (hasSideData) {
-      // Unilateral: show R/L breakdown (best of each)
       const rSets = allSets.filter(s => s.side === "R");
       const lSets = allSets.filter(s => s.side === "L");
       const wt = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
-      const rBest = rSets.length ? Math.max(...rSets.map(s => s.reps)) : "—";
-      const lBest = lSets.length ? Math.max(...lSets.map(s => s.reps)) : "—";
-      summary = `${wt} · R ${rBest} · L ${lBest}`;
+      const rBest = rSets.length ? Math.max(...rSets.map(s => s.reps)) : null;
+      const lBest = lSets.length ? Math.max(...lSets.map(s => s.reps)) : null;
+      const rStr = rBest != null ? fmtReps(rBest, isLastTimeBased) : "—";
+      const lStr = lBest != null ? fmtReps(lBest, isLastTimeBased) : "—";
+      summary = `${wt} · R ${rStr} · L ${lStr}`;
     } else if (allSets.length > 1) {
       const bestSet = allSets.reduce((b, s) =>
         calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, allSets[0]);
+      const repsStr = fmtReps(bestSet.reps, isLastTimeBased);
       const bestStr = bestSet.weightKg > 0
-        ? `${toDisplay(bestSet.weightKg, units)} ${units} × ${bestSet.reps}`
-        : `${bestSet.reps} reps`;
+        ? `${toDisplay(bestSet.weightKg, units)} ${units} × ${repsStr}`
+        : (isLastTimeBased ? repsStr : `${repsStr} reps`);
       summary = `${allSets.length} sets · best ${bestStr}`;
     } else {
       const w = last.weightKg ? `${toDisplay(last.weightKg, units)} ${units}` : "bw";
-      summary = usesWeight ? `${w} × ${last.reps}` : `${last.reps} reps`;
+      const repsStr = fmtReps(last.reps, isLastTimeBased);
+      summary = usesWeight
+        ? `${w} × ${repsStr}`
+        : (isLastTimeBased ? repsStr : `${repsStr} reps`);
     }
     const trendArrow =
       suggestion.trend === "up" ? "↑" :
@@ -3960,13 +3983,20 @@ function renderExerciseLog(ex, units) {
   // (one for each side) so the user can track R/L independently.
   const totalSets = ex.sets || 1;
   const stepW = units === "lb" ? 5 : 2.5;
-  // For time-block exercises (KB Sport, cardio blocks, planks), the
-  // "reps" field is "X min · pace …" — parseRepRange would extract
-  // bogus digits like "8" or "14" from the time/pace text and pre-fill
-  // a nonsensical number. Leave reps empty for these; the user types
-  // total reps achieved after the timer ends.
-  const isTimeBlock = !!ex.isTimeBlock || parseTimeReps(ex.reps) != null;
-  const defaultRep = isTimeBlock
+  // For time-based exercises (KB Sport, cardio blocks, planks, carries),
+  // the "reps" field is "X min · …" or "30 sec" — these aren't counted as
+  // reps. Show a MIN/SEC input instead, pre-filled with the prescribed
+  // duration. Also hide RIR (sustained work doesn't have a meaningful
+  // proximity-to-failure on the rep scale).
+  const isTimeBased = !!ex.isTimeBlock || parseTimeReps(ex.reps) != null;
+  const timeSec = isTimeBased ? parseTimeReps(ex.reps) : null;
+  // Pick the friendlier display unit — minutes for >=60s, seconds for shorter.
+  const useMinutes = timeSec != null && timeSec >= 60;
+  const defaultTime = timeSec == null ? "" : useMinutes
+    ? Math.round(timeSec / 60)
+    : timeSec;
+  const timeSuffix = useMinutes ? "min" : "sec";
+  const defaultRep = isTimeBased
     ? ""
     : (next ? next.reps : parseRepRange(ex.reps)[0]);
   const defaultWeight = next ? toDisplay(next.weightKg, units) : "";
@@ -3982,17 +4012,40 @@ function renderExerciseLog(ex, units) {
               : (entryIdx === 0 ? defaultWeight : "");
       const r = restored ? restored.reps
               : (entryIdx === 0 ? defaultRep : "");
+      // For time-based: restored reps may carry the duration in seconds; we
+      // display it in the friendlier unit. If no restore, pre-fill duration.
+      const tRestored = restored ? restored.reps : null;
+      const tDisplay = tRestored != null
+        ? (useMinutes ? Math.round(tRestored / 60) : tRestored)
+        : (entryIdx === 0 ? defaultTime : "");
       const restoredRir = restored?.rir;
       const label = side ? `Set ${setN} <span class="side-tag side-${side.toLowerCase()}">${side}</span>` : `Set ${setN}`;
-      // RIR (Reps In Reserve) — only meaningful on the LAST set of each side,
-      // since prior sets are usually held in reserve. Show it on every row
-      // anyway but make it cleanly optional (defaults to —).
-      const rirHtml = `
-        <div class="rir-picker" data-log-set="rir-group" title="Reps In Reserve — how many reps did you have left? (0 = to failure, 3+ = easy)">
-          ${[0, 1, 2, 3, 4].map(n =>
-            `<button type="button" class="rir-btn ${restoredRir === n ? "active" : ""}" data-rir="${n}">${n}</button>`
-          ).join("")}
+      // RIR — only meaningful for rep-counted work. Sustained holds /
+      // carries / cardio don't have rep-scale failure proximity, so hide.
+      const rirHtml = isTimeBased ? "" : `
+        <div class="rir-wrap">
+          <span class="rir-label" title="Reps In Reserve">RIR</span>
+          <div class="rir-picker" data-log-set="rir-group" title="Reps In Reserve — how many reps did you have left? (0 = to failure, 3+ = easy)">
+            ${[0, 1, 2, 3, 4].map(n =>
+              `<button type="button" class="rir-btn ${restoredRir === n ? "active" : ""}" data-rir="${n}">${n}</button>`
+            ).join("")}
+          </div>
         </div>`;
+
+      // Reps vs Time input
+      const repsOrTimeInput = isTimeBased
+        ? `<label class="log-field compact">
+            <input type="number" inputmode="numeric" step="1" min="0"
+                   data-log-set="time" data-log-time-unit="${timeSuffix}"
+                   placeholder="${defaultTime || timeSuffix}" value="${tDisplay || ""}" />
+            <span class="log-field-suffix">${timeSuffix}</span>
+          </label>`
+        : `<label class="log-field compact">
+            <input type="number" inputmode="numeric" step="1" min="0" data-log-set="reps"
+                   placeholder="${defaultRep}" value="${r || ""}" />
+            <span class="log-field-suffix">reps</span>
+          </label>`;
+
       rows.push(`
         <div class="set-row" data-set-idx="${entryIdx}" ${side ? `data-side="${side}"` : ""}>
           <span class="set-num">${label}</span>
@@ -4002,15 +4055,8 @@ function renderExerciseLog(ex, units) {
                      placeholder="${defaultWeight || "wt"}" value="${w || ""}" />
               <span class="log-field-suffix">${units}</span>
             </label>` : ""}
-          <label class="log-field compact">
-            <input type="number" inputmode="numeric" step="1" min="0" data-log-set="reps"
-                   placeholder="${defaultRep}" value="${r || ""}" />
-            <span class="log-field-suffix">reps</span>
-          </label>
-          <div class="rir-wrap">
-            <span class="rir-label" title="Reps In Reserve">RIR</span>
-            ${rirHtml}
-          </div>
+          ${repsOrTimeInput}
+          ${rirHtml}
         </div>
       `);
       entryIdx++;
@@ -4528,28 +4574,43 @@ function attachWorkoutActions() {
       const exName = logEl.dataset.exercise;
       const units = getPrefs(session.username).units;
 
-      // Gather sets from each row — skip rows without a reps value.
+      // Gather sets from each row. Time-based rows write the duration in
+      // SECONDS into the `reps` field (so existing history/progression code
+      // keeps working unmodified) — converted from the user's chosen
+      // display unit (min or sec). RIR is only read for rep-based rows.
       const setRows = logEl.querySelectorAll(".set-row");
       const sets = [];
       setRows.forEach(row => {
-        const repsInput = row.querySelector("[data-log-set='reps']");
         const weightInput = row.querySelector("[data-log-set='weight']");
-        const reps = Number(repsInput?.value);
-        if (!reps || reps <= 0) return;
+        const repsInput = row.querySelector("[data-log-set='reps']");
+        const timeInput = row.querySelector("[data-log-set='time']");
+        let reps = 0;
+        if (timeInput) {
+          const rawTime = Number(timeInput.value);
+          if (!rawTime || rawTime <= 0) return;
+          const unit = timeInput.dataset.logTimeUnit;
+          reps = unit === "min" ? rawTime * 60 : rawTime;
+        } else {
+          reps = Number(repsInput?.value);
+          if (!reps || reps <= 0) return;
+        }
         const weightDisplay = weightInput ? Number(weightInput.value) : 0;
         const weightKg = weightInput ? fromDisplay(weightDisplay, units) : 0;
-        const side = row.dataset.side; // "R" or "L" for unilateral, undefined otherwise
-        const rirBtn = row.querySelector(".rir-picker .rir-btn.active");
-        const rir = rirBtn ? Number(rirBtn.dataset.rir) : null;
+        const side = row.dataset.side;
         const entry = { weightKg, reps };
+        if (timeInput) entry.timeBased = true;
         if (side) entry.side = side;
-        if (rir != null && !Number.isNaN(rir)) entry.rir = rir;
+        if (!timeInput) {
+          const rirBtn = row.querySelector(".rir-picker .rir-btn.active");
+          const rir = rirBtn ? Number(rirBtn.dataset.rir) : null;
+          if (rir != null && !Number.isNaN(rir)) entry.rir = rir;
+        }
         sets.push(entry);
       });
 
       if (sets.length === 0) {
-        // Highlight first empty rep input as an affordance
-        logEl.querySelector("[data-log-set='reps']")?.focus();
+        // Focus the first empty input (reps OR time)
+        (logEl.querySelector("[data-log-set='reps']") || logEl.querySelector("[data-log-set='time']"))?.focus();
         return;
       }
 
