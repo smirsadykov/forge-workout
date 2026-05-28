@@ -3717,7 +3717,24 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   const leftoverCandidates = scored
     .filter(s => !pickedNames.has(s.ex.name))
     .map(s => s.ex);
-  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates);
+
+  // Bodyweight fallback pool — kicks in when the user's equipment pool is
+  // thin (e.g., kettlebell+push+beginner has 1 candidate). Bodyweight is
+  // always available unless user explicitly chose Floor only (and even then
+  // the bodyweight pool is what they get filtered through). Excludes warmup
+  // picks + the primary picks; honors floor-only furniture filter; honors
+  // target + difficulty as before.
+  const bodyweightFallback = effectiveEquipment.includes("bodyweight")
+    ? [] // bodyweight is already in the primary pool, no extra fallback needed
+    : EXERCISES.filter(ex => {
+        if (warmupNames.has(ex.name)) return false;
+        if (pickedNames.has(ex.name)) return false;
+        if (!ex.equipment.includes("bodyweight")) return false;
+        if (floorOnly && requiresFurniture(ex.name)) return false;
+        return matchesDifficulty(ex.difficulty, difficulty) && matchesTarget(ex, target);
+      });
+
+  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates, bodyweightFallback);
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -3788,7 +3805,7 @@ function enforceTimeBudget(exercises, durationMin) {
 //   1. Adding a set to under-set exercises (cheaper, keeps variety low)
 //   2. Pulling more exercises from the candidate pool
 // Aims to land in the 85-110% band of the requested duration.
-function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficulty, style, deload, extraCandidates = []) {
+function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficulty, style, deload, extraCandidates = [], bodyweightFallback = []) {
   if (!durationMin) return;
   const budgetSec = durationMin * 60;
   const floor = budgetSec * 0.85;
@@ -3818,10 +3835,16 @@ function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficul
       }
     }
 
-    // Strategy B: pull another exercise from the candidate pool.
+    // Strategy B: pull another exercise from the primary candidate pool.
+    // When that's exhausted, fall through to the bodyweight fallback pool
+    // (push-ups, squats, planks etc. — always available unless user picked
+    // Floor only, which already routes through bodyweight). This rescues
+    // scenarios like KB+push+beginner where only 1 KB exercise matches and
+    // the user gets stranded with a 10-min workout from a 45-min request.
     if (exercises.length >= maxExercises) break;
     const usedNames = new Set(exercises.map(e => e.name));
-    const next = extraCandidates.find(c => !usedNames.has(c.name));
+    let next = extraCandidates.find(c => !usedNames.has(c.name));
+    if (!next) next = bodyweightFallback.find(c => !usedNames.has(c.name));
     if (!next) break;
     const p = pickPrescription(goal, difficulty, next, style, deload, durationMin);
     exercises.push({
@@ -4140,6 +4163,23 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   const deloadFlag = inputs.deload
     ? `<span class="deload-flag">${t("wo.deloadFlag")}</span>` : "";
 
+  // Honesty about duration shortfall. Some filter combinations (e.g.,
+  // beginner + push + kettlebell only) have a tiny exercise pool — even
+  // after the bodyweight fallback, the workout caps well below the user's
+  // requested duration. Show the actual estimate alongside the requested
+  // duration AND a banner with specific advice if we're >25% short.
+  let durationNotice = "";
+  if (inputs.duration && workout.exercises?.length) {
+    const estMin = Math.round(estimateWorkoutSeconds(workout.exercises) / 60);
+    const reqMin = inputs.duration;
+    const shortPct = (reqMin - estMin) / reqMin;
+    if (shortPct > 0.25) {
+      durationNotice = `<div class="duration-shortfall">${
+        t("wo.shortfall", { est: estMin, req: reqMin })
+      }<div class="duration-shortfall-tips">${t("wo.shortfallTips")}</div></div>`;
+    }
+  }
+
   const notesText = workout.notes || "";
   const notesHtml = `
     <details class="workout-notes" ${notesText ? "open" : ""}>
@@ -4151,6 +4191,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   `;
 
   container.innerHTML = `
+    ${durationNotice}
     <div class="workout-header">
       <div>
         <div class="workout-title">${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}</div>

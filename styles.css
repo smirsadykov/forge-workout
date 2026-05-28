@@ -1861,6 +1861,27 @@ input {
   }
 }
 
+/* Duration shortfall notice — appears at the top of a workout when the
+   pool was too thin to fill the requested duration. Honest about what
+   you'll actually get and tells you how to widen the pool. */
+.duration-shortfall {
+  background: rgba(255, 158, 61, 0.10);
+  border: 1px solid rgba(255, 158, 61, 0.35);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ff9e3d;
+  line-height: 1.5;
+}
+.duration-shortfall-tips {
+  margin-top: 8px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* ─── PROGRAM BANNER (generator view) ────────────────────────────────── */
 .program-banner {
   background: linear-gradient(135deg, rgba(255, 214, 51, 0.10), rgba(255, 184, 51, 0.06));

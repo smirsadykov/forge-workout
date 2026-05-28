@@ -316,6 +316,8 @@
     "wo.recoveryLight": { en: "recovery — light", ru: "восстановление — лёгко" },
     "wo.firstTime": { en: "First time", ru: "Первый раз" },
     "wo.firstSessionNote": { en: "start here, adjust after set 1", ru: "начни отсюда, скорректируй после 1-го подхода" },
+    "wo.shortfall": { en: "Estimated ~{est} min — you asked for {req}. The pool of exercises matching these filters is small.", ru: "Примерно ~{est} мин — ты запросил {req}. Под эти фильтры подходит мало упражнений." },
+    "wo.shortfallTips": { en: "To get the full duration: raise difficulty (more exercises available), pick a broader target (Upper / Full Body), or add Bodyweight to Equipment.", ru: "Чтобы получить полную длительность: подними уровень (откроются новые упражнения), выбери более широкую зону (Верх тела / Всё тело) или добавь «Свой вес» в Инвентарь." },
 
     // ─── Guided mode ─────────────────────────────────────────────────
     "guided.exit": { en: "← Exit", ru: "← Выйти" },
