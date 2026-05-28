@@ -1320,10 +1320,11 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   const usesWeight = exerciseUsesWeight(exerciseName);
   const inc = progressionIncrementKg(pattern);
 
-  // No history for this exercise yet — return a first-session starting
-  // weight estimate so the user isn't left guessing (or worse, defaulting
-  // to their max KB on an unfamiliar single-arm pressing movement).
-  if (!stat || !stat.history?.length) {
+  // Helper: build a first-session estimate response. Used when there's no
+  // history at all OR when every prior session for this exercise was
+  // recovery/deload (and today isn't recovery) — in either case we don't
+  // have a real working baseline to progress from.
+  const buildFirstSession = () => {
     const startKg = usesWeight ? getStartingWeight(exerciseName, userId, goal) : 0;
     if (startKg > 0 || !usesWeight) {
       const targetReps = lo > 0 ? Math.round((lo + hi) / 2) : 0;
@@ -1335,7 +1336,9 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
       };
     }
     return { last: null, next: null, trend: null };
-  }
+  };
+
+  if (!stat || !stat.history?.length) return buildFirstSession();
 
   // Find the most recent "real" working session — skip recovery and deload
   // sessions, since those are intentionally sub-stimulus and would mislead
@@ -1352,11 +1355,11 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
     lastSession = candidate;
     break;
   }
-  // Fallback: if every prior session was recovery/deload, use the most
-  // recent one anyway — better than no suggestion at all.
-  if (!lastSession) {
-    lastSession = normalizeHistoryEntry(stat.history[stat.history.length - 1]);
-  }
+  // If every prior session was recovery/deload AND today isn't recovery,
+  // there's no working baseline to progress from. Treat as first session
+  // (use the starting-weight estimate) — better than progressing off a
+  // recovery rep count.
+  if (!lastSession) return buildFirstSession();
   if (lastSession.sets.length === 0) return { last: null, next: null, trend: null };
   const workingSet = lastSession.sets.reduce((best, s) =>
     calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, lastSession.sets[0]);
