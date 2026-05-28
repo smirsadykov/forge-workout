@@ -147,6 +147,17 @@ const EXERCISES = [
   { name: "Kettlebell Snatch", muscle: ["back","shoulders","glutes","hamstrings"], equipment: ["kettlebell"], group: ["pull","full_body","cardio"], pattern: "ballistic", difficulty: "advanced" },
   { name: "Kettlebell Clean", muscle: ["back","glutes","shoulders"], equipment: ["kettlebell"], group: ["pull","full_body"], pattern: "ballistic", difficulty: "intermediate" },
   { name: "Kettlebell Clean and Press", muscle: ["shoulders","back","glutes","triceps"], equipment: ["kettlebell"], group: ["push","pull","full_body"], pattern: "ballistic", difficulty: "advanced" },
+
+  // ─── KB SPORT (GIREVOY) ─────────────────────────────────────────────────
+  // Competition lifts. Used by the "KB Sport" goal as 8-10 min continuous
+  // time blocks. kbSport: true is a picker hint so these lifts dominate
+  // when that goal is selected.
+  { name: "Kettlebell Long Cycle", muscle: ["full_body","shoulders","back","glutes","quads"], equipment: ["kettlebell"], group: ["push","pull","full_body","cardio"], pattern: "ballistic", difficulty: "advanced", kbSport: true },
+  { name: "Kettlebell Jerk", muscle: ["shoulders","triceps","quads","core"], equipment: ["kettlebell"], group: ["push","full_body","cardio"], pattern: "ballistic", difficulty: "intermediate", kbSport: true },
+  { name: "Kettlebell Push Jerk", muscle: ["shoulders","triceps","quads","core"], equipment: ["kettlebell"], group: ["push","full_body","cardio"], pattern: "ballistic", difficulty: "intermediate", kbSport: true },
+  { name: "Kettlebell Half Snatch", muscle: ["back","shoulders","glutes","hamstrings"], equipment: ["kettlebell"], group: ["pull","full_body","cardio"], pattern: "ballistic", difficulty: "intermediate", kbSport: true },
+  { name: "Kettlebell One-Arm Long Cycle", muscle: ["full_body","shoulders","back","glutes","core"], equipment: ["kettlebell"], group: ["push","pull","full_body","cardio"], pattern: "ballistic", difficulty: "advanced", kbSport: true },
+  { name: "Kettlebell One-Arm Jerk", muscle: ["shoulders","triceps","core","quads"], equipment: ["kettlebell"], group: ["push","full_body","cardio"], pattern: "ballistic", difficulty: "intermediate", kbSport: true },
   { name: "Kettlebell Single-Arm Row", muscle: ["back","biceps","core"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Bent-Over Row", muscle: ["back","biceps"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Gorilla Row", muscle: ["back","biceps","core"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "intermediate" },
@@ -349,6 +360,9 @@ const PRESCRIPTIONS = {
   // Light loaded session for when you're under-recovered. Easy to start,
   // promotes blood flow without adding stress. Keep momentum, don't dig in.
   recovery:    { sets: [2, 3], reps: [10, 15], rest: 60,  isoReps: [12, 18] },
+  // KB Sport (Girevoy) — time-based main lifts. The numbers here are
+  // placeholders; generateKbSportWorkout builds the real shape.
+  kb_sport:    { sets: [1, 2], reps: [8, 10],  rest: 180, isoReps: [8, 10] },
 };
 
 // How many exercises to pick by duration (minutes)

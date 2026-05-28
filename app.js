@@ -2892,6 +2892,88 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
   };
 }
 
+// KB Sport (Girevoy) generator. Different shape from a standard workout:
+// warmup → 1-3 time-based main lifts (continuous, no setting the bell down)
+// → optional accessory → cool-down. Each main lift is an 8-10 min block at
+// a target pace (reps/min), scaled by difficulty.
+function generateKbSportWorkout({ equipment, duration, difficulty }) {
+  // Number of main blocks fits the requested duration.
+  let numBlocks;
+  let perBlockMin;
+  if (duration <= 15)      { numBlocks = 1; perBlockMin = 8; }
+  else if (duration <= 30) { numBlocks = 1; perBlockMin = 10; }
+  else if (duration <= 45) { numBlocks = 2; perBlockMin = 10; }
+  else if (duration <= 60) { numBlocks = 2; perBlockMin = 12; }
+  else                     { numBlocks = 3; perBlockMin = 10; }
+
+  const warmups = pickWarmupExercises("full_body", duration <= 15 ? 1 : 2)
+    .map(ex => ({
+      name: ex.name,
+      muscle: ex.muscle,
+      pattern: ex.pattern,
+      unilateral: isUnilateralExercise(ex.name),
+      ...pickPrescription("mobility", difficulty, ex, "standard", false, duration),
+    }));
+
+  // Target pace per minute, scaled by skill. KB Sport competition paces
+  // run ~16-20/min advanced; beginners pace lower to maintain form for
+  // the full set.
+  const paceByDiff = {
+    beginner:     [10, 12],
+    intermediate: [14, 16],
+    advanced:     [17, 20],
+  };
+  const [paceLo, paceHi] = paceByDiff[difficulty] || paceByDiff.intermediate;
+
+  // Pick from kbSport-tagged lifts. Fall back to KB ballistic if the
+  // kbSport pool happens to be filtered out (e.g., difficulty cap).
+  const kbCandidates = EXERCISES.filter(e =>
+    e.kbSport === true &&
+    e.equipment.includes("kettlebell") &&
+    matchesDifficulty(e.difficulty, difficulty)
+  );
+  const shuffled = shuffle(kbCandidates);
+  if (shuffled.length === 0) return null;
+
+  const mainExercises = [];
+  for (let i = 0; i < numBlocks && i < shuffled.length; i++) {
+    const ex = shuffled[i];
+    mainExercises.push({
+      name: ex.name,
+      muscle: ex.muscle,
+      pattern: ex.pattern,
+      unilateral: isUnilateralExercise(ex.name),
+      sets: 1,
+      reps: `${perBlockMin} min · pace ${paceLo}-${paceHi}/min`,
+      rest: i < numBlocks - 1 ? 180 : 0,  // 3 min between blocks; standard KB Sport rest
+      isTimeBlock: true,
+    });
+  }
+
+  // Cool-down: one mobility move (KB Around-the-World preferred for grip release)
+  const cooldownPool = EXERCISES.filter(e =>
+    e.pattern === "mobility" &&
+    (e.equipment.includes("kettlebell") || e.equipment.includes("bodyweight"))
+  );
+  const cooldownPick = shuffle(cooldownPool)[0];
+  const cooldown = cooldownPick ? [{
+    name: cooldownPick.name,
+    muscle: cooldownPick.muscle,
+    pattern: "mobility",
+    unilateral: isUnilateralExercise(cooldownPick.name),
+    sets: 2,
+    reps: "30–45 sec",
+    rest: 0,
+  }] : [];
+
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: { goal: "kb_sport", equipment, target: "full_body", duration, difficulty, style: "standard", deload: false },
+    exercises: [...warmups, ...mainExercises, ...cooldown],
+  };
+}
+
 // Anti-repeat memory: exercises picked in the immediately previous workout
 // get penalized so Regenerate produces visibly different sessions.
 let lastPickedNames = new Set();
@@ -3019,6 +3101,11 @@ function pickWarmupExercises(target, count) {
 }
 
 function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false }) {
+  // KB Sport goal: completely different shape (time-based continuous lifts).
+  // Routed before cardio because cardio still treats it as sets×reps.
+  if (goal === "kb_sport") {
+    return generateKbSportWorkout({ equipment, duration, difficulty });
+  }
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
   if (target === "cardio") {

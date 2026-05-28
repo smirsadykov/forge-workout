@@ -83,6 +83,12 @@
     "goal.endurance": { en: "Endurance", ru: "Выносливость" },
     "goal.mobility": { en: "Mobility", ru: "Мобильность" },
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
+    "goal.kb_sport": { en: "🔔 KB Sport", ru: "🔔 Гиревой спорт" },
+    "kbsport.pace": { en: "pace {lo}-{hi}/min", ru: "темп {lo}-{hi}/мин" },
+    "kbsport.warmup": { en: "Warm-up", ru: "Разминка" },
+    "kbsport.mainSet": { en: "Main set", ru: "Основной сет" },
+    "kbsport.cooldown": { en: "Cool-down", ru: "Заминка" },
+    "kbsport.continuous": { en: "continuous — don't set the bell down", ru: "непрерывно — не ставь гирю" },
 
     // Targets
     "target.full_body": { en: "Full Body", ru: "Всё тело" },
