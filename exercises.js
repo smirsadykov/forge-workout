@@ -316,6 +316,27 @@ const EXERCISES = [
   { name: "Wall Angels", muscle: ["shoulders","back"], equipment: ["bodyweight"], group: ["mobility","upper"], pattern: "mobility", difficulty: "beginner" },
   { name: "Scapular Pull-Ups", muscle: ["back","shoulders"], equipment: ["bodyweight"], group: ["mobility","upper"], pattern: "mobility", difficulty: "intermediate" },
   { name: "Pike Walk", muscle: ["hamstrings","shoulders","core"], equipment: ["bodyweight"], group: ["mobility","full_body"], pattern: "mobility", difficulty: "intermediate" },
+
+  // ─── ANIMAL FLOW / GROUND MOVEMENT ──────────────────────────────────────
+  // Ground-based movement system: quadrupedal positions, animal-pattern
+  // locomotion, flow-style sequences. Pure bodyweight, zero furniture —
+  // perfect for floor-only / hotel-room workouts and active-recovery days.
+  // Tagged with "full_body" so the muscle-cap logic doesn't double up.
+  { name: "Beast Hold", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["mobility","full_body","core"], pattern: "mobility", difficulty: "intermediate" },
+  { name: "Crab Hold", muscle: ["full_body","core","shoulders","glutes"], equipment: ["bodyweight"], group: ["mobility","full_body","core"], pattern: "mobility", difficulty: "beginner" },
+  { name: "Loaded Beast Rock", muscle: ["full_body","core","shoulders","quads"], equipment: ["bodyweight"], group: ["mobility","full_body"], pattern: "mobility", difficulty: "intermediate" },
+  { name: "Ape Hold", muscle: ["quads","glutes","core"], equipment: ["bodyweight"], group: ["mobility","legs","full_body"], pattern: "mobility", difficulty: "beginner" },
+  { name: "Beast Reach", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["mobility","full_body","core"], pattern: "mobility", difficulty: "intermediate" },
+  { name: "Scorpion Reach", muscle: ["full_body","core","back"], equipment: ["bodyweight"], group: ["mobility","full_body","core"], pattern: "mobility", difficulty: "intermediate" },
+  { name: "Crab Reach", muscle: ["full_body","core","shoulders","glutes"], equipment: ["bodyweight"], group: ["mobility","full_body","core"], pattern: "mobility", difficulty: "beginner" },
+  { name: "Ape Reach", muscle: ["quads","glutes","core","shoulders"], equipment: ["bodyweight"], group: ["mobility","legs","full_body"], pattern: "mobility", difficulty: "beginner" },
+  { name: "Forward Beast Travel", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["cardio","full_body","core"], pattern: "conditioning", difficulty: "beginner" },
+  { name: "Lateral Beast Travel", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["cardio","full_body","core"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Ape Hop", muscle: ["quads","glutes","core"], equipment: ["bodyweight"], group: ["cardio","legs","full_body"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Underswitch", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["full_body","core"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Side Kick Through", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["full_body","core"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Front Step Through", muscle: ["full_body","core","shoulders","hamstrings"], equipment: ["bodyweight"], group: ["full_body","core","mobility"], pattern: "conditioning", difficulty: "intermediate" },
+  { name: "Beast to Crab Switch", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["full_body","core"], pattern: "conditioning", difficulty: "intermediate" },
 ];
 
 // Prescriptions per goal: {sets, reps, rest_sec}
