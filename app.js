@@ -2373,7 +2373,7 @@ el.logoutBtn.addEventListener("click", async () => {
 });
 
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
-const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard", deload: false };
+const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard", deload: false, sport: null };
 
 // ─── DELOAD DETECTION ────────────────────────────────────────────────────
 // Counts ISO weeks containing a saved workout, since the last marked deload.
@@ -2473,6 +2473,22 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshRecommendationBanner();
       refreshRecoveryBanner();
       refreshLevelBanner();
+      // Sport sub-selector visibility: shown only when goal=sport_prep.
+      // When switching away from sport_prep, also clear the sport selection
+      // so the next sport_prep pick doesn't silently inherit an old value.
+      if (field === "goal") {
+        const sportGroup = document.getElementById("sportSubGroup");
+        if (sportGroup) {
+          if (formState.goal === "sport_prep") {
+            sportGroup.classList.remove("hidden");
+          } else {
+            sportGroup.classList.add("hidden");
+            formState.sport = null;
+            document.querySelectorAll('.chip-row[data-field="sport"] .chip.selected')
+              .forEach(c => c.classList.remove("selected"));
+          }
+        }
+      }
     });
   });
 });
@@ -2484,6 +2500,9 @@ function resetForm() {
   formState.duration = null;
   formState.difficulty = null;
   formState.style = "standard";
+  formState.sport = null;
+  // Sport sub-selector goes back to hidden too
+  document.getElementById("sportSubGroup")?.classList.add("hidden");
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
@@ -2974,6 +2993,86 @@ function generateKbSportWorkout({ equipment, duration, difficulty }) {
   };
 }
 
+// Sport Prep generator. Builds a prep + prehab session keyed to the chosen
+// sport. Pulls from SPORT_EXERCISES which combines sport-specific drills
+// with the prehab moves for that sport's typical injuries (e.g., running's
+// pool includes Nordic curls + tibialis raises + glute med work).
+//
+// Shape: 1-2 mobility warmups → 3-5 prep/prehab moves → 1 cooldown stretch.
+function generateSportPrepWorkout({ equipment, duration, difficulty, sport }) {
+  const pool = SPORT_EXERCISES[sport];
+  if (!pool || pool.length === 0) return null;
+
+  const floorOnly = equipment.includes("floor_only");
+  const effEquip = floorOnly ? ["bodyweight"] : equipment;
+
+  // Filter the sport's pool by available equipment + difficulty.
+  // For exercises that have multiple equipment options (e.g., "bodyweight,
+  // dumbbells"), pass if ANY available equipment fits. Floor-only also
+  // applies the furniture filter.
+  const candidates = pool
+    .map(name => EXERCISES.find(e => e.name === name))
+    .filter(e =>
+      e &&
+      e.equipment.some(eq => effEquip.includes(eq)) &&
+      matchesDifficulty(e.difficulty, difficulty) &&
+      (!floorOnly || !requiresFurniture(e.name))
+    );
+
+  if (candidates.length === 0) return null;
+
+  // Count by duration. Prep work is short-rest, low-load, fast-moving so
+  // more exercises fit per minute than a heavy strength session.
+  const totalCount = duration <= 15 ? 5
+    : duration <= 30 ? 7
+    : duration <= 45 ? 9
+    : duration <= 60 ? 11 : 13;
+
+  const warmupCount = duration <= 15 ? 1 : 2;
+  const cooldownCount = 1;
+  const mainCount = Math.max(3, totalCount - warmupCount - cooldownCount);
+
+  // Split candidates by pattern so the structure is sensible:
+  //   warmup = mobility moves (loose tissue prep)
+  //   main   = isolation moves (activation + prehab strength)
+  //   cooldown = mobility (final stretch)
+  const mobility = candidates.filter(e => e.pattern === "mobility");
+  const main = candidates.filter(e => e.pattern !== "mobility");
+
+  const warmups = shuffle(mobility).slice(0, warmupCount);
+  const warmupNames = new Set(warmups.map(w => w.name));
+
+  const mainPicks = shuffle(main).slice(0, mainCount);
+  const mainNames = new Set(mainPicks.map(m => m.name));
+
+  // Prefer a mobility move for cooldown that wasn't already used as warmup.
+  const cooldownCandidates = mobility.filter(m => !warmupNames.has(m.name));
+  const cooldown = cooldownCandidates.length
+    ? [shuffle(cooldownCandidates)[0]]
+    : shuffle(mobility).slice(0, 1);
+
+  // Convert each pick into a prescription. Prep work uses 2-3 sets, mid
+  // rep range, short rest. Mobility uses the standard mobility template.
+  const toExercise = (ex) => ({
+    name: ex.name,
+    muscle: ex.muscle,
+    pattern: ex.pattern,
+    unilateral: isUnilateralExercise(ex.name),
+    ...pickPrescription("sport_prep", difficulty, ex, "standard", false, duration),
+  });
+
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: { goal: "sport_prep", equipment, target: "full_body", duration, difficulty, style: "standard", deload: false, sport },
+    exercises: [
+      ...warmups.map(toExercise),
+      ...mainPicks.map(toExercise),
+      ...cooldown.map(toExercise),
+    ],
+  };
+}
+
 // Anti-repeat memory: exercises picked in the immediately previous workout
 // get penalized so Regenerate produces visibly different sessions.
 let lastPickedNames = new Set();
@@ -3100,11 +3199,15 @@ function pickWarmupExercises(target, count) {
   return scored.slice(0, count).map(s => s.ex);
 }
 
-function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false }) {
+function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false, sport = null }) {
   // KB Sport goal: completely different shape (time-based continuous lifts).
   // Routed before cardio because cardio still treats it as sets×reps.
   if (goal === "kb_sport") {
     return generateKbSportWorkout({ equipment, duration, difficulty });
+  }
+  // Sport Prep goal: tailored prep + prehab pool keyed to the chosen sport.
+  if (goal === "sport_prep") {
+    return generateSportPrepWorkout({ equipment, duration, difficulty, sport });
   }
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
@@ -3738,12 +3841,13 @@ let currentWorkout = null;
 
 el.generateBtn.addEventListener("click", () => {
   el.formError.textContent = "";
-  const { goal, equipment, target, duration, difficulty } = formState;
+  const { goal, equipment, target, duration, difficulty, sport } = formState;
   if (!goal) return el.formError.textContent = "Pick a goal.";
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";
   if (!duration) return el.formError.textContent = "Pick a duration.";
   if (!difficulty) return el.formError.textContent = "Pick a difficulty.";
+  if (goal === "sport_prep" && !sport) return el.formError.textContent = t("sport.pickFirst") || "Pick a sport first.";
 
   currentWorkout = generateWorkout({
     goal, equipment, target,
@@ -3751,6 +3855,7 @@ el.generateBtn.addEventListener("click", () => {
     difficulty,
     style: formState.style || "standard",
     deload: !!formState.deload,
+    sport,
   });
   workoutIsSaved = false;
   workoutReadOnly = false;

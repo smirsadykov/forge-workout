@@ -18,7 +18,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=68" />
+  <link rel="stylesheet" href="styles.css?v=69" />
 </head>
 <body>
   <header class="topbar">
@@ -127,6 +127,19 @@
               <button class="chip" data-value="mobility" data-i18n="goal.mobility">Mobility</button>
               <button class="chip" data-value="recovery" data-i18n="goal.recovery">Recovery</button>
               <button class="chip" data-value="kb_sport" data-i18n="goal.kb_sport">🔔 KB Sport</button>
+              <button class="chip" data-value="sport_prep" data-i18n="goal.sport_prep">🏃 Sport Prep</button>
+            </div>
+          </div>
+
+          <!-- Sport sub-selector: appears only when Goal = Sport Prep. -->
+          <div class="form-group hidden" id="sportSubGroup">
+            <label class="group-label" data-i18n="gen.sport">Sport</label>
+            <div class="chip-row" data-field="sport" data-multi="false">
+              <button class="chip" data-value="running" data-i18n="sport.running">Running</button>
+              <button class="chip" data-value="cycling" data-i18n="sport.cycling">Cycling</button>
+              <button class="chip" data-value="swimming" data-i18n="sport.swimming">Swimming</button>
+              <button class="chip" data-value="racket" data-i18n="sport.racket">Tennis / Padel</button>
+              <button class="chip" data-value="climbing" data-i18n="sport.climbing">Climbing</button>
             </div>
           </div>
 
@@ -453,10 +466,10 @@
     </div>
   </div>
 
-  <script src="config.js?v=68"></script>
-  <script src="supabase.min.js?v=68"></script>
-  <script src="i18n.js?v=68"></script>
-  <script src="exercises.js?v=68"></script>
-  <script src="app.js?v=68"></script>
+  <script src="config.js?v=69"></script>
+  <script src="supabase.min.js?v=69"></script>
+  <script src="i18n.js?v=69"></script>
+  <script src="exercises.js?v=69"></script>
+  <script src="app.js?v=69"></script>
 </body>
 </html>
