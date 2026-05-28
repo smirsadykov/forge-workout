@@ -402,6 +402,7 @@ function setPrefs(userId, prefs) {
   cloudPush(() => sb.from("user_prefs").upsert({
     user_id: session.userId,
     units: all[userId].units,
+    program: all[userId].program || null,
     updated_at: new Date().toISOString(),
   }));
 }
@@ -874,6 +875,211 @@ function dateKey(d = new Date()) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// ─── PROGRAM MODE (mesocycle / training block) ────────────────────────────
+// User commits to a goal for 4/6/8 weeks. The split rotates through
+// goal-appropriate sessions. Penultimate week auto-deloads. Generator
+// banner suggests today's session; "Use this" pre-fills the form.
+
+// Each entry is the session in rotation. The program's overall goal is
+// shared; only target + a descriptive label vary per day. For fat_loss
+// and endurance some sessions use target=cardio so the cardio generator
+// handles them.
+const PROGRAM_SPLITS = {
+  hypertrophy: {
+    2: [
+      { target: "upper", label: "Upper" },
+      { target: "lower", label: "Lower" },
+    ],
+    3: [
+      { target: "push",  label: "Push" },
+      { target: "pull",  label: "Pull" },
+      { target: "legs",  label: "Legs" },
+    ],
+    4: [
+      { target: "upper", label: "Upper" },
+      { target: "lower", label: "Lower" },
+      { target: "upper", label: "Upper" },
+      { target: "lower", label: "Lower" },
+    ],
+    5: [
+      { target: "push",  label: "Push" },
+      { target: "pull",  label: "Pull" },
+      { target: "legs",  label: "Legs" },
+      { target: "upper", label: "Upper" },
+      { target: "lower", label: "Lower" },
+    ],
+  },
+  strength: {
+    2: [
+      { target: "legs",  label: "Squat / Deadlift" },
+      { target: "upper", label: "Bench / OHP" },
+    ],
+    3: [
+      { target: "legs",  label: "Squat focus" },
+      { target: "push",  label: "Bench focus" },
+      { target: "pull",  label: "Deadlift focus" },
+    ],
+    4: [
+      { target: "legs",  label: "Squat focus" },
+      { target: "push",  label: "Bench focus" },
+      { target: "pull",  label: "Deadlift focus" },
+      { target: "push",  label: "OHP focus" },
+    ],
+    5: [
+      { target: "legs",       label: "Squat focus" },
+      { target: "push",       label: "Bench focus" },
+      { target: "pull",       label: "Deadlift focus" },
+      { target: "push",       label: "OHP focus" },
+      { target: "full_body",  label: "Accessory" },
+    ],
+  },
+  fat_loss: {
+    2: [
+      { target: "full_body", label: "Full body + finisher" },
+      { target: "cardio",    label: "Cardio" },
+    ],
+    3: [
+      { target: "full_body", label: "Full body + finisher" },
+      { target: "full_body", label: "Full body + finisher" },
+      { target: "cardio",    label: "Cardio" },
+    ],
+    4: [
+      { target: "upper",     label: "Upper + finisher" },
+      { target: "lower",     label: "Lower + finisher" },
+      { target: "full_body", label: "Full body + cardio" },
+      { target: "cardio",    label: "Cardio" },
+    ],
+    5: [
+      { target: "upper",     label: "Upper + finisher" },
+      { target: "lower",     label: "Lower + finisher" },
+      { target: "cardio",    label: "Cardio" },
+      { target: "full_body", label: "Full body" },
+      { target: "cardio",    label: "Cardio" },
+    ],
+  },
+  endurance: {
+    2: [
+      { target: "cardio",    label: "Aerobic" },
+      { target: "full_body", label: "Strength endurance" },
+    ],
+    3: [
+      { target: "cardio",    label: "Aerobic base" },
+      { target: "full_body", label: "Strength endurance" },
+      { target: "cardio",    label: "Intervals" },
+    ],
+    4: [
+      { target: "cardio",    label: "Aerobic base" },
+      { target: "full_body", label: "Strength endurance" },
+      { target: "cardio",    label: "Intervals" },
+      { target: "core",      label: "Mobility + core" },
+    ],
+    5: [
+      { target: "cardio",    label: "Long aerobic" },
+      { target: "full_body", label: "Strength endurance" },
+      { target: "cardio",    label: "Intervals" },
+      { target: "full_body", label: "Strength endurance" },
+      { target: "core",      label: "Mobility + core" },
+    ],
+  },
+};
+
+function getActiveProgram(userId) {
+  const prefs = getPrefs(userId);
+  if (!prefs.program) return null;
+  return prefs.program;
+}
+
+function startProgram(userId, { goal, weeksTotal, sessionsPerWeek }) {
+  setPrefs(userId, {
+    program: {
+      goal,
+      startedAt: Date.now(),
+      weeksTotal,
+      sessionsPerWeek,
+      sessionIdx: 0,
+      completedSessions: 0,
+      paused: false,
+      pausedAt: null,
+    },
+  });
+}
+
+function endProgram(userId) {
+  setPrefs(userId, { program: null });
+}
+
+function pauseProgram(userId) {
+  const p = getPrefs(userId).program;
+  if (!p) return;
+  setPrefs(userId, { program: { ...p, paused: true, pausedAt: Date.now() } });
+}
+
+function resumeProgram(userId) {
+  const p = getPrefs(userId).program;
+  if (!p) return;
+  // Shift startedAt forward by the pause duration so weekNum doesn't jump.
+  const offset = p.pausedAt ? Date.now() - p.pausedAt : 0;
+  setPrefs(userId, {
+    program: { ...p, paused: false, pausedAt: null, startedAt: p.startedAt + offset },
+  });
+}
+
+// Advance one session in the rotation. Called when user saves a workout
+// whose goal matches the program (so off-program sessions don't progress
+// the block).
+function advanceProgram(userId) {
+  const p = getPrefs(userId).program;
+  if (!p || p.paused) return;
+  const split = PROGRAM_SPLITS[p.goal]?.[p.sessionsPerWeek];
+  if (!split) return;
+  setPrefs(userId, {
+    program: {
+      ...p,
+      sessionIdx: (p.sessionIdx + 1) % split.length,
+      completedSessions: p.completedSessions + 1,
+    },
+  });
+}
+
+function getProgramWeekNum(p) {
+  const elapsed = Date.now() - p.startedAt;
+  const week = Math.floor(elapsed / (7 * 86400000)) + 1;
+  return Math.min(p.weeksTotal, Math.max(1, week));
+}
+
+// Penultimate week is the deload (textbook 4-week mesocycle ends with a
+// deload at week 4 of 4; for 6-week it's week 5; for 8-week it's week 7).
+// Last week resets to normal load to test the block's gains.
+function isProgramDeloadWeek(p) {
+  const week = getProgramWeekNum(p);
+  if (p.weeksTotal === 4) return week === 4;
+  return week === p.weeksTotal - 1;
+}
+
+function isProgramComplete(p) {
+  return getProgramWeekNum(p) >= p.weeksTotal &&
+    p.completedSessions >= p.weeksTotal * p.sessionsPerWeek;
+}
+
+function getNextProgramSession(userId) {
+  const p = getActiveProgram(userId);
+  if (!p || p.paused) return null;
+  const split = PROGRAM_SPLITS[p.goal]?.[p.sessionsPerWeek];
+  if (!split) return null;
+  const session = split[p.sessionIdx % split.length];
+  return {
+    goal: p.goal,
+    target: session.target,
+    label: session.label,
+    week: getProgramWeekNum(p),
+    weeksTotal: p.weeksTotal,
+    dayInRotation: (p.sessionIdx % split.length) + 1,
+    totalDays: split.length,
+    deload: isProgramDeloadWeek(p),
+    complete: isProgramComplete(p),
+  };
 }
 
 function getSleepRating(userId, date = new Date()) {
@@ -1548,6 +1754,7 @@ function showApp(view = "generator") {
     refreshSleepPrompt();
     refreshRecoveryBanner();
     refreshLevelBanner();
+    refreshProgramBanner();
   }
   // Daily sleep modal — fires once per session, any view, if today is unrated.
   // Don't pop it during a Guided session (would interrupt mid-workout).
@@ -1804,6 +2011,114 @@ function refreshSleepPrompt() {
 
 // Recovery banner: shows when bad sleep + accumulated soreness suggest the
 // user should skip the heavy session and do a light Recovery workout instead.
+// Program banner — shown on the Generator view when an active program exists.
+// Surfaces today's recommended session (target + label) and a "Use this"
+// button that pre-fills the form. Auto-handles paused / complete states.
+function refreshProgramBanner() {
+  if (!session) return;
+  const banner = document.getElementById("programBanner");
+  if (!banner) return;
+  const program = getActiveProgram(session.username);
+  if (!program) {
+    banner.classList.add("hidden");
+    banner.innerHTML = "";
+    return;
+  }
+  const next = getNextProgramSession(session.username);
+  if (!next) {
+    banner.classList.add("hidden");
+    banner.innerHTML = "";
+    return;
+  }
+
+  if (program.paused) {
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <div class="program-banner-icon">⏸</div>
+      <div class="program-banner-content">
+        <div class="program-banner-title">${t("program.bannerTitle")}</div>
+        <div class="program-banner-body">${t("program.bannerPaused")}</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (next.complete) {
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <div class="program-banner-icon">🎉</div>
+      <div class="program-banner-content">
+        <div class="program-banner-title">${t("program.bannerComplete")}</div>
+      </div>
+      <div class="program-banner-actions">
+        <button class="secondary-btn" data-prog-banner-action="end">${t("program.end")}</button>
+      </div>
+    `;
+    const endBtn = banner.querySelector('[data-prog-banner-action="end"]');
+    if (endBtn) endBtn.addEventListener("click", () => {
+      endProgram(session.username);
+      renderSettings();
+      refreshProgramBanner();
+    });
+    return;
+  }
+
+  const goalLabel = GOAL_LABELS[next.goal] || next.goal;
+  const meta = t("program.bannerMeta", {
+    week: next.week, total: next.weeksTotal,
+    day: next.dayInRotation, days: next.totalDays,
+  });
+  const todayLine = t("program.bannerSessionToday", { label: next.label });
+  const deloadHtml = next.deload
+    ? `<div class="program-banner-deload">${t("program.deloadFlag")}</div>` : "";
+
+  banner.classList.remove("hidden");
+  banner.innerHTML = `
+    <div class="program-banner-icon">📅</div>
+    <div class="program-banner-content">
+      <div class="program-banner-title">${t("program.bannerTitle")} · ${goalLabel}</div>
+      <div class="program-banner-body">${todayLine} · <span class="program-banner-meta">${meta}</span></div>
+      ${deloadHtml}
+    </div>
+    <div class="program-banner-actions">
+      <button class="primary-btn" data-prog-banner-action="use">${t("program.bannerUse")}</button>
+      <button class="ghost-btn" data-prog-banner-action="skip">${t("program.bannerSkip")}</button>
+    </div>
+  `;
+
+  banner.querySelector('[data-prog-banner-action="use"]')?.addEventListener("click", () => {
+    // Pre-fill form with the program's goal + target. If it's a deload week,
+    // also flip the deload flag so the existing deload prescription logic kicks in.
+    formState.goal = next.goal;
+    formState.target = next.target;
+    formState.deload = !!next.deload;
+    // Reflect in the UI chip rows
+    document.querySelectorAll('.chip-row[data-field="goal"] .chip').forEach(c => {
+      c.classList.toggle("selected", c.dataset.value === next.goal);
+    });
+    document.querySelectorAll('.chip-row[data-field="target"] .chip').forEach(c => {
+      c.classList.toggle("selected", c.dataset.value === next.target);
+    });
+    // Show/hide the sport sub-selector if user switched away from sport_prep
+    const sportGroup = document.getElementById("sportSubGroup");
+    if (sportGroup) sportGroup.classList.add("hidden");
+    // Refresh other banners that might depend on goal/target
+    refreshLoadWarning();
+    refreshRecommendationBanner();
+    refreshRecoveryBanner();
+    refreshLevelBanner();
+    el.formError.textContent = "";
+    // Scroll up to the form for visual continuity
+    document.querySelector('.form-grid')?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  banner.querySelector('[data-prog-banner-action="skip"]')?.addEventListener("click", () => {
+    advanceProgram(session.username);
+    refreshProgramBanner();
+    renderSettings();
+  });
+}
+
 function refreshRecoveryBanner() {
   if (!session || !el.recoveryBanner) return;
   // Don't show if user has already picked recovery as their goal.
@@ -3996,6 +4311,14 @@ function attachWorkoutActions() {
       saveBtn.textContent = t("settings.saved");
       saveBtn.disabled = true;
       workoutIsSaved = true;
+      // If an active program is running and the saved workout matches its
+      // goal, advance the rotation. Off-program workouts (different goal)
+      // don't count toward block progress. Skipping is via banner button.
+      const prog = getActiveProgram(session.username);
+      if (prog && !prog.paused && currentWorkout.inputs?.goal === prog.goal) {
+        advanceProgram(session.username);
+        refreshProgramBanner();
+      }
     });
   }
   if (regenBtn) {
@@ -4475,6 +4798,115 @@ function renderSettings() {
   renderSettingsSleep();
   renderCloudToggle();
   renderLanguageChips();
+  renderProgramCard();
+}
+
+// Program settings card — toggles between setup form and active-status view.
+// Setup chips are click-handled inline (not via the standard .chip-row
+// handler) so picking a goal/weeks/sessions just stores into a local draft
+// without polluting formState used by the workout generator.
+const _programDraft = { goal: null, weeks: null, sessions: null };
+function renderProgramCard() {
+  const setup = document.getElementById("programSetup");
+  const status = document.getElementById("programStatus");
+  if (!setup || !status) return;
+  const program = getActiveProgram(session.username);
+
+  if (!program) {
+    setup.classList.remove("hidden");
+    status.classList.add("hidden");
+    wireProgramSetupChips();
+    return;
+  }
+
+  setup.classList.add("hidden");
+  status.classList.remove("hidden");
+
+  const next = getNextProgramSession(session.username);
+  const goalLabel = GOAL_LABELS[program.goal] || program.goal;
+  document.getElementById("programStatusGoal").textContent = goalLabel;
+  document.getElementById("programStatusWeek").textContent = next
+    ? `${next.week}/${next.weeksTotal}`
+    : `—/${program.weeksTotal}`;
+  document.getElementById("programStatusDay").textContent = next
+    ? `${next.dayInRotation}/${next.totalDays} — ${next.label}`
+    : "—";
+  document.getElementById("programStatusDone").textContent =
+    `${program.completedSessions}/${program.weeksTotal * program.sessionsPerWeek}`;
+  const deloadFlag = document.getElementById("programDeloadFlag");
+  if (deloadFlag) deloadFlag.classList.toggle("hidden", !(next && next.deload));
+
+  // Pause/Resume swap
+  const pauseBtn = document.getElementById("programPauseBtn");
+  const resumeBtn = document.getElementById("programResumeBtn");
+  if (program.paused) {
+    pauseBtn?.classList.add("hidden");
+    resumeBtn?.classList.remove("hidden");
+  } else {
+    pauseBtn?.classList.remove("hidden");
+    resumeBtn?.classList.add("hidden");
+  }
+
+  if (pauseBtn) pauseBtn.onclick = () => {
+    pauseProgram(session.username);
+    renderProgramCard();
+    refreshProgramBanner();
+  };
+  if (resumeBtn) resumeBtn.onclick = () => {
+    resumeProgram(session.username);
+    renderProgramCard();
+    refreshProgramBanner();
+  };
+  const endBtn = document.getElementById("programEndBtn");
+  if (endBtn) endBtn.onclick = () => {
+    if (!confirm(t("program.confirmEnd"))) return;
+    endProgram(session.username);
+    _programDraft.goal = null;
+    _programDraft.weeks = null;
+    _programDraft.sessions = null;
+    document.querySelectorAll('#programSetup .chip.selected').forEach(c => c.classList.remove("selected"));
+    renderProgramCard();
+    refreshProgramBanner();
+  };
+}
+
+function wireProgramSetupChips() {
+  const fieldMap = {
+    "programGoalChips": "goal",
+    "programWeeksChips": "weeks",
+    "programSessionsChips": "sessions",
+  };
+  for (const [rowId, key] of Object.entries(fieldMap)) {
+    const row = document.getElementById(rowId);
+    if (!row) continue;
+    row.querySelectorAll(".chip").forEach(chip => {
+      chip.onclick = () => {
+        row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
+        chip.classList.add("selected");
+        let value = chip.dataset.progValue;
+        if (key === "weeks" || key === "sessions") value = parseInt(value, 10);
+        _programDraft[key] = value;
+        const err = document.getElementById("programStartErr");
+        if (err) err.textContent = "";
+      };
+    });
+  }
+  const startBtn = document.getElementById("programStartBtn");
+  if (startBtn) startBtn.onclick = () => {
+    const err = document.getElementById("programStartErr");
+    if (!_programDraft.goal || !_programDraft.weeks || !_programDraft.sessions) {
+      if (err) err.textContent = t("program.startErr");
+      return;
+    }
+    startProgram(session.username, {
+      goal: _programDraft.goal,
+      weeksTotal: _programDraft.weeks,
+      sessionsPerWeek: _programDraft.sessions,
+    });
+    if (err) err.textContent = "";
+    renderProgramCard();
+    refreshProgramBanner();
+  };
 }
 
 // Highlight the active language chip and wire clicks. Changing language

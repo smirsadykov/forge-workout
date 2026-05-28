@@ -101,6 +101,37 @@
     "kbsport.needIntermediate": { en: "KB Sport lifts (Jerk, Long Cycle, Snatch) are technical. Pick Intermediate or Advanced; start with a lighter bell.", ru: "Толчок, длинный цикл и рывок — техничные движения. Выбери Средний или Продвинутый; начни с лёгкой гири." },
     "gen.nothingFits": { en: "Couldn't build a workout that fits these filters. Try a different goal or add more equipment.", ru: "Не получилось собрать тренировку под эти фильтры. Попробуй другую цель или добавь инвентарь." },
 
+    // Program mode
+    "program.title": { en: "Program", ru: "Программа" },
+    "program.help": { en: "Commit to a goal for 4-8 weeks. The app rotates through a goal-appropriate split, auto-deloads near the end, and suggests today's session on the Generator.", ru: "Прими цель на 4-8 недель. Приложение ротирует подходящий сплит, делает разгрузку под конец и предлагает сессию на сегодня на экране генератора." },
+    "program.goal": { en: "Goal", ru: "Цель" },
+    "program.goalHypertrophy": { en: "Muscle growth", ru: "Набор массы" },
+    "program.goalStrength": { en: "Strength gain", ru: "Сила" },
+    "program.goalFatLoss": { en: "Fat loss", ru: "Сжигание жира" },
+    "program.goalEndurance": { en: "Endurance", ru: "Выносливость" },
+    "program.weeks": { en: "Block length", ru: "Длина блока" },
+    "program.sessionsPerWeek": { en: "Sessions per week", ru: "Тренировок в неделю" },
+    "program.start": { en: "Start program", ru: "Начать программу" },
+    "program.startErr": { en: "Pick goal, weeks, and sessions/week.", ru: "Выбери цель, недели и количество тренировок." },
+    "program.activeGoal": { en: "Goal", ru: "Цель" },
+    "program.activeWeek": { en: "Week", ru: "Неделя" },
+    "program.activeDay": { en: "Day", ru: "День" },
+    "program.activeDone": { en: "Sessions done", ru: "Тренировок сделано" },
+    "program.deloadFlag": { en: "⚠ Deload week — volume cut 30%, rest extended", ru: "⚠ Разгрузочная неделя — объём -30%, отдых дольше" },
+    "program.pause": { en: "Pause", ru: "Поставить на паузу" },
+    "program.resume": { en: "Resume", ru: "Продолжить" },
+    "program.end": { en: "End program", ru: "Завершить программу" },
+    "program.confirmEnd": { en: "End the current program? You can start a new one any time.", ru: "Завершить текущую программу? Новую можно начать в любой момент." },
+
+    // Program banner on generator
+    "program.bannerTitle": { en: "Active program", ru: "Активная программа" },
+    "program.bannerSessionToday": { en: "Today: {label}", ru: "Сегодня: {label}" },
+    "program.bannerMeta": { en: "Week {week}/{total} · Day {day}/{days}", ru: "Неделя {week}/{total} · День {day}/{days}" },
+    "program.bannerUse": { en: "Use this session", ru: "Использовать эту сессию" },
+    "program.bannerSkip": { en: "Skip", ru: "Пропустить" },
+    "program.bannerComplete": { en: "Program complete — 🎉", ru: "Программа завершена — 🎉" },
+    "program.bannerPaused": { en: "Paused — resume in Settings", ru: "На паузе — продолжи в Настройках" },
+
     // Targets
     "target.full_body": { en: "Full Body", ru: "Всё тело" },
     "target.upper": { en: "Upper Body", ru: "Верх тела" },

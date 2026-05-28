@@ -18,7 +18,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=71" />
+  <link rel="stylesheet" href="styles.css?v=72" />
 </head>
 <body>
   <header class="topbar">
@@ -204,6 +204,7 @@
           </div>
         </div>
 
+        <div id="programBanner" class="program-banner hidden"></div>
         <div id="levelBanner" class="level-banner hidden"></div>
         <div id="sleepPrompt" class="sleep-prompt hidden"></div>
         <div id="recoveryBanner" class="recovery-banner hidden"></div>
@@ -280,6 +281,76 @@
           <div class="chip-row" id="languageChips" data-field="language" data-multi="false">
             <button class="chip" data-lang-value="en">English</button>
             <button class="chip" data-lang-value="ru">Русский</button>
+          </div>
+        </div>
+
+        <!-- ─── PROGRAM MODE ─────────────────────────────────────────── -->
+        <div class="settings-card">
+          <h2 class="settings-section" data-i18n="program.title">Program</h2>
+          <p class="settings-help" data-i18n="program.help">Commit to a goal for 4-8 weeks. The app rotates through a goal-appropriate split, auto-deloads near the end, and suggests today's session on the Generator.</p>
+
+          <!-- Setup form — visible when there is no active program. -->
+          <div id="programSetup">
+            <div class="settings-grid">
+              <div class="form-group">
+                <label class="group-label" data-i18n="program.goal">Goal</label>
+                <div class="chip-row" id="programGoalChips" data-field="program-goal" data-multi="false">
+                  <button class="chip" data-prog-value="hypertrophy" data-i18n="program.goalHypertrophy">Muscle growth</button>
+                  <button class="chip" data-prog-value="strength" data-i18n="program.goalStrength">Strength gain</button>
+                  <button class="chip" data-prog-value="fat_loss" data-i18n="program.goalFatLoss">Fat loss</button>
+                  <button class="chip" data-prog-value="endurance" data-i18n="program.goalEndurance">Endurance</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="group-label" data-i18n="program.weeks">Block length</label>
+                <div class="chip-row" id="programWeeksChips" data-field="program-weeks" data-multi="false">
+                  <button class="chip" data-prog-value="4">4 weeks</button>
+                  <button class="chip" data-prog-value="6">6 weeks</button>
+                  <button class="chip" data-prog-value="8">8 weeks</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="group-label" data-i18n="program.sessionsPerWeek">Sessions per week</label>
+                <div class="chip-row" id="programSessionsChips" data-field="program-sessions" data-multi="false">
+                  <button class="chip" data-prog-value="2">2</button>
+                  <button class="chip" data-prog-value="3">3</button>
+                  <button class="chip" data-prog-value="4">4</button>
+                  <button class="chip" data-prog-value="5">5</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button id="programStartBtn" class="primary-btn" data-i18n="program.start">Start program</button>
+              <span id="programStartErr" class="error"></span>
+            </div>
+          </div>
+
+          <!-- Status view — visible when a program is active. -->
+          <div id="programStatus" class="hidden">
+            <div class="program-status-grid">
+              <div>
+                <div class="program-status-label" data-i18n="program.activeGoal">Goal</div>
+                <div class="program-status-value" id="programStatusGoal"></div>
+              </div>
+              <div>
+                <div class="program-status-label" data-i18n="program.activeWeek">Week</div>
+                <div class="program-status-value" id="programStatusWeek"></div>
+              </div>
+              <div>
+                <div class="program-status-label" data-i18n="program.activeDay">Day</div>
+                <div class="program-status-value" id="programStatusDay"></div>
+              </div>
+              <div>
+                <div class="program-status-label" data-i18n="program.activeDone">Sessions done</div>
+                <div class="program-status-value" id="programStatusDone"></div>
+              </div>
+            </div>
+            <div id="programDeloadFlag" class="program-deload-flag hidden" data-i18n="program.deloadFlag">⚠ Deload week — volume cut 30%, rest extended</div>
+            <div class="settings-actions">
+              <button id="programPauseBtn" class="secondary-btn" data-i18n="program.pause">Pause</button>
+              <button id="programResumeBtn" class="secondary-btn hidden" data-i18n="program.resume">Resume</button>
+              <button id="programEndBtn" class="ghost-btn" data-i18n="program.end">End program</button>
+            </div>
           </div>
         </div>
 
@@ -466,10 +537,10 @@
     </div>
   </div>
 
-  <script src="config.js?v=71"></script>
-  <script src="supabase.min.js?v=71"></script>
-  <script src="i18n.js?v=71"></script>
-  <script src="exercises.js?v=71"></script>
-  <script src="app.js?v=71"></script>
+  <script src="config.js?v=72"></script>
+  <script src="supabase.min.js?v=72"></script>
+  <script src="i18n.js?v=72"></script>
+  <script src="exercises.js?v=72"></script>
+  <script src="app.js?v=72"></script>
 </body>
 </html>

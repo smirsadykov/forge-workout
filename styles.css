@@ -1861,6 +1861,89 @@ input {
   }
 }
 
+/* ─── PROGRAM BANNER (generator view) ────────────────────────────────── */
+.program-banner {
+  background: linear-gradient(135deg, rgba(255, 214, 51, 0.10), rgba(255, 184, 51, 0.06));
+  border: 1px solid rgba(255, 214, 51, 0.35);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+.program-banner-icon {
+  font-size: 30px;
+  filter: drop-shadow(0 0 8px rgba(255, 214, 51, 0.35));
+}
+.program-banner-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.program-banner-body {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.program-banner-meta {
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+}
+.program-banner-deload {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ff9e3d;
+  letter-spacing: 0.3px;
+}
+.program-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+@media (max-width: 700px) {
+  .program-banner { grid-template-columns: auto 1fr; }
+  .program-banner-actions { grid-column: 1 / -1; flex-direction: row; }
+}
+
+/* ─── PROGRAM CARD (settings view) ───────────────────────────────────── */
+.program-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+  margin: 8px 0 16px;
+}
+.program-status-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.program-status-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.program-deload-flag {
+  background: rgba(255, 158, 61, 0.10);
+  border: 1px solid rgba(255, 158, 61, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ff9e3d;
+  margin-bottom: 14px;
+}
+
 /* ─── BODY HEATMAP ───────────────────────────────────────────────────── */
 .body-heatmap {
   background: var(--bg-card);
