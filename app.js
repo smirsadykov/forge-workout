@@ -327,7 +327,12 @@ function isPR(sets, history) {
 //   { sets: [{...}, ...] }     — multi-set session
 //   [{ weightKg, reps }, ...]  — bare array
 // Empty sets (reps == 0) are dropped silently.
-function logExercise(userId, exName, payload) {
+//
+// opts may include:
+//   - goal: the workout goal ("strength", "hypertrophy", "recovery", etc.)
+//     stored on the entry so progression can skip recovery sessions
+//   - deload: true if this was a deload week (also skipped for progression)
+function logExercise(userId, exName, payload, opts = {}) {
   let sets;
   if (Array.isArray(payload)) {
     sets = payload;
@@ -363,6 +368,12 @@ function logExercise(userId, exName, payload) {
     calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, sets[0]);
 
   const entry = { date: Date.now(), sets };
+  // Tag the entry with workout context so getSuggestion can skip recovery
+  // and deload sessions when picking a baseline for progression. Without
+  // this, yesterday's intentionally-light recovery session would pollute
+  // today's hypertrophy progression (the bug we're fixing).
+  if (opts.goal) entry.goal = opts.goal;
+  if (opts.deload) entry.deload = true;
   existing.weightKg = workingSet.weightKg;
   existing.reps = workingSet.reps;
   existing.date = entry.date;
@@ -1231,8 +1242,26 @@ function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   const usesWeight = exerciseUsesWeight(exerciseName);
   const inc = progressionIncrementKg(pattern);
 
-  // Find the working set from the last session (heaviest set, by e1RM).
-  const lastSession = normalizeHistoryEntry(stat.history[stat.history.length - 1]);
+  // Find the most recent "real" working session — skip recovery and deload
+  // sessions, since those are intentionally sub-stimulus and would mislead
+  // the progression algorithm. (Yesterday's 15 reps at 55% load shouldn't
+  // trigger "push to 17 reps" for today's hypertrophy session.)
+  // EXCEPTION: if today's workout IS itself a recovery session, we *want*
+  // to base it on the last recovery session (or fall back if none exists).
+  const skipRecoveryDeload = goal !== "recovery";
+  let lastSession = null;
+  for (let i = stat.history.length - 1; i >= 0; i--) {
+    const candidate = normalizeHistoryEntry(stat.history[i]);
+    if (skipRecoveryDeload && (candidate.goal === "recovery" || candidate.deload)) continue;
+    if (candidate.sets.length === 0) continue;
+    lastSession = candidate;
+    break;
+  }
+  // Fallback: if every prior session was recovery/deload, use the most
+  // recent one anyway — better than no suggestion at all.
+  if (!lastSession) {
+    lastSession = normalizeHistoryEntry(stat.history[stat.history.length - 1]);
+  }
   if (lastSession.sets.length === 0) return { last: null, next: null, trend: null };
   const workingSet = lastSession.sets.reduce((best, s) =>
     calculateE1RM(s.weightKg, s.reps) > calculateE1RM(best.weightKg, best.reps) ? s : best, lastSession.sets[0]);
@@ -3732,7 +3761,10 @@ function attachWorkoutActions() {
         return;
       }
 
-      const result = logExercise(session.username, exName, sets);
+      const result = logExercise(session.username, exName, sets, {
+        goal: currentWorkout?.inputs?.goal,
+        deload: !!currentWorkout?.inputs?.deload,
+      });
       recentlyLogged[exName] = { sets };
 
       // Auto-start rest timer using the exercise's prescribed rest.
@@ -4978,7 +5010,10 @@ function onDoneSet() {
     for (const name of namesToFlush) {
       const setsToLog = guidedSession.exerciseSets[name];
       if (!setsToLog || setsToLog.length === 0) continue;
-      const result = logExercise(session.username, name, setsToLog);
+      const result = logExercise(session.username, name, setsToLog, {
+        goal: currentWorkout?.inputs?.goal,
+        deload: !!currentWorkout?.inputs?.deload,
+      });
       if (result.pr) {
         const bestSet = setsToLog.reduce((b, s) =>
           calculateE1RM(s.weightKg, s.reps) > calculateE1RM(b.weightKg, b.reps) ? s : b, setsToLog[0]);
