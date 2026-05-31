@@ -1861,6 +1861,72 @@ input {
   }
 }
 
+/* Workout section grouping (warmup / main / cooldown) — gives each
+   workout a clear visual hierarchy instead of treating every exercise
+   row as equally important. */
+.workout-section {
+  margin: 24px 0 12px;
+}
+.workout-section:first-child { margin-top: 8px; }
+.workout-section-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+/* Warmup + cooldown rendered subtler so the main work pops */
+.workout-section-warmup .exercise,
+.workout-section-cooldown .exercise {
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.workout-section-warmup .exercise-name,
+.workout-section-cooldown .exercise-name {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.workout-section-warmup .workout-section-title { color: #93c5fd; }
+.workout-section-cooldown .workout-section-title { color: #a78bfa; }
+.workout-section-cardio .workout-section-title { color: #ff9e3d; }
+.workout-section-main .workout-section-title { color: var(--accent); }
+
+/* "More reasons ↓" pill — appears under the highest-priority banner when
+   other banners also wanted to show. Keeps the generator view tidy
+   instead of stacking 600px of advice. */
+.banner-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px 0 16px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.banner-more:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.banner-more-count {
+  background: var(--accent);
+  color: #1a1500;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+}
+
 /* Duration shortfall notice — appears at the top of a workout when the
    pool was too thin to fill the requested duration. Honest about what
    you'll actually get and tells you how to widen the pool. */

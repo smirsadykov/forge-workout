@@ -190,6 +190,51 @@ async function forceSyncAll() {
 }
 
 // Make the indicator clickable — manual sync trigger.
+// Validate the EXERCISES library at load time. Catches typos like
+// pattern:"compoud" or muscle:["chesst"] before they silently break
+// filtering / scoring downstream. Logs each issue with the exercise name
+// so it's findable. Soft — doesn't throw, since the app should still
+// boot even with library bugs.
+(function validateExerciseLibrary() {
+  if (typeof EXERCISES === "undefined" || !Array.isArray(EXERCISES)) return;
+  const VALID_PATTERNS = new Set(["compound", "isolation", "ballistic", "conditioning", "mobility"]);
+  const VALID_MUSCLES = new Set([
+    "chest", "back", "shoulders", "biceps", "triceps",
+    "quads", "hamstrings", "glutes", "calves", "core", "full_body",
+  ]);
+  const VALID_DIFFICULTY = new Set(["beginner", "intermediate", "advanced"]);
+  const VALID_EQUIPMENT = new Set([
+    "bodyweight", "dumbbells", "barbell", "kettlebell", "bands", "machine", "cardio_machine",
+  ]);
+  const seen = new Set();
+  let issues = 0;
+  for (const ex of EXERCISES) {
+    const flag = (msg) => { console.warn(`[forge] exercise "${ex?.name || "?"}" — ${msg}`); issues++; };
+    if (!ex || typeof ex !== "object") { flag("not an object"); continue; }
+    if (!ex.name) flag("missing name");
+    if (seen.has(ex.name)) flag("duplicate name");
+    seen.add(ex.name);
+    if (!VALID_PATTERNS.has(ex.pattern)) flag(`bad pattern "${ex.pattern}"`);
+    if (!VALID_DIFFICULTY.has(ex.difficulty)) flag(`bad difficulty "${ex.difficulty}"`);
+    if (!Array.isArray(ex.equipment) || !ex.equipment.length) flag("equipment missing");
+    else ex.equipment.forEach(e => { if (!VALID_EQUIPMENT.has(e)) flag(`bad equipment "${e}"`); });
+    if (!Array.isArray(ex.muscle) || !ex.muscle.length) flag("muscle missing");
+    else ex.muscle.forEach(m => { if (!VALID_MUSCLES.has(m)) flag(`bad muscle "${m}"`); });
+  }
+  // Validate SPORT_EXERCISES name references too
+  if (typeof SPORT_EXERCISES === "object" && SPORT_EXERCISES) {
+    for (const [sport, names] of Object.entries(SPORT_EXERCISES)) {
+      for (const n of names) {
+        if (!seen.has(n)) {
+          console.warn(`[forge] SPORT_EXERCISES["${sport}"] references missing exercise: "${n}"`);
+          issues++;
+        }
+      }
+    }
+  }
+  if (issues) console.warn(`[forge] exercise-library validation: ${issues} issue(s)`);
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
   // Apply translations to all static DOM elements tagged with data-i18n.
   if (window.i18n) window.i18n.applyI18n(document);
@@ -213,7 +258,11 @@ const load = (key, fallback) => {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
-  } catch {
+  } catch (e) {
+    // Common cause: localStorage quota exceeded, or corrupted JSON from a
+    // prior version. Either way, fall back silently — but log so it's
+    // findable if a user reports "my data disappeared."
+    console.warn(`[forge] load(${key}) failed:`, e);
     return fallback;
   }
 };
@@ -332,6 +381,10 @@ function isPR(sets, history) {
 //   - goal: the workout goal ("strength", "hypertrophy", "recovery", etc.)
 //     stored on the entry so progression can skip recovery sessions
 //   - deload: true if this was a deload week (also skipped for progression)
+// opts may also include:
+//   - replaceLast: if true, replace the most recent history entry instead
+//     of appending. Used by the "Edit logs" path in history view so the
+//     user can fix a typo without polluting history with duplicates.
 function logExercise(userId, exName, payload, opts = {}) {
   let sets;
   if (Array.isArray(payload)) {
@@ -377,7 +430,12 @@ function logExercise(userId, exName, payload, opts = {}) {
   existing.weightKg = workingSet.weightKg;
   existing.reps = workingSet.reps;
   existing.date = entry.date;
-  existing.history = (existing.history || []).concat([entry]).slice(-30);
+  // Replace-last for edits from history view; append otherwise.
+  if (opts.replaceLast && Array.isArray(existing.history) && existing.history.length > 0) {
+    existing.history = existing.history.slice(0, -1).concat([entry]).slice(-30);
+  } else {
+    existing.history = (existing.history || []).concat([entry]).slice(-30);
+  }
   all[userId][exName] = existing;
   save(STORAGE_KEYS.stats, all);
   cloudPush(() => sb.from("exercise_stats").upsert({
@@ -1748,13 +1806,21 @@ function showApp(view = "generator") {
   if (view === "library") renderLibrary();
   if (view === "generator") {
     refreshLoadWarning();
-    refreshDeloadBanner();
-    refreshRecommendationBanner();
     refreshStreakBadge();
     refreshSleepPrompt();
+    // Each "today's coaching" banner still renders to its own element, but
+    // coordinateBanners() then shows only the highest-priority one to keep
+    // the page from being a 600px stack of stacked advice. Order matters:
+    // recovery (urgent under-recovery) > deload (planned light week) >
+    // program (active block suggestion) > recommendation (light nudge) >
+    // level (intensity calibration). Load warning stays inline since it's
+    // contextual to the form fill, not a "today" message.
     refreshRecoveryBanner();
-    refreshLevelBanner();
+    refreshDeloadBanner();
     refreshProgramBanner();
+    refreshRecommendationBanner();
+    refreshLevelBanner();
+    coordinateBanners();
   }
   // Daily sleep modal — fires once per session, any view, if today is unrated.
   // Don't pop it during a Guided session (would interrupt mid-workout).
@@ -1802,6 +1868,52 @@ function getLevelRecommendation(userId) {
     };
   }
   return null;
+}
+
+// After each banner's refresh runs, only the highest-priority visible one
+// stays open. Others collapse into a "more reasons ↓" chevron that, when
+// tapped, expands the rest in priority order. This bounds the stack height
+// on the generator view regardless of how many advice signals fire today.
+function coordinateBanners() {
+  const order = [
+    { id: "recoveryBanner",       priority: 5 },
+    { id: "deloadBanner",         priority: 4 },
+    { id: "programBanner",        priority: 3 },
+    { id: "recommendationBanner", priority: 2 },
+    { id: "levelBanner",          priority: 1 },
+  ];
+
+  const visible = order.filter(b => {
+    const node = document.getElementById(b.id);
+    return node && !node.classList.contains("hidden") && node.innerHTML.trim();
+  });
+  if (visible.length <= 1) {
+    // Remove any leftover "more" chevron from a previous coordination pass
+    document.getElementById("bannerMore")?.remove();
+    return;
+  }
+
+  // Keep the top-priority one open; hide the rest behind a chevron.
+  visible.sort((a, b) => b.priority - a.priority);
+  const winner = visible[0];
+  const rest = visible.slice(1);
+  rest.forEach(b => document.getElementById(b.id)?.classList.add("hidden"));
+
+  // Inject (or refresh) a small "more" chevron right after the winner that
+  // expands the remaining banners on tap. Idempotent — replaces any prior.
+  document.getElementById("bannerMore")?.remove();
+  const winnerNode = document.getElementById(winner.id);
+  if (!winnerNode) return;
+  const more = document.createElement("button");
+  more.id = "bannerMore";
+  more.className = "banner-more";
+  more.type = "button";
+  more.innerHTML = `<span class="banner-more-count">+${rest.length}</span> ${t("banner.more") || "more reasons"} ↓`;
+  more.addEventListener("click", () => {
+    rest.forEach(b => document.getElementById(b.id)?.classList.remove("hidden"));
+    more.remove();
+  });
+  winnerNode.insertAdjacentElement("afterend", more);
 }
 
 function refreshLevelBanner() {
@@ -1930,6 +2042,44 @@ function refreshStreakBadge() {
 // X (avoids spam). They can still rate later from Settings → Sleep.
 let _sleepModalShownThisSession = false;
 
+// Focus-trap helper for modal overlays. Keeps Tab/Shift+Tab inside the
+// modal so keyboard users can't accidentally land on hidden background
+// content. Returns a teardown to unbind on close. Also handles Escape
+// → caller-supplied close.
+function trapFocus(container, onEscape) {
+  if (!container) return () => {};
+  const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const prevFocus = document.activeElement;
+  const focusables = () => Array.from(container.querySelectorAll(FOCUSABLE)).filter(el => el.offsetParent !== null);
+
+  const handler = (e) => {
+    if (e.key === "Escape" && onEscape) {
+      e.preventDefault();
+      onEscape();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const list = focusables();
+    if (!list.length) return;
+    const first = list[0];
+    const last  = list[list.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+  document.addEventListener("keydown", handler);
+  // Move initial focus into the modal
+  setTimeout(() => focusables()[0]?.focus(), 0);
+  return () => {
+    document.removeEventListener("keydown", handler);
+    if (prevFocus && prevFocus.focus) try { prevFocus.focus(); } catch {}
+  };
+}
+
 function maybeShowDailySleepModal() {
   if (_sleepModalShownThisSession) return;
   if (!session) return;
@@ -1944,9 +2094,12 @@ function maybeShowDailySleepModal() {
   modal.classList.remove("hidden");
   document.body.style.overflow = "hidden"; // prevent background scroll on iOS
 
+  // Focus trap — keeps Tab inside the modal + Escape closes it
+  let releaseTrap = trapFocus(modal, () => closeModal());
   const closeModal = () => {
     modal.classList.add("hidden");
     document.body.style.overflow = "";
+    if (releaseTrap) { releaseTrap(); releaseTrap = null; }
   };
 
   modal.querySelectorAll("[data-sleep-modal]").forEach(btn => {
@@ -2661,7 +2814,8 @@ async function syncFromCloud() {
       save(STORAGE_KEYS.loads, all);
     }
     setSyncStatus("ok");
-  } catch {
+  } catch (e) {
+    console.warn("[forge] syncFromCloud failed:", e);
     setSyncStatus("error");
   }
 }
@@ -4136,11 +4290,64 @@ function renderExerciseCard(ex, units, opts = {}) {
 // Walk a flat exercise list, grouping consecutive same-groupId items into
 // superset/circuit blocks, and emit the appropriate markup.
 let _groupCounter = 0;
+// Classify each exercise into a workout section so the renderer can group
+// consecutive same-section exercises under a section header. Helps the
+// user see warmup / main / cooldown at a glance instead of treating every
+// row as equally important.
+function getWorkoutSection(ex) {
+  if (!ex) return "main";
+  if (ex.pattern === "mobility") {
+    // Heuristic: mobility moves at the START of the list are warmup; at the
+    // end are cooldown. The renderer passes positional context via
+    // ex._sectionHint if it can determine. Fallback: treat as warmup since
+    // most mobility appears as warmup in the generator's ordering.
+    return ex._sectionHint || "warmup";
+  }
+  if (ex.pattern === "conditioning" && ex.isTimeBlock) return "cardio";
+  if (ex.pattern === "ballistic" || ex.pattern === "conditioning") return "main";
+  return "main";
+}
+
+// Mark each exercise with the right section before rendering. Mobility at
+// the very tail of the list (after all main work is done) is cooldown.
+function annotateSections(list) {
+  if (!list || !list.length) return list;
+  // Find the LAST non-mobility index. Everything mobility AFTER that is cooldown.
+  let lastMainIdx = -1;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].pattern !== "mobility") { lastMainIdx = i; break; }
+  }
+  return list.map((ex, idx) => {
+    if (ex.pattern === "mobility") {
+      return { ...ex, _sectionHint: idx > lastMainIdx ? "cooldown" : "warmup" };
+    }
+    return ex;
+  });
+}
+
 function renderExerciseList(list, units) {
+  list = annotateSections(list);
   let html = "";
+  let currentSection = null;
   let i = 0;
   while (i < list.length) {
     const ex = list[i];
+
+    // Section break — when this exercise's section differs from the previous,
+    // emit a header before continuing.
+    const section = getWorkoutSection(ex);
+    if (section !== currentSection) {
+      if (currentSection !== null) html += `</div>`;
+      const sectionLabel =
+        section === "warmup"   ? t("section.warmup")   :
+        section === "cooldown" ? t("section.cooldown") :
+        section === "cardio"   ? t("section.cardio")   :
+                                 t("section.main");
+      html += `<div class="workout-section workout-section-${section}">
+        <h3 class="workout-section-title">${sectionLabel}</h3>`;
+      currentSection = section;
+    }
+
     if (ex.groupId) {
       const groupExs = [];
       const gid = ex.groupId;
@@ -4175,6 +4382,7 @@ function renderExerciseList(list, units) {
       i++;
     }
   }
+  if (currentSection !== null) html += `</div>`;
   return html;
 }
 
@@ -4191,21 +4399,12 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     inputs.difficulty[0].toUpperCase() + inputs.difficulty.slice(1),
   ].map(t => `<span class="tag">${t}</span>`).join("");
 
-  const sections = {
-    "Warm-up / Mobility": exercises.filter(e => e.pattern === "mobility"),
-    "Power / Ballistic": exercises.filter(e => e.pattern === "ballistic"),
-    "Main Work": exercises.filter(e => e.pattern === "compound" || e.pattern === "isolation"),
-    "Conditioning / Finisher": exercises.filter(e => e.pattern === "conditioning"),
-  };
-
-  const exercisesHtml = Object.entries(sections)
-    .filter(([, list]) => list.length > 0)
-    .map(([title, list]) => `
-      <h3 class="section-header">${title}</h3>
-      <div class="exercise-list">
-        ${renderExerciseList(list, units)}
-      </div>
-    `).join("");
+  // Section headers (WARMUP / MAIN / COOLDOWN / CONDITIONING) are emitted
+  // inside renderExerciseList based on each exercise's annotated section.
+  // We pass the full exercise list — the renderer's annotateSections walks
+  // the whole array to correctly identify which mobility moves are warmup
+  // vs cooldown by their position relative to the last main work block.
+  const exercisesHtml = `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
 
   const intensityFlag = inputs.style === "intensity"
     ? `<span class="intensity-flag">Intensity Mode</span>` : "";
@@ -4251,6 +4450,12 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
         <button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>
         ${showSave ? `<button class="secondary-btn" id="saveBtn">${t("settings.save")}</button>` : ""}
         <button class="secondary-btn" id="shareBtn">🔗 ${t("wo.share")}</button>
+        ${workoutIsSaved && workoutReadOnly && !_editingFromHistory
+          ? `<button class="secondary-btn" id="editLogsBtn">✎ ${t("wo.editLogs") || "Edit logs"}</button>`
+          : ""}
+        ${workoutIsSaved && _editingFromHistory
+          ? `<button class="secondary-btn" id="exitEditLogsBtn">${t("wo.doneEdit") || "Done editing"}</button>`
+          : ""}
         <button class="secondary-btn" id="regenBtn">${t("wo.regenerate")}</button>
       </div>
     </div>
@@ -4386,13 +4591,38 @@ let sharedWorkoutPending = null;
 let recentlyLogged = {};
 // Whether the currently displayed workout is read-only (e.g. viewing from history).
 let workoutReadOnly = false;
+// True only when the user explicitly tapped "Edit logs" from a saved
+// history workout. Save handler uses this to call logExercise with
+// replaceLast:true so the old entry is overwritten, not duplicated.
+let _editingFromHistory = false;
 
 function attachWorkoutActions() {
   const saveBtn = document.getElementById("saveBtn");
   const regenBtn = document.getElementById("regenBtn");
   const startBtn = document.getElementById("startWorkoutBtn");
+  const editLogsBtn = document.getElementById("editLogsBtn");
+  const exitEditLogsBtn = document.getElementById("exitEditLogsBtn");
   if (startBtn) {
     startBtn.addEventListener("click", () => startGuidedMode());
+  }
+  if (editLogsBtn) {
+    editLogsBtn.addEventListener("click", () => {
+      // Flip out of read-only so the log inputs render with their
+      // historical values pre-filled (recentlyLogged is already populated
+      // in the history-item click handler).
+      workoutReadOnly = false;
+      _editingFromHistory = true;
+      renderWorkout(currentWorkout, el.workoutResult, { showSave: false });
+      attachWorkoutActions();
+    });
+  }
+  if (exitEditLogsBtn) {
+    exitEditLogsBtn.addEventListener("click", () => {
+      workoutReadOnly = true;
+      _editingFromHistory = false;
+      renderWorkout(currentWorkout, el.workoutResult, { showSave: false });
+      attachWorkoutActions();
+    });
   }
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
@@ -4617,6 +4847,9 @@ function attachWorkoutActions() {
       const result = logExercise(session.username, exName, sets, {
         goal: currentWorkout?.inputs?.goal,
         deload: !!currentWorkout?.inputs?.deload,
+        // When editing a historic workout, replace the last entry rather
+        // than appending a duplicate.
+        replaceLast: _editingFromHistory,
       });
       recentlyLogged[exName] = { sets };
 
@@ -4731,7 +4964,18 @@ function renderHistory() {
       currentWorkout = workout;
       workoutIsSaved = true;
       workoutReadOnly = true;
+      // Pre-load recentlyLogged with each exercise's last history entry,
+      // so the "Edit logs" toggle has values to populate inputs from.
       recentlyLogged = {};
+      const stats = getStats(session.username);
+      for (const ex of workout.exercises) {
+        const stat = stats[ex.name];
+        if (stat && stat.history?.length) {
+          const last = normalizeHistoryEntry(stat.history[stat.history.length - 1]);
+          if (last.sets?.length) recentlyLogged[ex.name] = { sets: last.sets, fromHistory: true };
+        }
+      }
+      _editingFromHistory = false; // start in read-only; user toggles
       showApp("generator");
       el.workoutResult.classList.remove("hidden");
       renderWorkout(workout, el.workoutResult, { showSave: false });
@@ -5863,11 +6107,31 @@ function renderGuided() {
     <div class="guided-actions">
       <button class="primary-btn big" data-guided-action="done">${doneLabel}</button>
       <button class="ghost-btn" data-guided-action="skip">${isLastSet ? t("guided.skipExercise") : t("guided.skipSet")}</button>
+      ${guidedSession.exercisesCompleted >= 1 && !isLastExercise
+        ? `<button class="ghost-btn finish-here" data-guided-action="finish-here">${t("guided.finishHere") || "Save & finish here"}</button>`
+        : ""}
     </div>
   `;
 
   document.querySelector("[data-guided-action='done']").addEventListener("click", onDoneSet);
   document.querySelector("[data-guided-action='skip']").addEventListener("click", onSkipSet);
+  document.querySelector("[data-guided-action='finish-here']")?.addEventListener("click", () => {
+    // User wants to stop early. Flush any buffered sets for the current
+    // exercise first (don't lose work-in-progress), then finalize as if
+    // the workout ended naturally. The summary stats only count what
+    // was actually completed — honest.
+    if (currentWorkout && session) {
+      const ex = currentWorkout.exercises[guided.exIdx];
+      const buf = guidedSession.exerciseSets?.[ex?.name];
+      if (ex && buf && buf.length > 0) {
+        logExercise(session.username, ex.name, buf, {
+          goal: currentWorkout.inputs?.goal,
+          deload: !!currentWorkout.inputs?.deload,
+        });
+      }
+    }
+    finishGuidedWorkout();
+  });
   // Wire set-timer for time-based exercises in Guided Mode
   document.querySelectorAll("[data-guided-action='start-set-timer']").forEach(btn => {
     btn.addEventListener("click", (e) => {
