@@ -1,0 +1,73 @@
+# FORGE CI — runs the ?test=1 harness on every push + PR.
+#
+# Strategy: serve the static site with Python's http.server (already used
+# locally for the preview), then run a tiny headless Chromium test driver
+# via Playwright that navigates to ?test=1, waits for window.__FORGE_TEST_RESULTS__,
+# and exits non-zero if any test failed.
+#
+# Playwright is preferred over Puppeteer for the simpler GitHub Actions
+# install (single npm package, browsers pre-cached on ubuntu-latest).
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --save-dev playwright
+          npx playwright install --with-deps chromium
+
+      - name: Start static server
+        run: |
+          python3 -m http.server 8765 &
+          # Give the server a beat to bind
+          sleep 1
+
+      - name: Run test harness
+        run: |
+          node -e "
+            const { chromium } = require('playwright');
+            (async () => {
+              const browser = await chromium.launch();
+              const page = await browser.newPage();
+              const errs = [];
+              page.on('pageerror', e => errs.push(String(e)));
+              page.on('console', msg => {
+                if (msg.type() === 'error') errs.push('[console.error] ' + msg.text());
+              });
+              await page.goto('http://localhost:8765/?test=1', { waitUntil: 'load' });
+              // Tests run async on script load; wait up to 30s for results.
+              await page.waitForFunction(() => window.__FORGE_TEST_RESULTS__, null, { timeout: 30000 });
+              const r = await page.evaluate(() => window.__FORGE_TEST_RESULTS__);
+              await browser.close();
+              console.log('passed=' + r.passed + ' failed=' + r.failed);
+              if (r.failed > 0) {
+                for (const s of r.suites) for (const t of s.tests) if (!t.pass) {
+                  console.error('FAIL ' + s.name + ' :: ' + t.name + ' :: ' + (t.err && t.err.message || t.err));
+                }
+                process.exit(1);
+              }
+              if (errs.length) {
+                console.error('Page errors:'); errs.forEach(e => console.error(e));
+                // Don't fail on console.error alone — tests already cover behavior.
+                // But surface them in the log for debugging.
+              }
+            })().catch(e => { console.error(e); process.exit(2); });
+          "

@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   soreness: "forge:soreness", // per-user, per-muscle soreness (decays over time)
   volumeTargets: "forge:volumeTargets", // per-user weekly sets target per muscle
   sleep: "forge:sleep",   // per-user, per-date sleep quality rating (1-5)
+  templates: "forge:templates", // per-user saved workout templates
 };
 
 // Muscle groups we expose in soreness + volume target UI.
@@ -190,6 +191,58 @@ async function forceSyncAll() {
 }
 
 // Make the indicator clickable — manual sync trigger.
+// ─── ERROR TRACKING ──────────────────────────────────────────────────────
+// Lightweight client-side error logger. Hooks window.onerror +
+// unhandledrejection. Posts a minimal payload to Supabase if available;
+// otherwise just keeps to console. Throttled per-message (5s cooldown
+// for identical errors) + capped at 20 reports per session to avoid spam.
+(function setupErrorTracking() {
+  if (typeof window === "undefined") return;
+  const SESSION_CAP = 20;
+  const COOLDOWN_MS = 5000;
+  const recent = new Map(); // message → last-sent timestamp
+  let sent = 0;
+
+  function postError(payload) {
+    if (sent >= SESSION_CAP) return;
+    const lastTs = recent.get(payload.message) || 0;
+    if (Date.now() - lastTs < COOLDOWN_MS) return;
+    recent.set(payload.message, Date.now());
+    sent++;
+    // Always log so it's visible in console too
+    console.error("[forge-error]", payload);
+    // Best-effort cloud push — silently no-op if Supabase isn't ready.
+    if (typeof sb === "undefined" || !sb || !window.session?.userId) return;
+    try {
+      sb.from("client_errors").insert({
+        user_id: window.session.userId,
+        message: payload.message.slice(0, 500),
+        stack: (payload.stack || "").slice(0, 2000),
+        url: location.pathname + location.search,
+        user_agent: navigator.userAgent.slice(0, 200),
+        at: new Date().toISOString(),
+      }).then(() => {}, () => {});
+    } catch {}
+  }
+
+  window.addEventListener("error", (e) => {
+    if (!e) return;
+    postError({
+      message: e.message || "Unknown error",
+      stack: e.error?.stack || "",
+      source: e.filename ? `${e.filename}:${e.lineno}:${e.colno}` : "",
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e.reason;
+    postError({
+      message: "Unhandled promise rejection: " + (r?.message || String(r)),
+      stack: r?.stack || "",
+    });
+  });
+})();
+
 // Validate the EXERCISES library at load time. Catches typos like
 // pattern:"compoud" or muscle:["chesst"] before they silently break
 // filtering / scoring downstream. Logs each issue with the exercise name
@@ -238,6 +291,7 @@ async function forceSyncAll() {
 document.addEventListener("DOMContentLoaded", () => {
   // Apply translations to all static DOM elements tagged with data-i18n.
   if (window.i18n) window.i18n.applyI18n(document);
+  wireIntervalControls();
 
   const indicator = document.getElementById("syncIndicator");
   if (indicator) {
@@ -322,6 +376,41 @@ function updateWorkout(userId, workoutId, partial) {
   Object.assign(w, partial);
   save(STORAGE_KEYS.workouts, all);
   cloudPush(() => sb.from("workouts").update({ data: w }).eq("id", workoutId));
+}
+
+// ─── WORKOUT TEMPLATES ───────────────────────────────────────────────────
+// Templates store the workout's shape (inputs + exercise list with their
+// prescriptions). Loading a template restores the workout as-is; the
+// "regenerate" button re-runs generateWorkout with the saved inputs so
+// the user gets fresh variety while staying in the same goal/target/etc.
+function getTemplates(userId) {
+  const all = load(STORAGE_KEYS.templates, {});
+  return all[userId] || [];
+}
+
+function addTemplate(userId, template) {
+  const all = load(STORAGE_KEYS.templates, {});
+  if (!all[userId]) all[userId] = [];
+  all[userId].push(template);
+  // Keep most-recent 20 to avoid unbounded growth
+  all[userId] = all[userId].slice(-20);
+  save(STORAGE_KEYS.templates, all);
+  cloudPush(() => sb.from("user_templates").upsert({
+    id: template.id,
+    user_id: session.userId,
+    name: template.name,
+    inputs: template.inputs,
+    exercises: template.exercises,
+    created_at: new Date(template.createdAt).toISOString(),
+  }));
+}
+
+function deleteTemplate(userId, templateId) {
+  const all = load(STORAGE_KEYS.templates, {});
+  if (!all[userId]) return;
+  all[userId] = all[userId].filter(t => t.id !== templateId);
+  save(STORAGE_KEYS.templates, all);
+  cloudPush(() => sb.from("user_templates").delete().eq("id", templateId));
 }
 
 // ─── PROGRESSION: stats + prefs ──────────────────────────────────────────
@@ -1712,6 +1801,7 @@ function showApp(view = "generator") {
     refreshRecommendationBanner();
     refreshLevelBanner();
     coordinateBanners();
+    refreshTemplatesPicker();
   }
   // Onboarding wizard — fires once per user on first-ever app load.
   // Runs BEFORE the sleep modal so a brand-new user sees onboarding first
@@ -1937,6 +2027,257 @@ function refreshStreakBadge() {
 // Once shown in a session, it doesn't re-show even if user dismisses with
 // X (avoids spam). They can still rate later from Settings → Sleep.
 let _sleepModalShownThisSession = false;
+
+// ─── INTERVAL TIMER (Tabata / EMOM / AMRAP / Custom) ─────────────────────
+// Standalone tool — lives behind a button in Settings → Tools. Big timer,
+// audio beeps at phase transitions, keeps running when the tab is hidden
+// (uses performance.now() not setInterval drift), holds screen on via
+// the existing acquireWakeLock helper used by Guided Mode.
+const _intervalState = {
+  running: false,
+  paused: false,
+  mode: "tabata",        // "tabata" | "emom" | "amrap" | "custom"
+  workSec: 20,
+  restSec: 10,
+  rounds: 8,
+  // Runtime
+  phase: "work",         // "work" | "rest" | "done"
+  round: 1,
+  phaseEndMs: 0,         // when the current phase will end (perf.now)
+  remainingMs: 0,        // updated each tick + when paused
+  totalWorkSec: 0,
+  timerHandle: null,
+};
+
+function intervalPreset(name) {
+  switch (name) {
+    case "tabata": return { workSec: 20, restSec: 10, rounds: 8 };
+    case "emom":   return { workSec: 60, restSec: 0,  rounds: 10 };  // one big block per round
+    case "amrap":  return { workSec: 15 * 60, restSec: 0, rounds: 1 };
+    default:       return null;
+  }
+}
+
+function applyIntervalPreset(name) {
+  _intervalState.mode = name;
+  const p = intervalPreset(name);
+  if (p) Object.assign(_intervalState, p);
+  // Reflect into config inputs
+  const work = document.getElementById("intervalWork");
+  const rest = document.getElementById("intervalRest");
+  const rounds = document.getElementById("intervalRounds");
+  if (work) work.value = _intervalState.workSec;
+  if (rest) rest.value = _intervalState.restSec;
+  if (rounds) rounds.value = _intervalState.rounds;
+  updateIntervalSummary();
+  // Highlight active preset
+  document.querySelectorAll("[data-interval-preset]").forEach(b => {
+    b.classList.toggle("active", b.dataset.intervalPreset === name);
+  });
+}
+
+function updateIntervalSummary() {
+  const el = document.getElementById("intervalSummary");
+  if (!el) return;
+  const { workSec, restSec, rounds, mode } = _intervalState;
+  const totalSec = rounds * (workSec + restSec);
+  let label;
+  if (mode === "tabata") label = t("timer.tabataSummary", { rounds, total: formatSecs(totalSec) });
+  else if (mode === "emom") label = t("timer.emomSummary", { rounds, total: formatSecs(totalSec) });
+  else if (mode === "amrap") label = t("timer.amrapSummary", { total: formatSecs(workSec) });
+  else label = t("timer.customSummary", { work: workSec, rest: restSec, rounds, total: formatSecs(totalSec) });
+  el.textContent = label;
+}
+
+function openIntervalModal() {
+  const modal = document.getElementById("intervalModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  // Reset to setup view
+  document.getElementById("intervalSetup")?.classList.remove("hidden");
+  document.getElementById("intervalRunning")?.classList.add("hidden");
+  document.getElementById("intervalDone")?.classList.add("hidden");
+  applyIntervalPreset(_intervalState.mode);
+  trapFocus(modal, closeIntervalModal);
+}
+
+function closeIntervalModal() {
+  stopInterval();
+  const modal = document.getElementById("intervalModal");
+  if (modal) modal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+// Audio beep — short oscillator, no audio asset needed. Two tones: high
+// (work start) and low (rest start). Skipped silently if Audio API blocked.
+let _audioCtx = null;
+function beep(freq, durMs = 120) {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = _audioCtx.createOscillator();
+    const gain = _audioCtx.createGain();
+    osc.frequency.value = freq;
+    osc.type = "sine";
+    gain.gain.value = 0.15;
+    osc.connect(gain).connect(_audioCtx.destination);
+    osc.start();
+    osc.stop(_audioCtx.currentTime + durMs / 1000);
+  } catch {}
+}
+
+function startInterval() {
+  const work = parseInt(document.getElementById("intervalWork")?.value, 10) || 20;
+  const rest = parseInt(document.getElementById("intervalRest")?.value, 10) || 10;
+  const rounds = parseInt(document.getElementById("intervalRounds")?.value, 10) || 8;
+  if (work < 1 || rounds < 1) return;
+  _intervalState.workSec = work;
+  _intervalState.restSec = rest;
+  _intervalState.rounds = rounds;
+  _intervalState.running = true;
+  _intervalState.paused = false;
+  _intervalState.phase = "work";
+  _intervalState.round = 1;
+  _intervalState.totalWorkSec = 0;
+  _intervalState.phaseEndMs = performance.now() + work * 1000;
+  _intervalState.remainingMs = work * 1000;
+
+  document.getElementById("intervalSetup")?.classList.add("hidden");
+  document.getElementById("intervalDone")?.classList.add("hidden");
+  document.getElementById("intervalRunning")?.classList.remove("hidden");
+
+  acquireWakeLock?.();
+  beep(880, 150); // work-start tone
+  tickInterval();
+}
+
+function tickInterval() {
+  cancelAnimationFrame(_intervalState.timerHandle);
+  const update = () => {
+    if (!_intervalState.running) return;
+    if (_intervalState.paused) {
+      _intervalState.timerHandle = requestAnimationFrame(update);
+      return;
+    }
+    const now = performance.now();
+    _intervalState.remainingMs = Math.max(0, _intervalState.phaseEndMs - now);
+    renderIntervalRunning();
+    if (_intervalState.remainingMs === 0) {
+      advanceIntervalPhase();
+    }
+    _intervalState.timerHandle = requestAnimationFrame(update);
+  };
+  _intervalState.timerHandle = requestAnimationFrame(update);
+}
+
+function advanceIntervalPhase() {
+  const s = _intervalState;
+  if (s.phase === "work") {
+    s.totalWorkSec += s.workSec;
+    // Move to rest, or to next round's work if no rest, or finish
+    if (s.restSec > 0 && s.round < s.rounds) {
+      s.phase = "rest";
+      s.phaseEndMs = performance.now() + s.restSec * 1000;
+      s.remainingMs = s.restSec * 1000;
+      beep(440, 120); // rest-start (lower tone)
+    } else if (s.round < s.rounds) {
+      // No rest — straight to next round
+      s.round += 1;
+      s.phaseEndMs = performance.now() + s.workSec * 1000;
+      s.remainingMs = s.workSec * 1000;
+      beep(880, 150);
+    } else {
+      finishInterval();
+    }
+  } else if (s.phase === "rest") {
+    s.round += 1;
+    s.phase = "work";
+    s.phaseEndMs = performance.now() + s.workSec * 1000;
+    s.remainingMs = s.workSec * 1000;
+    beep(880, 150);
+  }
+}
+
+function renderIntervalRunning() {
+  const s = _intervalState;
+  const phaseEl = document.getElementById("intervalPhase");
+  const timeEl = document.getElementById("intervalTime");
+  const roundEl = document.getElementById("intervalRound");
+  const progressEl = document.getElementById("intervalProgressFill");
+  if (!phaseEl || !timeEl || !roundEl || !progressEl) return;
+  const phaseLabel = s.phase === "work" ? t("timer.work") : t("timer.rest");
+  phaseEl.textContent = phaseLabel;
+  phaseEl.dataset.phase = s.phase;
+  const sec = Math.ceil(s.remainingMs / 1000);
+  timeEl.textContent = formatSecs(sec);
+  roundEl.textContent = t("timer.roundOf", { current: s.round, total: s.rounds });
+  const totalPhase = s.phase === "work" ? s.workSec : s.restSec;
+  const pct = totalPhase > 0 ? ((totalPhase * 1000 - s.remainingMs) / (totalPhase * 1000)) * 100 : 100;
+  progressEl.style.width = `${pct}%`;
+}
+
+function pauseInterval() {
+  if (!_intervalState.running) return;
+  _intervalState.paused = !_intervalState.paused;
+  if (_intervalState.paused) {
+    // Snapshot remaining so resume picks up correctly
+    _intervalState.remainingMs = Math.max(0, _intervalState.phaseEndMs - performance.now());
+  } else {
+    // Recompute phaseEndMs from remaining
+    _intervalState.phaseEndMs = performance.now() + _intervalState.remainingMs;
+  }
+  const btn = document.getElementById("intervalPause");
+  if (btn) btn.textContent = _intervalState.paused ? t("timer.resume") : t("timer.pause");
+}
+
+function stopInterval() {
+  _intervalState.running = false;
+  cancelAnimationFrame(_intervalState.timerHandle);
+  releaseWakeLock?.();
+}
+
+function finishInterval() {
+  stopInterval();
+  beep(660, 200);
+  setTimeout(() => beep(880, 250), 250);
+  document.getElementById("intervalRunning")?.classList.add("hidden");
+  document.getElementById("intervalDone")?.classList.remove("hidden");
+  const summary = document.getElementById("intervalDoneSummary");
+  if (summary) {
+    const totalMin = (_intervalState.totalWorkSec / 60).toFixed(1);
+    summary.textContent = t("timer.doneSummary", { rounds: _intervalState.rounds, minutes: totalMin });
+  }
+}
+
+function wireIntervalControls() {
+  document.getElementById("openIntervalBtn")?.addEventListener("click", openIntervalModal);
+  document.getElementById("intervalClose")?.addEventListener("click", closeIntervalModal);
+  document.getElementById("intervalClose2")?.addEventListener("click", closeIntervalModal);
+  document.querySelectorAll("[data-interval-preset]").forEach(b => {
+    b.addEventListener("click", () => applyIntervalPreset(b.dataset.intervalPreset));
+  });
+  ["intervalWork", "intervalRest", "intervalRounds"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", () => {
+      _intervalState.workSec = parseInt(document.getElementById("intervalWork").value, 10) || 0;
+      _intervalState.restSec = parseInt(document.getElementById("intervalRest").value, 10) || 0;
+      _intervalState.rounds = parseInt(document.getElementById("intervalRounds").value, 10) || 0;
+      _intervalState.mode = "custom";
+      updateIntervalSummary();
+      document.querySelectorAll("[data-interval-preset]").forEach(b =>
+        b.classList.toggle("active", b.dataset.intervalPreset === "custom"));
+    });
+  });
+  document.getElementById("intervalStart")?.addEventListener("click", startInterval);
+  document.getElementById("intervalPause")?.addEventListener("click", pauseInterval);
+  document.getElementById("intervalStop")?.addEventListener("click", () => {
+    stopInterval();
+    closeIntervalModal();
+  });
+  document.getElementById("intervalRestart")?.addEventListener("click", () => {
+    document.getElementById("intervalDone")?.classList.add("hidden");
+    document.getElementById("intervalSetup")?.classList.remove("hidden");
+  });
+}
 
 // ─── ONBOARDING ──────────────────────────────────────────────────────────
 // Fires once per user, on first-ever app load after signup/login. Marked
@@ -2169,6 +2510,238 @@ function refreshSleepPrompt() {
 
 // Recovery banner: shows when bad sleep + accumulated soreness suggest the
 // user should skip the heavy session and do a light Recovery workout instead.
+// ─── HISTORY INSIGHTS ────────────────────────────────────────────────────
+// Aggregate stats over the user's recent activity. Surfaces PR cadence,
+// volume trend, exercise frequency, and push:pull / upper:lower balance.
+// Pure read against existing storage — no new tables.
+function computeInsights(userId) {
+  const stats = getStats(userId);
+  const workouts = getWorkouts(userId);
+  const now = Date.now();
+  const WEEK = 7 * 86400000;
+  const fourWk = now - 4 * WEEK;
+  const eightWk = now - 8 * WEEK;
+
+  // PR detection: walk each exercise's history, find sessions that beat
+  // every prior session's e1RM. Counted by week.
+  const prsByWeek = Array(8).fill(0);
+  let totalPRs = 0;
+  let lastPRName = null, lastPRDate = 0;
+  for (const [name, stat] of Object.entries(stats)) {
+    const hist = (stat.history || []).map(normalizeHistoryEntry);
+    let bestE1 = 0;
+    for (const entry of hist) {
+      const e1 = sessionBestE1RM(entry.sets);
+      if (e1 > bestE1 + 0.01) {
+        if (entry.date >= eightWk) {
+          const wkIdx = Math.min(7, Math.floor((now - entry.date) / WEEK));
+          prsByWeek[7 - wkIdx]++;
+          totalPRs++;
+          if (entry.date > lastPRDate) { lastPRDate = entry.date; lastPRName = name; }
+        }
+        bestE1 = e1;
+      }
+    }
+  }
+
+  // Exercise frequency over 4 weeks
+  const exFreq = {};
+  for (const [name, stat] of Object.entries(stats)) {
+    const recent = (stat.history || [])
+      .map(normalizeHistoryEntry)
+      .filter(h => h.date >= fourWk);
+    if (recent.length > 0) exFreq[name] = recent.length;
+  }
+  const sortedFreq = Object.entries(exFreq).sort((a, b) => b[1] - a[1]);
+  const mostFrequent = sortedFreq.slice(0, 3);
+
+  // Movement-pattern balance over 4 weeks (push:pull, knee:hip)
+  const bucketCounts = { push: 0, pull: 0, squat: 0, hinge: 0 };
+  for (const [name, sets] of Object.entries(exFreq)) {
+    const ex = EXERCISES.find(e => e.name === name);
+    if (!ex) continue;
+    const b = getMovementBucket(ex);
+    if (bucketCounts[b] !== undefined) bucketCounts[b] += sets;
+  }
+  const pushPullRatio = bucketCounts.pull > 0 ? (bucketCounts.push / bucketCounts.pull).toFixed(2) : null;
+  const kneeHipRatio = bucketCounts.hinge > 0 ? (bucketCounts.squat / bucketCounts.hinge).toFixed(2) : null;
+
+  // Workouts-per-week trend (last 4 weeks)
+  const wkCounts = [0, 0, 0, 0];
+  for (const w of workouts) {
+    const ageWeeks = Math.floor((now - w.createdAt) / WEEK);
+    if (ageWeeks >= 0 && ageWeeks < 4) wkCounts[3 - ageWeeks]++;
+  }
+
+  return {
+    totalPRs,
+    prsByWeek,
+    lastPR: lastPRName ? { name: lastPRName, daysAgo: Math.round((now - lastPRDate) / 86400000) } : null,
+    mostFrequent,
+    pushPullRatio,
+    kneeHipRatio,
+    workoutsPerWeek: wkCounts,
+    totalWorkoutsLast4Wk: wkCounts.reduce((a, b) => a + b, 0),
+  };
+}
+
+function renderInsightsPanel(userId) {
+  const stats = getStats(userId);
+  if (!stats || Object.keys(stats).length === 0) return "";
+  const ins = computeInsights(userId);
+  if (ins.totalPRs === 0 && ins.totalWorkoutsLast4Wk === 0) return "";
+
+  // PR sparkline (8 weeks)
+  const maxPR = Math.max(1, ...ins.prsByWeek);
+  const prBars = ins.prsByWeek.map(c => {
+    const h = (c / maxPR) * 100;
+    return `<div class="ins-bar-wrap" title="${c} PRs"><div class="ins-bar" style="height:${h}%"></div></div>`;
+  }).join("");
+
+  // Workouts/week sparkline (4 weeks)
+  const maxWk = Math.max(1, ...ins.workoutsPerWeek);
+  const wkBars = ins.workoutsPerWeek.map(c => {
+    const h = (c / maxWk) * 100;
+    return `<div class="ins-bar-wrap" title="${c}"><div class="ins-bar accent" style="height:${h}%"></div></div>`;
+  }).join("");
+
+  // Balance flag — flag if push:pull or knee:hip is >1.5 either way
+  let balanceFlag = "";
+  if (ins.pushPullRatio !== null) {
+    const r = parseFloat(ins.pushPullRatio);
+    if (r > 1.5) balanceFlag = `<div class="ins-warn">${t("insights.pushHeavy", { ratio: ins.pushPullRatio })}</div>`;
+    else if (r < 0.67) balanceFlag = `<div class="ins-warn">${t("insights.pullHeavy", { ratio: ins.pushPullRatio })}</div>`;
+  }
+  if (!balanceFlag && ins.kneeHipRatio !== null) {
+    const r = parseFloat(ins.kneeHipRatio);
+    if (r > 1.7) balanceFlag = `<div class="ins-warn">${t("insights.kneeHeavy", { ratio: ins.kneeHipRatio })}</div>`;
+    else if (r < 0.6) balanceFlag = `<div class="ins-warn">${t("insights.hipHeavy", { ratio: ins.kneeHipRatio })}</div>`;
+  }
+
+  const freqHtml = ins.mostFrequent.length
+    ? ins.mostFrequent.map(([n, c]) => `<li>${escapeAttr(n)} <span class="ins-count">×${c}</span></li>`).join("")
+    : `<li class="ins-muted">${t("insights.noFrequent")}</li>`;
+
+  const lastPrLine = ins.lastPR
+    ? t("insights.lastPR", { name: escapeAttr(ins.lastPR.name), days: ins.lastPR.daysAgo })
+    : t("insights.noPRs");
+
+  return `
+    <div class="insights-panel">
+      <h3 class="volume-chart-title">${t("insights.title")} <span class="volume-chart-sub">${t("insights.sub")}</span></h3>
+      <div class="insights-grid">
+        <div class="ins-card">
+          <div class="ins-card-label">${t("insights.prsLast8w")}</div>
+          <div class="ins-card-value">${ins.totalPRs}</div>
+          <div class="ins-sparkline">${prBars}</div>
+          <div class="ins-card-foot">${lastPrLine}</div>
+        </div>
+        <div class="ins-card">
+          <div class="ins-card-label">${t("insights.workoutsLast4w")}</div>
+          <div class="ins-card-value">${ins.totalWorkoutsLast4Wk}</div>
+          <div class="ins-sparkline">${wkBars}</div>
+          <div class="ins-card-foot">${t("insights.weekAvg", { avg: (ins.totalWorkoutsLast4Wk / 4).toFixed(1) })}</div>
+        </div>
+        <div class="ins-card">
+          <div class="ins-card-label">${t("insights.mostFrequent")}</div>
+          <ul class="ins-freq">${freqHtml}</ul>
+        </div>
+        <div class="ins-card">
+          <div class="ins-card-label">${t("insights.balance")}</div>
+          <div class="ins-balance-row">
+            <span>${t("insights.pushPull")}</span>
+            <strong>${ins.pushPullRatio ?? "—"}</strong>
+          </div>
+          <div class="ins-balance-row">
+            <span>${t("insights.kneeHip")}</span>
+            <strong>${ins.kneeHipRatio ?? "—"}</strong>
+          </div>
+          ${balanceFlag}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Templates picker — collapsed details on the Generator showing user's
+// saved templates. Loading a template either uses its exact exercises or
+// regenerates from its inputs ("fresh variety, same shape").
+function refreshTemplatesPicker() {
+  if (!session) return;
+  const picker = document.getElementById("templatesPicker");
+  const listEl = document.getElementById("templatesList");
+  const countEl = document.getElementById("templatesCount");
+  if (!picker || !listEl) return;
+  const templates = getTemplates(session.username);
+  if (!templates.length) {
+    picker.classList.add("hidden");
+    return;
+  }
+  picker.classList.remove("hidden");
+  if (countEl) countEl.textContent = `(${templates.length})`;
+  listEl.innerHTML = templates
+    .slice()
+    .reverse()
+    .map(tpl => `
+      <div class="template-row" data-template-id="${tpl.id}">
+        <div class="template-info">
+          <div class="template-name">${escapeAttr(tpl.name)}</div>
+          <div class="template-meta">${tpl.exercises.length} ${t("wo.exercises")} · ${tpl.inputs.duration} ${t("gen.min")}</div>
+        </div>
+        <div class="template-actions">
+          <button class="link-btn" data-template-action="load" data-template-id="${tpl.id}">${t("templates.useExact")}</button>
+          <button class="link-btn" data-template-action="regen" data-template-id="${tpl.id}">${t("templates.regen")}</button>
+          <button class="link-btn delete" data-template-action="delete" data-template-id="${tpl.id}">✕</button>
+        </div>
+      </div>
+    `).join("");
+
+  listEl.querySelectorAll("[data-template-action]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.dataset.templateId;
+      const action = btn.dataset.templateAction;
+      const tpl = getTemplates(session.username).find(t => t.id === id);
+      if (!tpl) return;
+      if (action === "delete") {
+        if (!confirm(t("templates.confirmDelete") || "Delete this template?")) return;
+        deleteTemplate(session.username, id);
+        refreshTemplatesPicker();
+        return;
+      }
+      if (action === "load") {
+        // Use the saved exercises exactly. Wrap in workout shape.
+        currentWorkout = {
+          id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          createdAt: Date.now(),
+          inputs: { ...tpl.inputs },
+          exercises: tpl.exercises.map(e => ({ ...e })),
+        };
+        workoutIsSaved = false;
+        workoutReadOnly = false;
+        recentlyLogged = {};
+        el.workoutResult.classList.remove("hidden");
+        renderWorkout(currentWorkout, el.workoutResult, { showSave: true });
+        attachWorkoutActions();
+        el.workoutResult.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (action === "regen") {
+        // Replay the saved inputs through generateWorkout for fresh variety.
+        currentWorkout = generateWorkout({ ...tpl.inputs });
+        if (!currentWorkout) return;
+        workoutIsSaved = false;
+        workoutReadOnly = false;
+        recentlyLogged = {};
+        el.workoutResult.classList.remove("hidden");
+        renderWorkout(currentWorkout, el.workoutResult, { showSave: true });
+        attachWorkoutActions();
+        el.workoutResult.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+}
+
 // Program banner — shown on the Generator view when an active program exists.
 // Surfaces today's recommended session (target + label) and a "Use this"
 // button that pre-fills the form. Auto-handles paused / complete states.
@@ -4362,6 +4935,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
       <div class="workout-actions">
         <button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>
         ${showSave ? `<button class="secondary-btn" id="saveBtn">${t("settings.save")}</button>` : ""}
+        <button class="secondary-btn" id="saveTemplateBtn" title="${t("templates.saveTooltip")}">⭐ ${t("templates.save")}</button>
         <button class="secondary-btn" id="shareBtn">🔗 ${t("wo.share")}</button>
         ${workoutIsSaved && workoutReadOnly && !_editingFromHistory
           ? `<button class="secondary-btn" id="editLogsBtn">✎ ${t("wo.editLogs") || "Edit logs"}</button>`
@@ -4537,6 +5111,32 @@ function attachWorkoutActions() {
       attachWorkoutActions();
     });
   }
+  // Save as template
+  const saveTemplateBtn = document.getElementById("saveTemplateBtn");
+  if (saveTemplateBtn) {
+    saveTemplateBtn.addEventListener("click", () => {
+      if (!currentWorkout || !session) return;
+      // Generate a default name from the workout's shape
+      const defaultName = `${TARGET_LABELS[currentWorkout.inputs.target]} · ${GOAL_LABELS[currentWorkout.inputs.goal]} · ${currentWorkout.inputs.duration}m`;
+      const name = prompt(t("templates.namePrompt") || "Name this template", defaultName);
+      if (!name) return;
+      addTemplate(session.username, {
+        id: `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: name.trim().slice(0, 60),
+        createdAt: Date.now(),
+        inputs: { ...currentWorkout.inputs },
+        // Strip volatile fields like ids; keep just the prescription shape
+        exercises: currentWorkout.exercises.map(e => ({
+          name: e.name, sets: e.sets, reps: e.reps, rest: e.rest,
+          pattern: e.pattern, isTimeBlock: !!e.isTimeBlock, unilateral: !!e.unilateral,
+        })),
+      });
+      saveTemplateBtn.textContent = `✓ ${t("settings.saved")}`;
+      setTimeout(() => { saveTemplateBtn.innerHTML = `⭐ ${t("templates.save")}`; }, 1500);
+      refreshTemplatesPicker();
+    });
+  }
+
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
       if (!currentWorkout || !session) return;
@@ -4819,11 +5419,13 @@ function attachWorkoutActions() {
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
   const items = getWorkouts(session.username);
+  const insightsHtml = renderInsightsPanel(session.username);
   const heatmapHtml = renderBodyHeatmap(session.username);
   const volumeChartHtml = renderWeeklyVolumeChart(session.username, 8);
 
   if (!items.length) {
     el.historyList.innerHTML = `
+      ${insightsHtml}
       ${heatmapHtml}
       ${volumeChartHtml}
       <div class="empty-state">
@@ -4835,7 +5437,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = heatmapHtml + volumeChartHtml + items.map(w => {
+  el.historyList.innerHTML = insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
     const notes = (w.notes || "").trim();
     const notesPreview = notes
       ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`
