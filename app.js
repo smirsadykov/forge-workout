@@ -334,42 +334,8 @@ function getExerciseStat(userId, exName) {
   return getStats(userId)[exName] || null;
 }
 // Epley estimated 1-rep max — captures both rep PRs and load PRs in one number.
-function calculateE1RM(weightKg, reps) {
-  if (weightKg <= 0 || reps <= 0) return 0;
-  if (reps === 1) return weightKg;
-  return weightKg * (1 + reps / 30);
-}
-
-// Normalize either old single-set history entries or new sets-array entries
-// into the new shape: { date, sets: [{ weightKg, reps }] }.
-function normalizeHistoryEntry(entry) {
-  if (!entry) return { date: Date.now(), sets: [] };
-  if (Array.isArray(entry.sets)) return entry;
-  return {
-    date: entry.date || Date.now(),
-    sets: [{ weightKg: entry.weightKg || 0, reps: entry.reps || 0 }],
-  };
-}
-
-function sessionBestE1RM(sets) {
-  return sets.reduce((m, s) => Math.max(m, calculateE1RM(s.weightKg, s.reps)), 0);
-}
-function sessionBestReps(sets) {
-  return sets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
-}
-
-function isPR(sets, history) {
-  if (!history || history.length === 0) return false;
-  if (!sets || sets.length === 0) return false;
-  const newBestE1 = sessionBestE1RM(sets);
-  const oldBestE1 = history.reduce((m, h) => Math.max(m, sessionBestE1RM(normalizeHistoryEntry(h).sets)), 0);
-  if (newBestE1 > 0 && newBestE1 > oldBestE1 + 0.01) return true;
-  // Bodyweight: pure rep PR
-  const newBestReps = sessionBestReps(sets);
-  const oldBestReps = history.reduce((m, h) =>
-    Math.max(m, sessionBestReps(normalizeHistoryEntry(h).sets)), 0);
-  return newBestReps > oldBestReps;
-}
+// calculateE1RM, normalizeHistoryEntry, sessionBestE1RM, sessionBestReps, isPR
+// moved to lib/utils.js (loaded as a global before app.js).
 
 // Log a set OR an array of sets for an exercise. Accepts:
 //   { weightKg, reps }         — single set (back-compat)
@@ -1283,41 +1249,8 @@ function roundHalf(x) { return Math.round(x * 2) / 2; }
 // Parse time-based reps strings into seconds. Handles "30-60 sec",
 // "X sec", "X-Y min", "X min steady state", etc. Returns null when
 // the reps string isn't time-based.
-function parseTimeReps(reps) {
-  if (typeof reps !== "string") return null;
-  let m = reps.match(/(\d+)\s*[\-–]\s*(\d+)\s*sec/);
-  if (m) return Math.round((Number(m[1]) + Number(m[2])) / 2);
-  m = reps.match(/(\d+)\s*sec/);
-  if (m) return Number(m[1]);
-  m = reps.match(/(\d+)\s*[\-–]\s*(\d+)\s*min/);
-  if (m) return Math.round((Number(m[1]) + Number(m[2])) / 2) * 60;
-  m = reps.match(/(\d+)\s*min/);
-  if (m) return Number(m[1]) * 60;
-  return null;
-}
-
-// Pretty-print seconds. 45 → "45s", 90 → "1:30", 180 → "3:00".
-function formatSecs(s) {
-  if (s == null || isNaN(s)) return "";
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-function parseRepRange(repsStr) {
-  if (typeof repsStr !== "string") return [8, 12];
-  if (/sec/i.test(repsStr)) return [0, 0]; // time-based; no rep progression
-  const m = repsStr.match(/(\d+)[^\d]+(\d+)/);
-  if (m) return [parseInt(m[1], 10), parseInt(m[2], 10)];
-  const single = repsStr.match(/(\d+)/);
-  if (single) return [parseInt(single[1], 10), parseInt(single[1], 10)];
-  return [8, 12];
-}
-
-function progressionIncrementKg(pattern) {
-  return pattern === "isolation" ? 1.25 : 2.5;
-}
+// parseTimeReps, formatSecs, parseRepRange, progressionIncrementKg
+// moved to lib/utils.js.
 
 // Real-world equipment doesn't increment in 2.5kg steps. Snap the suggested
 // next weight to the smallest realistic jump for the actual equipment.
@@ -1483,49 +1416,14 @@ function smartProgression(currentKg, exerciseName, topOfRange, userId, lastReps)
 //     A bog-standard bodyweight squat at 4-6 reps with 3 min rest is junk —
 //     a 75kg person doing 6 BW squats works at ~20% of 1RM, far below the
 //     ~80%+ threshold the literature says strength adaptations require.
-function canDeliverStrength(exercise) {
-  if (!exercise) return false;
-  const eqs = exercise.equipment || [];
-  // Anything with real external load → strength-capable
-  if (eqs.some(e => ["dumbbells", "barbell", "kettlebell", "machine"].includes(e))) return true;
-  // Bands only at advanced (assume heavy resistance bands)
-  if (eqs.includes("bands")) return exercise.difficulty === "advanced";
-  // Bodyweight: only specific advanced moves
-  if (eqs.includes("bodyweight")) {
-    if (exercise.difficulty !== "advanced") return false;
-    const n = (exercise.name || "").toLowerCase();
-    return /pistol|one-?arm|handstand|planche|archer|lever|muscle-?up|deficit|nordic|shrimp|dragon|skater squat/.test(n);
-  }
-  return false;
-}
+// canDeliverStrength moved to lib/utils.js.
 
 // Strictly floor-only filter for hotel-room / "no equipment at all" mode.
 // The "bodyweight" tag is a broad bucket — it includes pull-ups (need bar),
 // dips (need chairs/bars), Bulgarian splits (need bench), step-ups (need
 // step), inverted rows (need bar). Identify these by name pattern so we
 // don't have to hand-tag every exercise in exercises.js.
-function requiresFurniture(name) {
-  if (!name) return false;
-  const n = name.toLowerCase();
-  // Needs pull-up bar
-  if (/\b(pull-?ups?|chin-?ups?|muscle-?up|hanging|inverted row|toes to bar|knees to elbows|l-?sit hang)/i.test(n)) return true;
-  // Needs chairs / parallel bars / dipping surface
-  if (/\bdips?\b/i.test(n)) return true;
-  // Needs a step / elevated surface
-  if (/step-?up|box jump|box squat|bench (jump|step)|bulgarian|elevated/i.test(n)) return true;
-  // Needs a bench / elevated surface for incline/decline variants
-  if (/incline push|decline push|feet-elevated|hands-elevated/i.test(n)) return true;
-  // Needs something to row against (door, table)
-  if (/doorway row|towel row/i.test(n)) return true;
-  return false;
-}
-
-function exerciseUsesWeight(name) {
-  const ex = EXERCISES.find(e => e.name === name);
-  if (!ex) return false;
-  if (ex.pattern === "mobility") return false;
-  return ex.equipment.some(e => e !== "bodyweight");
-}
+// requiresFurniture, exerciseUsesWeight moved to lib/utils.js.
 
 // Find a replacement for an exercise within the same form inputs. Tiers from
 // strict (same primary muscle + pattern) to loose (anything matching the
@@ -1569,14 +1467,7 @@ function findAlternativeExercise(currentName, inputs, excludeNames) {
   return null;
 }
 
-function isTrackable(name) {
-  // Mobility / cardio machine work isn't logged with reps the same way.
-  const ex = EXERCISES.find(e => e.name === name);
-  if (!ex) return false;
-  if (ex.pattern === "mobility") return false;
-  if (ex.equipment.length === 1 && ex.equipment[0] === "cardio_machine") return false;
-  return true;
-}
+// isTrackable moved to lib/utils.js.
 
 function getSuggestion(userId, exerciseName, prescription, pattern, goal) {
   const stat = getExerciseStat(userId, exerciseName);
@@ -3133,14 +3024,7 @@ function refreshLoadWarning() {
 }
 
 // ─── WORKOUT GENERATION ──────────────────────────────────────────────────
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+// shuffle moved to lib/utils.js.
 
 // Round rest periods to clean numbers: nearest 5s when short, nearest 15s otherwise.
 function roundRest(s) {
@@ -3212,24 +3096,7 @@ function getIntensityFinisher(exercise) {
 // Detect whether an exercise is performed unilaterally (one side at a time)
 // vs bilaterally (both sides simultaneously). Reps for unilateral exercises
 // are "per side" and they take ~2x the time per set.
-function isUnilateralExercise(name) {
-  if (!name) return false;
-  const n = name.toLowerCase();
-  // Explicit one-side names
-  if (/single-?arm|single-?leg|one-?arm|one-?leg/.test(n)) return true;
-  // Lunges, split squats, step-ups, pistol/shrimp squats = per leg
-  if (/\blunges?\b|split squat|step-?up|pistol squat|shrimp squat/.test(n)) return true;
-  // Get-ups + windmills are inherently one-side
-  if (/get-?up|windmill/.test(n)) return true;
-  // Specific kettlebell movements that are unilateral by tradition:
-  // pressing variants, snatches, cleans, single-bell rows, carries
-  if (/kettlebell\s+(arnold|overhead|floor|bottoms-?up|z-?press|see-saw)/.test(n)) return true;
-  if (/kettlebell\s+(snatch|clean|high pull|gorilla row|renegade row|cuban)/.test(n)) return true;
-  if (/kettlebell\s+(suitcase|racked carry|overhead carry)/.test(n)) return true;
-  // Renegade row (bodyweight or DB) is alternating arms, counted per side
-  if (/renegade row/.test(n)) return true;
-  return false;
-}
+// isUnilateralExercise moved to lib/utils.js.
 
 // "X reps" → "X reps per side" when unilateral. Time-based reps get
 // "per side" too. For ballistic ranges keep the per-side suffix.
@@ -3251,13 +3118,7 @@ function displayReps(ex) {
 
 // Cap sets based on requested workout duration so short sessions don't
 // inherit 5-set ballistic prescriptions that take 10+ minutes each.
-function maxSetsForDuration(duration) {
-  if (!duration) return 5;
-  if (duration <= 15) return 3;
-  if (duration <= 30) return 4;
-  if (duration <= 45) return 4;
-  return 5;
-}
+// maxSetsForDuration moved to lib/utils.js.
 
 function pickPrescription(goal, difficulty, exercise, style = "standard", deload = false, duration = 45) {
   // Mobility exercises always use the mobility prescription regardless of
@@ -3408,29 +3269,7 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
 
   return { sets, reps, rest: roundRest(rest), technique, finisher };
 }
-function randInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function matchesTarget(exercise, target) {
-  if (target === "full_body") return true;
-  if (target === "cardio") return exercise.group.includes("cardio");
-  if (target === "core") return exercise.group.includes("core");
-  if (target === "upper") return exercise.group.includes("upper");
-  if (target === "lower") return exercise.group.includes("lower") || exercise.group.includes("legs");
-  if (target === "push") return exercise.group.includes("push");
-  if (target === "pull") return exercise.group.includes("pull");
-  if (target === "legs") return exercise.group.includes("legs") || exercise.group.includes("lower");
-  return true;
-}
-
-function matchesDifficulty(exDiff, target) {
-  // Beginners get beginner only.
-  // Intermediate gets beginner + intermediate.
-  // Advanced gets all three.
-  const order = { beginner: 0, intermediate: 1, advanced: 2 };
-  return order[exDiff] <= order[target];
-}
+// randInt, matchesTarget, matchesDifficulty moved to lib/utils.js.
 
 // Cardio target produces one (or two) steady-state blocks rather than picking
 // six different cardio "exercises". Warm-up still prepended.
@@ -3690,47 +3529,7 @@ const TARGET_MUSCLES = {
 // workout could end up as 2 rows + 2 lunges (no push, no hinge, no
 // bilateral squat). Standard strength programming wants one of each
 // major pattern (push, pull, squat, hinge) per session.
-function getMovementBucket(exercise) {
-  if (!exercise) return "other";
-  if (exercise.pattern === "mobility") return "mobility";
-  if (exercise.pattern === "conditioning") return "conditioning";
-  const name = (exercise.name || "").toLowerCase();
-  const primary = (exercise.muscle && exercise.muscle[0]) || "";
-
-  // Hinge — must precede squat (handles "deadlift squat" hybrids)
-  if (/deadlift|\brdl\b|romanian|swing|\bclean\b|snatch|hip thrust|good morning|hyperextension|kettlebell jerk|nordic/.test(name)) {
-    return "hinge";
-  }
-  // Squat / knee-dominant
-  if (/squat|lunge|step-?up|split squat|bulgarian|cossack|pistol|sissy|shrimp/.test(name)) {
-    return "squat";
-  }
-  // Pull (back-dominant; biceps curls go to arm_iso)
-  if (/pull-?up|chin-?up|pulldown|pull-?down|lat pull|inverted row|\brow\b|face pull|reverse fly|rear delt/.test(name)) {
-    return "pull";
-  }
-  // Push (chest / shoulder pressing, dips)
-  if (/press|push-?up|push up|bench|\bfly\b|\bflye\b|\bdip\b/.test(name)) {
-    return "push";
-  }
-  // Arm isolation (curls, extensions)
-  if (/curl|tricep extension|skull crusher|kickback|pushdown/.test(name)) {
-    return "arm_iso";
-  }
-  // Shoulder isolation
-  if (/lateral raise|front raise|shrug|upright row/.test(name)) {
-    return "shoulder_iso";
-  }
-  // Core
-  if (primary === "core" || /plank|crunch|sit-?up|leg raise|hollow|dead bug|bird dog|ab wheel|cable crunch|russian twist|wood chop|mountain climb|hanging knee|knees to elbows|toes to bar/.test(name)) {
-    return "core";
-  }
-  // Calf
-  if (primary === "calves" || /calf raise|calf press/.test(name)) {
-    return "calf";
-  }
-  return "other";
-}
+// getMovementBucket moved to lib/utils.js.
 
 // Which movement buckets are RELEVANT for each target — the picker enforces
 // diversity within these buckets. (Buckets not in this list still get
