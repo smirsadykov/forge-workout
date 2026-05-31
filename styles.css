@@ -209,6 +209,49 @@ input {
   color: #1a1500;
 }
 
+/* Language quick-toggle — same shape as the units toggle.
+   Lives in the nav (after login) AND on the auth screen so users in the
+   wrong locale can switch before signing in. */
+.lang-toggle {
+  display: inline-flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-left: 6px;
+}
+.lang-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  transition: all 0.15s;
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.lang-btn:hover { color: var(--text); }
+.lang-btn.active {
+  background: var(--accent);
+  color: #1a1500;
+}
+/* Auth-screen variant — top-right corner, floats above the card. */
+.auth-lang-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin-left: 0;
+  z-index: 5;
+}
+.auth-view { position: relative; }
+@media (max-width: 480px) {
+  .auth-lang-toggle { top: 10px; right: 10px; }
+  .lang-btn { padding: 4px 8px; font-size: 11px; }
+}
+
 .link-btn {
   color: var(--text-dim);
   font-size: 14px;
@@ -4052,15 +4095,18 @@ input {
     padding: 12px 14px;  /* ~44px touch target */
     min-height: 44px;
   }
-  .nav-items .units-toggle {
+  .nav-items .units-toggle,
+  .nav-items .lang-toggle {
     margin-left: 0;
     align-self: stretch;
     justify-content: center;
   }
-  .nav-items .units-btn {
+  .nav-items .units-btn,
+  .nav-items .lang-btn {
     flex: 1;
     padding: 10px 12px;
     min-height: 36px;
+    font-size: 13px;
   }
   .nav-items .user-chip {
     margin-left: 0;

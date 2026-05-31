@@ -2997,6 +2997,37 @@ function applyUnitsButtons() {
     b.classList.toggle("active", b.dataset.units === u);
   });
 }
+
+// Highlight the active language in any quick-toggle (nav + auth screen).
+// Called both on initial load and after a language switch.
+function applyLangButtons() {
+  const cur = window.i18n?.getLang() || "en";
+  document.querySelectorAll("[data-lang-quick]").forEach(b => {
+    b.classList.toggle("active", b.dataset.langQuick === cur);
+  });
+}
+
+// Quick language toggle — visible in the nav (after login) AND on the
+// auth screen (so brand-new users in the wrong locale can switch before
+// signing in). Mirrors the Settings → Language card's behavior: persists,
+// re-applies static translations, re-renders any visible dynamic view.
+document.querySelectorAll("[data-lang-quick]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const lang = btn.dataset.langQuick;
+    if (!window.i18n || !lang || lang === window.i18n.getLang()) return;
+    window.i18n.setLang(lang);
+    window.i18n.applyI18n(document);
+    applyLangButtons();
+    // Re-render the visible dynamic view so labels update without a reload.
+    if (typeof refreshActiveView === "function") refreshActiveView();
+  });
+});
+// Apply initial active state on load
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", applyLangButtons);
+} else {
+  applyLangButtons();
+}
 document.querySelectorAll(".units-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     if (!session) return;
