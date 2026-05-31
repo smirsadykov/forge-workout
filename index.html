@@ -18,7 +18,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=77" />
+  <link rel="stylesheet" href="styles.css?v=78" />
 </head>
 <body>
   <header class="topbar">
@@ -518,6 +518,84 @@
     </div>
   </div>
 
+  <!-- Onboarding wizard — fires once per user on first-ever app load.
+       3 steps: equipment loads → program → first workout. Skip on any. -->
+  <div id="onboardModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardTitle">
+    <div class="modal-card onboard-card">
+      <div class="onboard-progress">
+        <div class="onboard-step-dot active" data-onboard-dot="1"></div>
+        <div class="onboard-step-dot" data-onboard-dot="2"></div>
+        <div class="onboard-step-dot" data-onboard-dot="3"></div>
+      </div>
+
+      <!-- Step 1: equipment loads -->
+      <div class="onboard-step" data-onboard-step="1">
+        <h2 id="onboardTitle" class="modal-title" data-i18n="onboard.step1Title">Welcome to FORGE</h2>
+        <p class="modal-sub" data-i18n="onboard.step1Sub">Tell us what loads you have so progressions actually match your equipment. You can edit these later in Settings.</p>
+        <div class="onboard-grid">
+          <label class="settings-field">
+            <span data-i18n="settings.maxDumbbell">Heaviest dumbbell (per hand)</span>
+            <div class="settings-input">
+              <input type="number" id="onboardMaxDb" min="0" step="0.5" placeholder="0" />
+              <span class="settings-unit" data-unit-label>kg</span>
+            </div>
+          </label>
+          <label class="settings-field">
+            <span data-i18n="settings.maxKettlebell">Heaviest kettlebell</span>
+            <div class="settings-input">
+              <input type="number" id="onboardMaxKb" min="0" step="0.5" placeholder="0" />
+              <span class="settings-unit" data-unit-label>kg</span>
+            </div>
+          </label>
+          <label class="settings-field checkbox">
+            <input type="checkbox" id="onboardHasBarbell" />
+            <span data-i18n="settings.hasBarbell">I have a barbell with at least 100 kg / 220 lb in plates available</span>
+          </label>
+        </div>
+        <div class="onboard-actions">
+          <button class="link-btn onboard-skip" data-onboard-action="skip" data-i18n="onboard.skip">Skip setup</button>
+          <button class="primary-btn" data-onboard-action="next" data-i18n="onboard.next">Continue →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: program (optional) -->
+      <div class="onboard-step hidden" data-onboard-step="2">
+        <h2 class="modal-title" data-i18n="onboard.step2Title">Want a program?</h2>
+        <p class="modal-sub" data-i18n="onboard.step2Sub">A program rotates through a goal-appropriate split (push/pull/legs for muscle growth, squat/bench/deadlift for strength, etc.) and auto-deloads near the end. Or skip and just freestyle workouts day by day.</p>
+        <div class="onboard-grid">
+          <label class="group-label" data-i18n="program.goal">Goal</label>
+          <div class="chip-row" id="onboardProgramGoal">
+            <button class="chip" data-prog-value="hypertrophy" data-i18n="program.goalHypertrophy">Muscle growth</button>
+            <button class="chip" data-prog-value="strength" data-i18n="program.goalStrength">Strength gain</button>
+            <button class="chip" data-prog-value="fat_loss" data-i18n="program.goalFatLoss">Fat loss</button>
+            <button class="chip" data-prog-value="endurance" data-i18n="program.goalEndurance">Endurance</button>
+          </div>
+          <label class="group-label" data-i18n="program.sessionsPerWeek">Sessions per week</label>
+          <div class="chip-row" id="onboardProgramSessions">
+            <button class="chip" data-prog-value="2">2</button>
+            <button class="chip" data-prog-value="3">3</button>
+            <button class="chip" data-prog-value="4">4</button>
+            <button class="chip" data-prog-value="5">5</button>
+          </div>
+        </div>
+        <div class="onboard-actions">
+          <button class="link-btn onboard-skip" data-onboard-action="skipProgram" data-i18n="onboard.skipProgram">No program, freestyle</button>
+          <button class="primary-btn" data-onboard-action="startProgram" data-i18n="onboard.startProgram">Start program →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: done -->
+      <div class="onboard-step hidden" data-onboard-step="3">
+        <div class="onboard-celebrate">🎯</div>
+        <h2 class="modal-title" data-i18n="onboard.step3Title">You're set.</h2>
+        <p class="modal-sub" data-i18n="onboard.step3Sub">Build your first session: pick a goal, equipment, target, and duration. The app handles the rest — exercise selection, weight suggestions, rest timing, progression.</p>
+        <div class="onboard-actions">
+          <button class="primary-btn big" data-onboard-action="finish" data-i18n="onboard.finish">Build my first workout →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="restTimer" class="rest-timer hidden">
     <div class="rest-timer-bar"><div id="restTimerFill" class="rest-timer-fill"></div></div>
     <div class="rest-timer-row">
@@ -537,10 +615,19 @@
     </div>
   </div>
 
-  <script src="config.js?v=77"></script>
-  <script src="supabase.min.js?v=77"></script>
-  <script src="i18n.js?v=77"></script>
-  <script src="exercises.js?v=77"></script>
-  <script src="app.js?v=77"></script>
+  <script src="config.js?v=78"></script>
+  <script src="supabase.min.js?v=78"></script>
+  <script src="i18n.js?v=78"></script>
+  <script src="exercises.js?v=78"></script>
+  <script src="app.js?v=78"></script>
+  <!-- Test harness — only loaded when ?test=1 is in the URL.
+       Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
+  <script>
+    if (new URLSearchParams(location.search).has("test")) {
+      const s = document.createElement("script");
+      s.src = "tests/run.js?v=78";
+      document.body.appendChild(s);
+    }
+  </script>
 </body>
 </html>

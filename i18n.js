@@ -326,6 +326,19 @@
     "section.cardio": { en: "CONDITIONING", ru: "КАРДИО" },
     "section.cooldown": { en: "COOL-DOWN", ru: "ЗАМИНКА" },
 
+    // Onboarding wizard (first-run, 3 steps)
+    "onboard.step1Title": { en: "Welcome to FORGE", ru: "Добро пожаловать в FORGE" },
+    "onboard.step1Sub": { en: "Tell us what loads you have so progressions actually match your equipment. You can edit these later in Settings.", ru: "Укажи доступные веса — прогрессии будут соответствовать твоему инвентарю. Можно изменить позже в Настройках." },
+    "onboard.step2Title": { en: "Want a program?", ru: "Нужна программа?" },
+    "onboard.step2Sub": { en: "A program rotates through a goal-appropriate split and auto-deloads near the end. Or skip and freestyle workouts day by day.", ru: "Программа ротирует сплит под цель и делает разгрузку под конец блока. Или пропусти и делай тренировки день за днём." },
+    "onboard.step3Title": { en: "You're set.", ru: "Готово." },
+    "onboard.step3Sub": { en: "Build your first session: pick a goal, equipment, target, and duration. The app handles the rest — exercise selection, weight suggestions, rest timing, progression.", ru: "Создай первую тренировку: выбери цель, инвентарь, зону и длительность. Остальное — подбор упражнений, веса, отдых, прогрессии — на нас." },
+    "onboard.skip": { en: "Skip setup", ru: "Пропустить настройку" },
+    "onboard.next": { en: "Continue →", ru: "Продолжить →" },
+    "onboard.skipProgram": { en: "No program, freestyle", ru: "Без программы" },
+    "onboard.startProgram": { en: "Start program →", ru: "Начать программу →" },
+    "onboard.finish": { en: "Build my first workout →", ru: "Создать первую тренировку →" },
+
     // ─── Guided mode ─────────────────────────────────────────────────
     "guided.exit": { en: "← Exit", ru: "← Выйти" },
     "guided.set": { en: "Set", ru: "Подход" },

@@ -1822,6 +1822,11 @@ function showApp(view = "generator") {
     refreshLevelBanner();
     coordinateBanners();
   }
+  // Onboarding wizard — fires once per user on first-ever app load.
+  // Runs BEFORE the sleep modal so a brand-new user sees onboarding first
+  // (otherwise the sleep prompt would overlay their welcome).
+  if (view !== "guided") maybeShowOnboarding();
+
   // Daily sleep modal — fires once per session, any view, if today is unrated.
   // Don't pop it during a Guided session (would interrupt mid-workout).
   if (view !== "guided") maybeShowDailySleepModal();
@@ -2041,6 +2046,115 @@ function refreshStreakBadge() {
 // Once shown in a session, it doesn't re-show even if user dismisses with
 // X (avoids spam). They can still rate later from Settings → Sleep.
 let _sleepModalShownThisSession = false;
+
+// ─── ONBOARDING ──────────────────────────────────────────────────────────
+// Fires once per user, on first-ever app load after signup/login. Marked
+// done via prefs.onboarded so it doesn't fire again across sessions/devices.
+// Three steps: equipment loads → optional program → drop into Generator.
+const _onboardDraft = { goal: null, sessions: null };
+
+function maybeShowOnboarding() {
+  if (!session) return;
+  const prefs = getPrefs(session.username);
+  if (prefs.onboarded) return;
+  const modal = document.getElementById("onboardModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  showOnboardStep(1);
+  wireOnboarding();
+}
+
+function showOnboardStep(n) {
+  document.querySelectorAll("[data-onboard-step]").forEach(s => {
+    s.classList.toggle("hidden", Number(s.dataset.onboardStep) !== n);
+  });
+  document.querySelectorAll("[data-onboard-dot]").forEach(d => {
+    const dn = Number(d.dataset.onboardDot);
+    d.classList.toggle("active", dn === n);
+    d.classList.toggle("done", dn < n);
+  });
+}
+
+function finishOnboarding() {
+  if (!session) return;
+  setPrefs(session.username, { onboarded: true });
+  const modal = document.getElementById("onboardModal");
+  if (modal) modal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+function wireOnboarding() {
+  const modal = document.getElementById("onboardModal");
+  if (!modal) return;
+
+  // Step 1 → Step 2: save equipment loads
+  modal.querySelector('[data-onboard-action="next"]')?.addEventListener("click", () => {
+    if (!session) return;
+    const dbInput = document.getElementById("onboardMaxDb");
+    const kbInput = document.getElementById("onboardMaxKb");
+    const bbCheck = document.getElementById("onboardHasBarbell");
+    const units = getPrefs(session.username).units || "kg";
+    const all = load(STORAGE_KEYS.loads, {});
+    all[session.username] = {
+      ...(all[session.username] || {}),
+      maxDumbbellKg: fromDisplay(Number(dbInput.value) || 0, units),
+      maxKettlebellKg: fromDisplay(Number(kbInput.value) || 0, units),
+      hasHeavyBarbell: bbCheck.checked,
+    };
+    save(STORAGE_KEYS.loads, all);
+    cloudPush(() => sb.from("user_loads").upsert({
+      user_id: session.userId,
+      max_dumbbell_kg: all[session.username].maxDumbbellKg,
+      max_kettlebell_kg: all[session.username].maxKettlebellKg,
+      has_heavy_barbell: !!all[session.username].hasHeavyBarbell,
+      updated_at: new Date().toISOString(),
+    }));
+    showOnboardStep(2);
+  });
+
+  // Skip from any step → mark done, close
+  modal.querySelectorAll('[data-onboard-action="skip"]').forEach(b => {
+    b.addEventListener("click", finishOnboarding);
+  });
+
+  // Step 2 chip selection (local draft, not formState)
+  modal.querySelectorAll("#onboardProgramGoal .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      modal.querySelectorAll("#onboardProgramGoal .chip").forEach(c => c.classList.remove("selected"));
+      chip.classList.add("selected");
+      _onboardDraft.goal = chip.dataset.progValue;
+    });
+  });
+  modal.querySelectorAll("#onboardProgramSessions .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      modal.querySelectorAll("#onboardProgramSessions .chip").forEach(c => c.classList.remove("selected"));
+      chip.classList.add("selected");
+      _onboardDraft.sessions = parseInt(chip.dataset.progValue, 10);
+    });
+  });
+
+  // Step 2 → Step 3: start program
+  modal.querySelector('[data-onboard-action="startProgram"]')?.addEventListener("click", () => {
+    if (!_onboardDraft.goal || !_onboardDraft.sessions) return;
+    startProgram(session.username, {
+      goal: _onboardDraft.goal,
+      weeksTotal: 6,            // sensible default for a first mesocycle
+      sessionsPerWeek: _onboardDraft.sessions,
+    });
+    showOnboardStep(3);
+  });
+  modal.querySelector('[data-onboard-action="skipProgram"]')?.addEventListener("click", () => {
+    showOnboardStep(3);
+  });
+
+  // Step 3: finish, drop into Generator. If a program was started,
+  // refreshProgramBanner will show the suggested first session.
+  modal.querySelector('[data-onboard-action="finish"]')?.addEventListener("click", () => {
+    finishOnboarding();
+    showApp("generator");
+  });
+}
 
 // Focus-trap helper for modal overlays. Keeps Tab/Shift+Tab inside the
 // modal so keyboard users can't accidentally land on hidden background

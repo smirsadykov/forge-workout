@@ -1861,6 +1861,88 @@ input {
   }
 }
 
+/* Onboarding wizard — first-run flow */
+.onboard-card {
+  max-width: 520px;
+  text-align: center;
+}
+.onboard-progress {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.onboard-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: all 0.2s;
+}
+.onboard-step-dot.active {
+  background: var(--accent);
+  width: 24px;
+}
+.onboard-step-dot.done {
+  background: var(--success);
+}
+.onboard-step.hidden {
+  display: none;
+}
+.onboard-step .modal-title {
+  margin-bottom: 8px;
+}
+.onboard-step .modal-sub {
+  margin-bottom: 22px;
+  text-align: left;
+}
+.onboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+.onboard-grid .settings-field {
+  margin: 0;
+}
+.onboard-grid .chip-row {
+  margin-top: 0;
+}
+.onboard-grid .group-label {
+  margin-bottom: -6px;
+}
+.onboard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.onboard-actions .primary-btn {
+  flex: 1;
+  max-width: 260px;
+}
+.onboard-actions .primary-btn.big {
+  flex: 1;
+  max-width: none;
+  padding: 16px;
+  font-size: 16px;
+}
+.onboard-skip {
+  font-size: 13px;
+}
+.onboard-celebrate {
+  font-size: 56px;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+@media (max-width: 480px) {
+  .onboard-actions { flex-direction: column-reverse; }
+  .onboard-actions .primary-btn,
+  .onboard-actions .link-btn { width: 100%; max-width: none; }
+}
+
 /* Workout section grouping (warmup / main / cooldown) — gives each
    workout a clear visual hierarchy instead of treating every exercise
    row as equally important. */
