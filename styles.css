@@ -2155,21 +2155,38 @@ input {
 .interval-phase[data-phase="rest"] ~ .interval-progress-bar .interval-progress-fill {
   background: #5dade2;
 }
+/* Action rows below the timer: 1 button → full-width centered;
+   ≥2 buttons → side-by-side on a single row. Previously column-stacked
+   everywhere which left Pause/Stop awkwardly stacked vertically on
+   mobile despite plenty of horizontal room. */
 .interval-actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  justify-content: center;
 }
 .interval-actions .primary-btn,
-.interval-actions .secondary-btn {
-  min-width: 200px;
+.interval-actions .secondary-btn,
+.interval-actions .ghost-btn,
+.interval-actions .link-btn {
+  flex: 1 1 calc(50% - 5px);
+  min-width: 0;
+  padding: 12px 14px;
+  font-size: 14px;
+  min-height: 44px;
 }
+/* Single-button row (Setup screen has just "▶ Start") → fill the row */
 .interval-actions .primary-btn.big {
+  flex-basis: 100%;
   padding: 16px 24px;
   font-size: 16px;
-  width: 100%;
-  max-width: 280px;
+}
+/* The "link" close on the Done screen pairs with "Run again" — keep
+   it slim so it doesn't shout louder than the primary action. */
+.interval-actions .link-btn {
+  flex-basis: auto;
+  flex-grow: 0;
 }
 .interval-done-icon {
   font-size: 64px;

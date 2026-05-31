@@ -18,7 +18,7 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=81" />
+  <link rel="stylesheet" href="styles.css?v=82" />
 </head>
 <body>
   <header class="topbar">
@@ -708,20 +708,20 @@
     </div>
   </div>
 
-  <script src="config.js?v=81"></script>
-  <script src="supabase.min.js?v=81"></script>
-  <script src="i18n.js?v=81"></script>
-  <script src="exercises.js?v=81"></script>
+  <script src="config.js?v=82"></script>
+  <script src="supabase.min.js?v=82"></script>
+  <script src="i18n.js?v=82"></script>
+  <script src="exercises.js?v=82"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=81"></script>
-  <script src="app.js?v=81"></script>
+  <script src="lib/utils.js?v=82"></script>
+  <script src="app.js?v=82"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
     if (new URLSearchParams(location.search).has("test")) {
       const s = document.createElement("script");
-      s.src = "tests/run.js?v=81";
+      s.src = "tests/run.js?v=82";
       document.body.appendChild(s);
     }
   </script>
