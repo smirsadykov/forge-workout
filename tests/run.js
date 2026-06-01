@@ -85,6 +85,50 @@
     });
   });
 
+  suite("isUnilateralExercise (per-side logging)", () => {
+    // These must be classified unilateral — they're either explicit one-side
+    // names, lateral/rotational movements, or carries/holds done per side.
+    const unilateral = [
+      "Kettlebell Single-Arm Row",
+      "Kettlebell Floor Press",
+      "Kettlebell Bulgarian Split Squat",
+      "Kettlebell Suitcase Deadlift",
+      "Kettlebell Side Bend",
+      "Dumbbell Side Bend",
+      "Side Plank",
+      "Side Plank Raises",
+      "Pallof Press",
+      "Wood Chop",
+      "Cable Wood Chop",
+      "Cossack Squat",
+      "Kettlebell Cossack Squat",
+      "Bulgarian Split Squat",
+      "Pistol Squat",
+      "Walking Lunges",
+      "Reverse Lunges",
+      "Kettlebell Renegade Row",
+      "Kettlebell Half Get-Up",
+    ];
+    // These must NOT be classified unilateral — they're bilateral two-arm/
+    // two-leg movements even if a unilateral variant exists separately.
+    const bilateral = [
+      "Kettlebell Bent-Over Row",       // two-bell row
+      "Bodyweight Squat",
+      "Bench Press",
+      "Deadlift",
+      "Plank",
+      "Push-Ups",
+      "Bird Dog",                       // alternating but bilateral pattern
+      "Dead Bug",                       // ditto
+    ];
+    for (const name of unilateral) {
+      test(`${name} → unilateral`, () => assert(isUnilateralExercise(name), `${name} should be unilateral`));
+    }
+    for (const name of bilateral) {
+      test(`${name} → bilateral`, () => assert(!isUnilateralExercise(name), `${name} should be bilateral`));
+    }
+  });
+
   suite("canDeliverStrength", () => {
     const find = n => EXERCISES.find(e => e.name === n);
     test("Loaded compounds qualify", () => assert(canDeliverStrength(find("Kettlebell Floor Press"))));
