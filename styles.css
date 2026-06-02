@@ -1904,6 +1904,83 @@ input {
   }
 }
 
+/* "This Week" panel — per-pattern weekly volume vs target */
+.this-week-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  margin-bottom: 20px;
+}
+.week-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.week-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 60px;
+  align-items: center;
+  gap: 12px;
+}
+.week-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.week-bar-wrap {
+  position: relative;
+  height: 14px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.week-bar {
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.3s ease;
+}
+.week-bar.deficit { background: linear-gradient(90deg, #ef4444, #f87171); }
+.week-bar.under   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.week-bar.ok      { background: linear-gradient(90deg, #10b981, #34d399); }
+.week-bar.over    { background: linear-gradient(90deg, #a855f7, #c084fc); }
+.week-target-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 1px;
+}
+.week-count {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.week-target {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.week-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 214, 51, 0.08);
+  border-left: 3px solid var(--accent, #FFD633);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.week-note.balanced {
+  background: rgba(16, 185, 129, 0.08);
+  border-left-color: #10b981;
+  color: var(--text-muted);
+}
+
 /* History insights panel */
 .insights-panel {
   background: var(--bg-card);

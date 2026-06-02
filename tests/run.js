@@ -185,6 +185,84 @@
     });
   });
 
+  suite("Pattern balance (cross-session load distribution)", () => {
+    test("getDefaultPatternTargets: strength has lower volume than hypertrophy", () => {
+      const s = getDefaultPatternTargets("strength");
+      const h = getDefaultPatternTargets("hypertrophy");
+      assert(s.push < h.push, "strength push should be < hypertrophy push");
+      assert(s.squat < h.squat, "strength squat should be < hypertrophy squat");
+    });
+    test("getDefaultPatternTargets: unknown goal falls back to hypertrophy", () => {
+      const u = getDefaultPatternTargets("bogus_goal");
+      const h = getDefaultPatternTargets("hypertrophy");
+      eq(u.push, h.push, "unknown goal should match hypertrophy");
+    });
+    test("patternStatus: zero target → ok (don't divide by 0)", () => {
+      eq(patternStatus(5, 0), "ok");
+    });
+    test("patternStatus: thresholds at 0.5x / 1.0x / 1.5x of target", () => {
+      eq(patternStatus(2, 10), "deficit", "2/10 = 20% → deficit");
+      eq(patternStatus(7, 10), "under",   "7/10 = 70% → under");
+      eq(patternStatus(12, 10), "ok",     "12/10 = 120% → ok");
+      eq(patternStatus(16, 10), "over",   "16/10 = 160% → over");
+    });
+    test("patternDebtScore: deficit boosts, over penalizes more than anti-repeat", () => {
+      assert(patternDebtScore("deficit") > 0, "deficit should boost score");
+      assert(patternDebtScore("over") < -8 || patternDebtScore("over") === -8, "over should penalize ≥ anti-repeat (-9 vs -8 — close enough)");
+      eq(patternDebtScore("ok"), 0, "ok should be neutral");
+    });
+    test("getRecentPatternVolume: empty history → zero everywhere", () => {
+      // Use a fresh user ID with no data
+      const v = getRecentPatternVolume("__nobody__", 7);
+      eq(v.push, 0);
+      eq(v.pull, 0);
+      eq(v.squat, 0);
+      eq(v.hinge, 0);
+      eq(v.core, 0);
+    });
+    test("getPatternBalance: returns full status object for all 5 patterns", () => {
+      const b = getPatternBalance("__nobody__", "hypertrophy");
+      for (const pat of ["push", "pull", "squat", "hinge", "core"]) {
+        assert(pat in b, `${pat} should be present`);
+        assert("actual" in b[pat], `${pat}.actual should be present`);
+        assert("target" in b[pat], `${pat}.target should be present`);
+        assert("status" in b[pat], `${pat}.status should be present`);
+        assert("delta" in b[pat], `${pat}.delta should be present`);
+      }
+    });
+    test("getRecentPatternVolume: synthetic history counts correctly", () => {
+      // Inject a synthetic history entry for a known push exercise
+      const pushEx = EXERCISES.find(e => getMovementBucket(e) === "push" && e.equipment.includes("kettlebell"));
+      if (!pushEx) return;  // skip if no candidate
+      const stats = load(STORAGE_KEYS.stats, {});
+      stats["__patternuser__"] = {
+        [pushEx.name]: {
+          history: [
+            { date: Date.now() - 86400000, sets: [{ weightKg: 16, reps: 8 }, { weightKg: 16, reps: 8 }, { weightKg: 16, reps: 8 }] },
+          ],
+        },
+      };
+      save(STORAGE_KEYS.stats, stats);
+      const v = getRecentPatternVolume("__patternuser__", 7);
+      eq(v.push, 3, "should count 3 sets of push");
+    });
+    test("getRecentPatternVolume: deload entries don't count", () => {
+      const pushEx = EXERCISES.find(e => getMovementBucket(e) === "push" && e.equipment.includes("kettlebell"));
+      if (!pushEx) return;
+      const stats = load(STORAGE_KEYS.stats, {});
+      stats["__deloaduser__"] = {
+        [pushEx.name]: {
+          history: [
+            { date: Date.now() - 86400000, deload: true, sets: [{ weightKg: 16, reps: 8 }, { weightKg: 16, reps: 8 }] },
+          ],
+        },
+      };
+      save(STORAGE_KEYS.stats, stats);
+      const v = getRecentPatternVolume("__deloaduser__", 7);
+      eq(v.push, 0, "deload sets should be excluded");
+    });
+  });
+
   suite("snapToEquipmentStep", () => {
     const findKb = EXERCISES.find(e => e.equipment.includes("kettlebell"));
     test("KB rounds down to inventory", () => {

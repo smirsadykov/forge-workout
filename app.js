@@ -717,6 +717,57 @@ function getRecentMuscleVolume(userId, daysBack = 14) {
   return byMuscle;
 }
 
+// ─── Cross-session pattern volume ────────────────────────────────────────
+// Sum working sets per movement pattern (push/pull/squat/hinge/core) over
+// the last N days. Drives the pattern-debt scoring + "This Week" panel —
+// the closest the algorithm gets to "remembering" which patterns have
+// been hammered recently. Unilateral sides count as 0.5 (matches
+// getRecentMuscleVolume convention).
+function getRecentPatternVolume(userId, daysBack = 7) {
+  const cutoff = Date.now() - daysBack * 86400000;
+  const stats = getStats(userId);
+  const byPattern = { push: 0, pull: 0, squat: 0, hinge: 0, core: 0 };
+  for (const [exName, stat] of Object.entries(stats)) {
+    const ex = EXERCISES.find(e => e.name === exName);
+    if (!ex) continue;
+    const bucket = getMovementBucket(ex);
+    if (!(bucket in byPattern)) continue;  // skip arm_iso, calf, mobility, etc.
+    for (const entry of (stat.history || [])) {
+      const n = normalizeHistoryEntry(entry);
+      if (n.date < cutoff) continue;
+      // Recovery / deload sessions don't count toward weekly load — they're
+      // explicit recovery work. Without this exclusion a deload week would
+      // look like normal volume and skew the debt calculation.
+      if (entry.deload || entry.goal === "recovery") continue;
+      const setCount = n.sets.reduce((c, s) => c + (s.side ? 0.5 : 1), 0);
+      byPattern[bucket] += setCount;
+    }
+  }
+  return byPattern;
+}
+
+// Compute the full balance picture: actual sets, target sets, status band,
+// and a per-pattern scoring delta. One call covers (a) the generation
+// scoring loop, (b) auto-deload decisions, and (c) the "This Week" UI.
+function getPatternBalance(userId, goal) {
+  const actual = getRecentPatternVolume(userId, 7);
+  const target = getDefaultPatternTargets(goal);
+  const result = {};
+  for (const pat of ["push", "pull", "squat", "hinge", "core"]) {
+    const a = actual[pat] || 0;
+    const t = target[pat] || 0;
+    const status = patternStatus(a, t);
+    result[pat] = {
+      actual: Math.round(a * 10) / 10,
+      target: t,
+      ratio: t > 0 ? a / t : 0,
+      status,
+      delta: patternDebtScore(status),
+    };
+  }
+  return result;
+}
+
 // Interpolate intensity (0-1) into a heat color. 0 = cold slate, 0.5 = orange,
 // 1 = bright red. No work at all returns the empty/dark color.
 function heatColor(intensity) {
@@ -2676,6 +2727,75 @@ function renderInsightsPanel(userId) {
   `;
 }
 
+// ─── THIS WEEK panel ─────────────────────────────────────────────────────
+// Shows per-pattern progress vs weekly target for the last 7 days, with a
+// note about which patterns the next generated workout will favor. Reads
+// the user's most recent workout goal as the target proxy (or falls back
+// to hypertrophy targets when no prior session). Lives at the top of the
+// History view so the user can see why the generator picks what it picks.
+function renderThisWeekPanel(userId) {
+  if (!userId) return "";
+  const workouts = getWorkouts(userId);
+  // Use the goal the user actually trains for. If nothing logged yet, the
+  // generic hypertrophy targets are a reasonable default.
+  const goal = workouts[0]?.inputs?.goal || "hypertrophy";
+  const balance = getPatternBalance(userId, goal);
+
+  // Pull patterns with any data OR any target for display.
+  const PATTERNS = ["push", "pull", "squat", "hinge", "core"];
+  const anyData = PATTERNS.some(p => balance[p].actual > 0);
+  if (!anyData) return "";  // No history → no panel (avoid clutter for new users)
+
+  const STATUS_CLASS = { deficit: "deficit", under: "under", ok: "ok", over: "over" };
+  const labels = {
+    push: t("patterns.push") || "Push",
+    pull: t("patterns.pull") || "Pull",
+    squat: t("patterns.squat") || "Squat",
+    hinge: t("patterns.hinge") || "Hinge",
+    core: t("patterns.core") || "Core",
+  };
+
+  const rows = PATTERNS.map(pat => {
+    const b = balance[pat];
+    // Bar fill capped at 150% so "over" bars stay visible without
+    // running off the edge — the status badge tells the rest of the story.
+    const pct = Math.min(150, Math.round(b.ratio * 100));
+    const cls = STATUS_CLASS[b.status] || "ok";
+    return `
+      <div class="week-row">
+        <div class="week-label">${labels[pat]}</div>
+        <div class="week-bar-wrap">
+          <div class="week-bar ${cls}" style="width:${pct}%"></div>
+          <div class="week-target-tick" style="left:${100 / 1.5}%"></div>
+        </div>
+        <div class="week-count">${b.actual}<span class="week-target">/${b.target}</span></div>
+      </div>
+    `;
+  }).join("");
+
+  // Highlight which patterns today's generation will favor (deficit/under)
+  // and which it will deload (over). Empty list = balanced week.
+  const favored = PATTERNS.filter(p => balance[p].delta > 0);
+  const deloaded = PATTERNS.filter(p => balance[p].delta < 0);
+  let note = "";
+  if (favored.length || deloaded.length) {
+    const parts = [];
+    if (favored.length) parts.push(`${t("week.favor") || "Today's workout will favor"}: <strong>${favored.map(p => labels[p]).join(", ")}</strong>`);
+    if (deloaded.length) parts.push(`${t("week.deload") || "Auto-deload"}: <strong>${deloaded.map(p => labels[p]).join(", ")}</strong>`);
+    note = `<div class="week-note">${parts.join(" · ")}</div>`;
+  } else {
+    note = `<div class="week-note balanced">${t("week.balanced") || "All patterns balanced — no bias applied"}</div>`;
+  }
+
+  return `
+    <div class="this-week-panel">
+      <h3 class="volume-chart-title">${t("week.title") || "This Week"} <span class="volume-chart-sub">${t("week.sub") || "last 7 days · sets per pattern"}</span></h3>
+      <div class="week-rows">${rows}</div>
+      ${note}
+    </div>
+  `;
+}
+
 // Templates picker — collapsed details on the Generator showing user's
 // saved templates. Loading a template either uses its exact exercises or
 // regenerates from its inputs ("fresh variety, same shape").
@@ -3812,6 +3932,19 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
     rest = Math.max(20, rest * 0.85);
   }
 
+  // Auto-deload: if this pattern is already 150%+ of weekly target, trim
+  // 1 set. The over-trained pattern was penalized in scoring but may still
+  // surface (e.g. when it's the only candidate for a required bucket).
+  // Reducing sets caps the damage without removing the pattern entirely —
+  // some work is still useful for technique/skill maintenance.
+  if (session?.username && !deload) {
+    const bal = getPatternBalance(session.username, goal);
+    const bucket = getMovementBucket(exercise);
+    if (bal[bucket]?.status === "over") {
+      sets = Math.max(2, sets - 1);
+    }
+  }
+
   // Load-aware rest scaling: the strength rest table (180-216s) assumes
   // the user is working at 80%+ 1RM, which needs full ATP-PCr recovery to
   // maintain output. But when the user's max equipment is light, even
@@ -4300,6 +4433,15 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     return diffOk && targetOk;
   });
 
+  // Cross-session load distribution: compute pattern-debt ONCE before
+  // scoring. Under-trained patterns (push/pull/squat/hinge/core) get a
+  // scoring boost; over-trained ones get penalized. This is the only
+  // place the generator considers what you've done in prior sessions,
+  // beyond the anti-repeat penalty for last workout's exact exercises.
+  const patternBalance = session?.username
+    ? getPatternBalance(session.username, goal)
+    : null;
+
   // Score each candidate. Higher = preferred.
   const scored = candidates.map(ex => {
     let score = 0;
@@ -4351,6 +4493,17 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     if (session?.username) {
       const sore = ex.muscle.reduce((s, m) => s + getCurrentSoreness(session.username, m), 0);
       score -= sore * 6;
+    }
+
+    // Pattern-debt: bias toward under-trained patterns from the last 7
+    // days. delta is +6 for deficit, +3 for under, 0 for ok, -8 for over.
+    // Magnitude tuned to nudge, not overwhelm — equipment match (+12) and
+    // goal-pattern bias (+6) still dominate the top picks.
+    if (patternBalance) {
+      const bucket = getMovementBucket(ex);
+      if (bucket in patternBalance) {
+        score += patternBalance[bucket].delta;
+      }
     }
 
     // Random jitter so equal-scored items shuffle naturally on each regen.
@@ -5502,12 +5655,14 @@ function attachWorkoutActions() {
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
   const items = getWorkouts(session.username);
+  const thisWeekHtml = renderThisWeekPanel(session.username);
   const insightsHtml = renderInsightsPanel(session.username);
   const heatmapHtml = renderBodyHeatmap(session.username);
   const volumeChartHtml = renderWeeklyVolumeChart(session.username, 8);
 
   if (!items.length) {
     el.historyList.innerHTML = `
+      ${thisWeekHtml}
       ${insightsHtml}
       ${heatmapHtml}
       ${volumeChartHtml}
@@ -5520,7 +5675,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
+  el.historyList.innerHTML = thisWeekHtml + insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
     const notes = (w.notes || "").trim();
     const notesPreview = notes
       ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`

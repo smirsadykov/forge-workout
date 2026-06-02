@@ -397,6 +397,18 @@
     "insights.noPRs": { en: "No PRs yet — keep logging.", ru: "Рекордов пока нет — продолжай тренироваться." },
     "insights.noFrequent": { en: "No exercises logged in 4 weeks.", ru: "За 4 недели ничего не залогировано." },
 
+    // This Week pattern balance
+    "week.title": { en: "This Week", ru: "Эта неделя" },
+    "week.sub": { en: "last 7 days · sets per pattern", ru: "за 7 дней · подходов по паттернам" },
+    "week.favor": { en: "Today's workout will favor", ru: "Сегодняшняя тренировка усилит" },
+    "week.deload": { en: "Auto-deload", ru: "Авто-разгрузка" },
+    "week.balanced": { en: "All patterns balanced — no bias applied", ru: "Все паттерны в норме — без сдвигов" },
+    "patterns.push": { en: "Push", ru: "Жим" },
+    "patterns.pull": { en: "Pull", ru: "Тяга" },
+    "patterns.squat": { en: "Squat", ru: "Присед" },
+    "patterns.hinge": { en: "Hinge", ru: "Наклон" },
+    "patterns.core": { en: "Core", ru: "Кор" },
+
     // ─── Guided mode ─────────────────────────────────────────────────
     "guided.exit": { en: "← Exit", ru: "← Выйти" },
     "guided.set": { en: "Set", ru: "Подход" },
