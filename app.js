@@ -6666,12 +6666,23 @@ function renderGuided() {
   // bar as the rest timer. Without this, Guided Mode left the user with no
   // way to time these sets — they had to use a phone clock.
   const setTimeSec = parseTimeReps(ex.reps);
+  // If THIS set's timer is already running in the floating bar, swap the
+  // primary-btn for a non-interactive "running" pill — tapping the start
+  // button while a timer runs would call stopRestTimer→startRestTimer
+  // and reset the in-progress hold, which is awful UX for plank/Beast Hold.
+  const timerRunning = setTimeSec && isTimerRunningFor(ex.name, guided.set);
   const timerHtml = setTimeSec
-    ? `<div class="guided-timer-row">
-        <button class="primary-btn timer-btn" data-guided-action="start-set-timer" data-duration="${setTimeSec}">
-          ▶ ${t("guided.startTimer")} · ${formatSecs(setTimeSec)}
-        </button>
-      </div>`
+    ? (timerRunning
+        ? `<div class="guided-timer-row">
+            <div class="primary-btn timer-btn running" aria-disabled="true">
+              ⏱ ${t("guided.timerRunning") || "Timer running"} — ${t("guided.seeBar") || "see bar below"}
+            </div>
+          </div>`
+        : `<div class="guided-timer-row">
+            <button class="primary-btn timer-btn" data-guided-action="start-set-timer" data-duration="${setTimeSec}">
+              ▶ ${t("guided.startTimer")} · ${formatSecs(setTimeSec)}
+            </button>
+          </div>`)
     : "";
 
   // For time-based exercises the reps "input" doesn't make sense (user can't
@@ -6735,7 +6746,14 @@ function renderGuided() {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const seconds = parseInt(btn.dataset.duration, 10) || 30;
-      startRestTimer(seconds, `${t("guided.setTimerLabel")} — ${ex.name}`);
+      const setIdxAtStart = guided.set;  // capture: closure must hold THIS set's idx
+      startRestTimer(seconds, `${t("guided.setTimerLabel")} — ${ex.name}`, {
+        kind: "set",
+        exName: ex.name,
+        setIdx: setIdxAtStart,
+      });
+      // Re-render so the button swaps to the "Timer running" pill
+      renderGuided();
     });
   });
   // Wire guided RIR picker (single-select, toggle off on re-click)
@@ -7049,12 +7067,25 @@ document.getElementById("guidedExitBtn").addEventListener("click", () => {
 });
 
 // ─── REST TIMER ──────────────────────────────────────────────────────────
+// One global timer object serves both set-timer (planks, holds, cardio
+// blocks) and rest-between-sets. `context` tracks WHAT this timer is for
+// so the guided card can render an accurate "running" indicator on the
+// Start-timer button (otherwise users tap it again and accidentally
+// reset their in-progress hold — see issue from Beast Hold screenshot).
 const restTimer = {
   total: 0,
   remaining: 0,
   intervalId: null,
   paused: false,
+  context: null,  // { kind: "set"|"rest", exName, setIdx }
 };
+
+function isTimerRunningFor(exName, setIdx) {
+  if (!restTimer.intervalId) return false;
+  const c = restTimer.context;
+  if (!c) return false;
+  return c.kind === "set" && c.exName === exName && c.setIdx === setIdx;
+}
 
 function formatTime(s) {
   const m = Math.floor(s / 60);
@@ -7062,11 +7093,12 @@ function formatTime(s) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
-function startRestTimer(seconds, label = "Rest") {
+function startRestTimer(seconds, label = "Rest", context = null) {
   stopRestTimer(true);
   restTimer.total = seconds;
   restTimer.remaining = seconds;
   restTimer.paused = false;
+  restTimer.context = context;
 
   const root = document.getElementById("restTimer");
   root.classList.remove("hidden", "urgent", "done");
@@ -7116,15 +7148,17 @@ function finishRestTimer() {
 }
 
 function stopRestTimer(immediate) {
+  const hadRunningSetTimer = restTimer.intervalId && restTimer.context?.kind === "set";
   if (restTimer.intervalId) clearInterval(restTimer.intervalId);
   restTimer.intervalId = null;
+  restTimer.context = null;
   const root = document.getElementById("restTimer");
-  if (immediate) {
-    root.classList.add("hidden");
-    root.classList.remove("urgent", "done");
-  } else {
-    root.classList.add("hidden");
-    root.classList.remove("urgent", "done");
+  root.classList.add("hidden");
+  root.classList.remove("urgent", "done");
+  // If a set-timer was running and we're in Guided Mode, re-render so
+  // the in-card button flips back from "Timer running" to "Start timer".
+  if (hadRunningSetTimer && document.getElementById("guidedView") && !document.getElementById("guidedView").classList.contains("hidden")) {
+    if (typeof renderGuided === "function" && currentWorkout) renderGuided();
   }
 }
 

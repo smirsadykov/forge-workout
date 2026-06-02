@@ -3036,6 +3036,17 @@ input {
   font-weight: 700;
   letter-spacing: 0.3px;
 }
+/* "Timer running" pill — non-interactive, distinct from the active start
+   button so the user can see at a glance that the timer is already going
+   and won't tap to reset it. */
+.guided-timer-row .timer-btn.running {
+  background: transparent;
+  color: var(--accent, #FFD633);
+  border: 1.5px dashed rgba(255, 214, 51, 0.55);
+  cursor: default;
+  pointer-events: none;
+  text-align: center;
+}
 
 .guided-actions {
   display: flex;

@@ -415,6 +415,8 @@
     "guided.restGroup": { en: "Rest — Round of group", ru: "Отдых — после круга" },
     "guided.last": { en: "Last:", ru: "Прошлая:" },
     "guided.startTimer": { en: "Start timer", ru: "Запустить таймер" },
+    "guided.timerRunning": { en: "Timer running", ru: "Таймер идёт" },
+    "guided.seeBar": { en: "see bar below", ru: "см. полосу ниже" },
     "guided.setTimerLabel": { en: "Set", ru: "Подход" },
     "guided.warmup": { en: "WARM-UP / MOBILITY", ru: "РАЗМИНКА / МОБИЛЬНОСТЬ" },
     "guided.power": { en: "POWER / BALLISTIC", ru: "СИЛА / ВЗРЫВНОЕ" },
