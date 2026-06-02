@@ -3409,8 +3409,14 @@ async function syncFromCloud() {
       save(STORAGE_KEYS.stats, all);
     }
     if (pfRes?.data) {
+      // MERGE, don't replace. Previously this clobbered everything else
+      // in prefs (onboarded, program, language, etc.) every time sync
+      // ran, because we only select `units` from the cloud. That's why
+      // onboarding kept re-firing on every view switch — sync wiped
+      // prefs.onboarded.
       const all = load(STORAGE_KEYS.prefs, {});
-      all[username] = { units: pfRes.data.units || "kg" };
+      const prev = all[username] || {};
+      all[username] = { ...prev, units: pfRes.data.units || prev.units || "kg" };
       save(STORAGE_KEYS.prefs, all);
     }
     if (ldRes?.data) {

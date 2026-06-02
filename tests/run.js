@@ -140,6 +140,24 @@
       const e = find("Pistol Squat") || find("One-Arm Push-Ups");
       if (e) assert(canDeliverStrength(e), `${e.name} should qualify`);
     });
+    // Isolation work, regardless of equipment, is not strength-capable —
+    // can't be loaded to the 80%+ 1RM territory where strength lives.
+    test("KB Side Bend (isolation) doesn't qualify", () => {
+      const e = find("Kettlebell Side Bend");
+      if (e) assert(!canDeliverStrength(e), "Side Bend is isolation, not strength");
+    });
+    test("KB Curl (isolation) doesn't qualify", () => {
+      const e = find("Kettlebell Curl");
+      if (e) assert(!canDeliverStrength(e), "Curl is isolation, not strength");
+    });
+    test("KB Halo (mobility) doesn't qualify", () => {
+      const e = find("Kettlebell Halo");
+      if (e) assert(!canDeliverStrength(e), "Halo is mobility, not strength");
+    });
+    test("KB Swing (ballistic) doesn't qualify", () => {
+      const e = find("Kettlebell Swing");
+      if (e) assert(!canDeliverStrength(e), "Swing is ballistic, not max-load strength");
+    });
   });
 
   suite("snapToEquipmentStep", () => {
