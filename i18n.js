@@ -48,6 +48,38 @@
     "auth.newPasswordLabel": { en: "New password", ru: "Новый пароль" },
     "auth.updatePassword": { en: "Update password", ru: "Сохранить пароль" },
 
+    // Auth errors (localized from raw Supabase messages)
+    "authErr.emailRate": {
+      en: "Too many sign-up attempts. Try again in about an hour, or log in if you already have an account.",
+      ru: "Слишком много попыток регистрации. Попробуй через час или войди, если аккаунт уже есть.",
+    },
+    "authErr.cooldown": {
+      en: "Wait {sec} seconds before trying again.",
+      ru: "Подожди {sec} секунд перед следующей попыткой.",
+    },
+    "authErr.badCreds": { en: "Wrong email or password.", ru: "Неверный email или пароль." },
+    "authErr.exists": {
+      en: "An account with this email already exists. Try logging in instead.",
+      ru: "Аккаунт с таким email уже есть. Попробуй войти.",
+    },
+    "authErr.notConfirmed": {
+      en: "Email not confirmed yet — check your inbox for the link.",
+      ru: "Email ещё не подтверждён — проверь почту.",
+    },
+    "authErr.weakPassword": {
+      en: "Password must be at least 6 characters.",
+      ru: "Пароль должен быть не короче 6 символов.",
+    },
+    "authErr.badEmail": {
+      en: "That doesn't look like a valid email address.",
+      ru: "Похоже, email указан неправильно.",
+    },
+    "authErr.network": {
+      en: "Network error — check your connection and try again.",
+      ru: "Ошибка сети — проверь подключение и попробуй снова.",
+    },
+    "authErr.unknown": { en: "Something went wrong. Try again.", ru: "Что-то пошло не так. Попробуй ещё раз." },
+
     // Email confirmation pending panel
     "confirm.title": { en: "Check your email", ru: "Проверь почту" },
     "confirm.bodyPre": { en: "We sent a confirmation link to", ru: "Мы отправили ссылку для подтверждения на" },

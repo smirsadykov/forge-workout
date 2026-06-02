@@ -3311,6 +3311,45 @@ el.confirmResendBtn?.addEventListener("click", async () => {
   }
 });
 
+// Map raw Supabase auth errors to localized friendly strings. Supabase
+// returns English-only error messages that bleed through to a Russian UI
+// otherwise. Keys match by case-insensitive substring so we catch both
+// the message text and any variations (Supabase has changed wording
+// across versions). Falls back to the raw message when unknown.
+function translateAuthError(rawMsg) {
+  if (!rawMsg) return t("authErr.unknown") || "Something went wrong. Try again.";
+  const msg = String(rawMsg).toLowerCase();
+  // Email send rate limit (free tier: ~3-4 per hour)
+  if (/email rate limit|over_email_send_rate_limit/.test(msg)) {
+    return t("authErr.emailRate") || "Too many sign-up attempts. Try again in about an hour, or sign in if you already have an account.";
+  }
+  // Per-request cooldown
+  const cooldown = msg.match(/(?:wait|every) (\d+) seconds?/);
+  if (cooldown) {
+    return (t("authErr.cooldown") || "Wait {sec} seconds before trying again.").replace("{sec}", cooldown[1]);
+  }
+  if (/invalid login credentials|invalid.*password/.test(msg)) {
+    return t("authErr.badCreds") || "Wrong email or password.";
+  }
+  if (/user already registered|already exists/.test(msg)) {
+    return t("authErr.exists") || "An account with this email already exists. Try logging in instead.";
+  }
+  if (/email not confirmed/.test(msg)) {
+    return t("authErr.notConfirmed") || "Email not confirmed yet — check your inbox for the link.";
+  }
+  if (/password.*(at least|short|weak|6 characters)/.test(msg)) {
+    return t("authErr.weakPassword") || "Password must be at least 6 characters.";
+  }
+  if (/invalid.*email|email.*invalid|invalid format/.test(msg)) {
+    return t("authErr.badEmail") || "That doesn't look like a valid email address.";
+  }
+  if (/network|fetch failed|failed to fetch/.test(msg)) {
+    return t("authErr.network") || "Network error — check your connection and try again.";
+  }
+  // Unknown — surface raw for diagnostic value but mark it as such
+  return rawMsg;
+}
+
 el.authForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   el.authError.textContent = "";
@@ -3347,7 +3386,7 @@ el.authForm.addEventListener("submit", async (e) => {
       }
       if (authMode === "signup") {
         if (result.error) {
-          el.authError.textContent = result.error.message;
+          el.authError.textContent = translateAuthError(result.error.message);
           return;
         }
         // If email confirmation is on, user must verify before signing in.
@@ -3360,7 +3399,7 @@ el.authForm.addEventListener("submit", async (e) => {
         }
       } else {
         if (result.error) {
-          el.authError.textContent = result.error.message;
+          el.authError.textContent = translateAuthError(result.error.message);
           return;
         }
       }
@@ -3444,7 +3483,7 @@ if (forgotBtn) {
         redirectTo: location.origin + location.pathname,
       });
       if (error) {
-        el.authError.textContent = error.message;
+        el.authError.textContent = translateAuthError(error.message);
         el.authError.style.color = "";
       } else {
         el.authError.textContent = `Reset link sent to ${email}. Check your inbox (and spam folder).`;
