@@ -3799,6 +3799,28 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
     rest = Math.max(20, rest * 0.85);
   }
 
+  // Load-aware rest scaling: the strength rest table (180-216s) assumes the
+  // user is working at 80%+ 1RM, which needs full ATP-PCr recovery to
+  // maintain output. But when the user's max equipment is light, the
+  // prescribed weight isn't actually near max-strength territory — sets
+  // feel like RIR 3+ even at "full effort", and long rest is just dead
+  // time. Scale rest down when the equipment is below the strength
+  // threshold for the exercise type.
+  if (goal === "strength" && session?.username && rest > 90) {
+    const loads = getLoads(session.username);
+    const usesKb = exercise.equipment?.includes("kettlebell");
+    const usesDb = exercise.equipment?.includes("dumbbells");
+    const usesBb = exercise.equipment?.includes("barbell");
+    let lightLoad = false;
+    if (usesKb && (loads.maxKettlebellKg || 0) > 0 && loads.maxKettlebellKg < 28) lightLoad = true;
+    else if (usesDb && (loads.maxDumbbellKg || 0) > 0 && loads.maxDumbbellKg < 25) lightLoad = true;
+    else if (usesBb && !loads.hasHeavyBarbell) lightLoad = true;
+    if (lightLoad) {
+      // Hypertrophy-style rest (90-120s) is appropriate for sub-max work.
+      rest = Math.max(75, Math.min(rest, 120));
+    }
+  }
+
   const isIso = exercise.pattern === "isolation";
   let repsRange = isIso ? p.isoReps : p.reps;
 
