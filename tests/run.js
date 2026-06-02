@@ -160,6 +160,31 @@
     });
   });
 
+  suite("nextRealisticWeight (cap at user max)", () => {
+    test("KB user at max 24kg, no inventory → stays at 24, no jump to 28", () => {
+      const all = load(STORAGE_KEYS.loads, {});
+      all["__test__"] = { ...(all["__test__"] || {}), maxKettlebellKg: 24, availableKettlebellsKg: null };
+      save(STORAGE_KEYS.loads, all);
+      // Pick a KB exercise that exists
+      const ex = EXERCISES.find(e => e.equipment.includes("kettlebell"));
+      if (!ex) return;
+      eq(nextRealisticWeight(24, ex.name, "__test__"), 24, "shouldn't suggest above maxKettlebellKg");
+    });
+    test("KB user with 24kg max, currently at 20kg → next is 24kg (within max)", () => {
+      const ex = EXERCISES.find(e => e.equipment.includes("kettlebell"));
+      if (!ex) return;
+      eq(nextRealisticWeight(20, ex.name, "__test__"), 24, "should step up to 24 (still within max)");
+    });
+    test("DB user with 18kg max → cap respected", () => {
+      const all = load(STORAGE_KEYS.loads, {});
+      all["__test__"] = { ...(all["__test__"] || {}), maxDumbbellKg: 18, maxKettlebellKg: 0 };
+      save(STORAGE_KEYS.loads, all);
+      const ex = EXERCISES.find(e => e.equipment.includes("dumbbells") && !e.equipment.includes("kettlebell"));
+      if (!ex) return;
+      eq(nextRealisticWeight(18, ex.name, "__test__"), 18, "shouldn't suggest above maxDumbbellKg");
+    });
+  });
+
   suite("snapToEquipmentStep", () => {
     const findKb = EXERCISES.find(e => e.equipment.includes("kettlebell"));
     test("KB rounds down to inventory", () => {

@@ -1428,10 +1428,10 @@ function snapToEquipmentStep(kg, ex, userId, roundDown) {
 function nextRealisticWeight(currentKg, exerciseName, userId) {
   const ex = EXERCISES.find(e => e.name === exerciseName);
   const eqs = ex?.equipment || [];
+  const loads = userId ? getLoads(userId) : {};
 
   // Honor user's actual kettlebell inventory if set
   if (eqs.includes("kettlebell") && userId) {
-    const loads = getLoads(userId);
     const inventory = loads.availableKettlebellsKg;
     if (Array.isArray(inventory) && inventory.length > 0) {
       const sorted = [...inventory].sort((a, b) => a - b);
@@ -1448,7 +1448,20 @@ function nextRealisticWeight(currentKg, exerciseName, userId) {
   else if (eqs.includes("barbell")) stepKg = 5;
   else if (eqs.includes("machine")) stepKg = 2.5;
   else return currentKg + progressionIncrementKg(ex?.pattern || "compound");
-  return Math.ceil((currentKg + 0.001) / stepKg) * stepKg;
+  const stepped = Math.ceil((currentKg + 0.001) / stepKg) * stepKg;
+
+  // CAP at the user's stated max for the equipment type. Without this we'd
+  // happily suggest 28kg KB to someone whose max KB is 24kg — they don't
+  // own a 28kg, so the suggestion is impossible. When at max, return the
+  // current weight so smartProgression switches to "extend reps" mode.
+  if (eqs.includes("kettlebell")) {
+    const maxKb = loads.maxKettlebellKg || 0;
+    if (maxKb > 0 && stepped > maxKb) return currentKg;
+  } else if (eqs.includes("dumbbells")) {
+    const maxDb = loads.maxDumbbellKg || 0;
+    if (maxDb > 0 && stepped > maxDb) return currentKg;
+  }
+  return stepped;
 }
 
 // Double progression with EXTENDED ranges — applied in every scenario.
@@ -3799,26 +3812,37 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
     rest = Math.max(20, rest * 0.85);
   }
 
-  // Load-aware rest scaling: the strength rest table (180-216s) assumes the
-  // user is working at 80%+ 1RM, which needs full ATP-PCr recovery to
-  // maintain output. But when the user's max equipment is light, the
-  // prescribed weight isn't actually near max-strength territory — sets
-  // feel like RIR 3+ even at "full effort", and long rest is just dead
-  // time. Scale rest down when the equipment is below the strength
-  // threshold for the exercise type.
+  // Load-aware rest scaling: the strength rest table (180-216s) assumes
+  // the user is working at 80%+ 1RM, which needs full ATP-PCr recovery to
+  // maintain output. But when the user's max equipment is light, even
+  // "full effort" doesn't approach max-strength territory — sets feel
+  // like RIR 3+, and long rest is just dead time. Scale rest aggressively
+  // down. Two tiers, based on how light the equipment is relative to
+  // the population near-max thresholds:
+  //   - moderately light  → cap rest at 120s (hypertrophy range)
+  //   - severely light    → cap rest at 75s  (effectively endurance work)
+  // Pattern matters too: pressing tolerates slightly heavier relative
+  // loads than rows/squats/hinges, so we cap row/squat/hinge tighter.
   if (goal === "strength" && session?.username && rest > 90) {
     const loads = getLoads(session.username);
     const usesKb = exercise.equipment?.includes("kettlebell");
     const usesDb = exercise.equipment?.includes("dumbbells");
     const usesBb = exercise.equipment?.includes("barbell");
-    let lightLoad = false;
-    if (usesKb && (loads.maxKettlebellKg || 0) > 0 && loads.maxKettlebellKg < 28) lightLoad = true;
-    else if (usesDb && (loads.maxDumbbellKg || 0) > 0 && loads.maxDumbbellKg < 25) lightLoad = true;
-    else if (usesBb && !loads.hasHeavyBarbell) lightLoad = true;
-    if (lightLoad) {
-      // Hypertrophy-style rest (90-120s) is appropriate for sub-max work.
-      rest = Math.max(75, Math.min(rest, 120));
+    const isPress = /press|push-?up|bench|fly/i.test(exercise.name || "");
+    let cap = null;
+    if (usesKb && (loads.maxKettlebellKg || 0) > 0) {
+      const max = loads.maxKettlebellKg;
+      if (max < 24)            cap = 75;             // very light — endurance range
+      else if (max < 32)       cap = isPress ? 120 : 90;  // light — sub-max for most patterns
+      // ≥32kg KB → strength territory for most users; no cap
+    } else if (usesDb && (loads.maxDumbbellKg || 0) > 0) {
+      const max = loads.maxDumbbellKg;
+      if (max < 20)            cap = 75;
+      else if (max < 30)       cap = isPress ? 120 : 90;
+    } else if (usesBb && !loads.hasHeavyBarbell) {
+      cap = isPress ? 120 : 90;
     }
+    if (cap != null) rest = Math.max(45, Math.min(rest, cap));
   }
 
   const isIso = exercise.pattern === "isolation";
