@@ -768,6 +768,134 @@ function getPatternBalance(userId, goal) {
   return result;
 }
 
+// ─── Difficulty readiness ────────────────────────────────────────────────
+// Detect when the user has outgrown their current difficulty tier and
+// should bump up to unlock more exercises + better prescription scaling.
+// Returns:
+//   { suggested: "intermediate"|"advanced"|null, signals: {...}, score: 0-4 }
+// The Generator banner only fires when score >= 3 of 4 signals to avoid
+// nagging on noisy data — same threshold used by similar fitness apps.
+function checkDifficultyReadiness(userId, currentDifficulty) {
+  if (!userId) return { suggested: null, signals: {}, score: 0 };
+  const workouts = getWorkouts(userId);
+  const stats = getStats(userId);
+  const loads = getLoads(userId);
+  const now = Date.now();
+
+  // Real workouts only — skip recovery/deload (they're not a fitness signal).
+  const real = workouts.filter(w =>
+    !w.inputs?.deload && w.inputs?.goal !== "recovery");
+
+  if (currentDifficulty === "beginner") {
+    // Beginner → Intermediate (any 3 of 4)
+    const fourWeeksAgo = now - 28 * 86400000;
+    const sixWeeksAgo  = now - 42 * 86400000;
+    const twoWeeksAgo  = now - 14 * 86400000;
+
+    // (1) Consistency: 8+ workouts over 4+ weeks
+    const recent4w = real.filter(w => w.createdAt >= fourWeeksAgo);
+    const consistency = recent4w.length >= 8;
+
+    // (2) Effort calibration: avg RIR ≤ 1 across last 4 strength sessions'
+    //     top sets. If we can't find RIR data, count as fail (conservative).
+    const strengthSessions = real
+      .filter(w => w.inputs?.goal === "strength")
+      .slice(0, 4);
+    let rirSum = 0, rirCount = 0;
+    for (const w of strengthSessions) {
+      for (const ex of (w.exercises || [])) {
+        const hist = stats[ex.name]?.history;
+        if (!hist) continue;
+        const session = hist.find(h => Math.abs((h.date || 0) - w.createdAt) < 86400000);
+        if (!session) continue;
+        const topSet = (session.sets || []).filter(s => typeof s.rir === "number").pop();
+        if (topSet) { rirSum += topSet.rir; rirCount++; }
+      }
+    }
+    const effortCalibrated = rirCount >= 3 && (rirSum / rirCount) <= 1;
+
+    // (3) Progression: 2+ weight bumps on main compounds in last 6 weeks.
+    //     A "bump" = a session's top weight > previous session's top weight
+    //     for the same exercise.
+    let bumps = 0;
+    for (const [exName, stat] of Object.entries(stats)) {
+      const ex = EXERCISES.find(e => e.name === exName);
+      if (!ex || ex.pattern !== "compound") continue;
+      const hist = (stat.history || [])
+        .filter(h => (h.date || 0) >= sixWeeksAgo)
+        .sort((a, b) => (a.date || 0) - (b.date || 0));
+      for (let i = 1; i < hist.length; i++) {
+        const prevMax = Math.max(...(hist[i-1].sets || []).map(s => s.weightKg || 0));
+        const currMax = Math.max(...(hist[i].sets || []).map(s => s.weightKg || 0));
+        if (currMax > prevMax + 0.5) bumps++;
+      }
+    }
+    const progression = bumps >= 2;
+
+    // (4) Pattern coverage: all 4 primary patterns trained in last 14 days
+    const coveredPatterns = new Set();
+    for (const w of real.filter(x => x.createdAt >= twoWeeksAgo)) {
+      for (const ex of (w.exercises || [])) {
+        const fullEx = EXERCISES.find(e => e.name === ex.name);
+        if (!fullEx) continue;
+        const bucket = getMovementBucket(fullEx);
+        if (["push","pull","squat","hinge"].includes(bucket)) coveredPatterns.add(bucket);
+      }
+    }
+    const patternCoverage = coveredPatterns.size === 4;
+
+    const signals = { consistency, effortCalibrated, progression, patternCoverage };
+    const score = Object.values(signals).filter(Boolean).length;
+    return { suggested: score >= 3 ? "intermediate" : null, signals, score };
+  }
+
+  if (currentDifficulty === "intermediate") {
+    // Intermediate → Advanced (any 3 of 4)
+    const twelveWeeksAgo = now - 84 * 86400000;
+    const eightWeeksAgo  = now - 56 * 86400000;
+    const fourWeeksAgo   = now - 28 * 86400000;
+
+    // (1) Tenure: 24+ workouts over 12+ weeks
+    const twelveWkReal = real.filter(w => w.createdAt >= twelveWeeksAgo);
+    const tenure = twelveWkReal.length >= 24;
+
+    // (2) Heavy equipment
+    const heavyEquip = (loads.maxKettlebellKg || 0) >= 32
+      || (loads.maxDumbbellKg || 0) >= 30
+      || !!loads.hasHeavyBarbell;
+
+    // (3) PRs in last 8 weeks. Count PR markers stored on workouts
+    let prsRecent = 0;
+    for (const w of real.filter(x => x.createdAt >= eightWeeksAgo)) {
+      prsRecent += (w.prs || []).length;
+    }
+    const prsActive = prsRecent >= 2;
+
+    // (4) Pattern coverage: all 4 primary trained 3+ times in last 28 days
+    const patternHits = { push: 0, pull: 0, squat: 0, hinge: 0 };
+    for (const w of real.filter(x => x.createdAt >= fourWeeksAgo)) {
+      const seen = new Set();
+      for (const ex of (w.exercises || [])) {
+        const fullEx = EXERCISES.find(e => e.name === ex.name);
+        if (!fullEx) continue;
+        const bucket = getMovementBucket(fullEx);
+        if (bucket in patternHits && !seen.has(bucket)) {
+          patternHits[bucket]++;
+          seen.add(bucket);
+        }
+      }
+    }
+    const patternCoverage = Object.values(patternHits).every(n => n >= 3);
+
+    const signals = { tenure, heavyEquip, prsActive, patternCoverage };
+    const score = Object.values(signals).filter(Boolean).length;
+    return { suggested: score >= 3 ? "advanced" : null, signals, score };
+  }
+
+  // Already advanced — no further bump
+  return { suggested: null, signals: {}, score: 0 };
+}
+
 // Interpolate intensity (0-1) into a heat color. 0 = cold slate, 0.5 = orange,
 // 1 = bright red. No work at all returns the empty/dark color.
 function heatColor(intensity) {
@@ -1974,7 +2102,48 @@ function refreshLevelBanner() {
     el.levelBanner.innerHTML = "";
     return;
   }
-  const rec = getLevelRecommendation(session.username);
+  // First try RPE-based recommendation (existing — needs rated workouts).
+  // Then fall back to behavior-based readiness check that doesn't need RPE.
+  let rec = getLevelRecommendation(session.username);
+  if (!rec) {
+    // Infer current difficulty from the mode of the last 8 workouts (any
+    // RPE state). If user has never logged, default to beginner.
+    const workouts = getWorkouts(session.username);
+    const recent = workouts.slice(0, 8);
+    let currentDiff = "beginner";
+    if (recent.length > 0) {
+      const counts = {};
+      for (const w of recent) {
+        const d = w.inputs?.difficulty;
+        if (d) counts[d] = (counts[d] || 0) + 1;
+      }
+      currentDiff = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "beginner";
+    }
+    const readiness = checkDifficultyReadiness(session.username, currentDiff);
+    if (readiness.suggested) {
+      // Build a reason string from the signals that fired
+      const labels = {
+        consistency:      t("ready.consistency")      || "8+ workouts in 4 weeks",
+        effortCalibrated: t("ready.effort")           || "RIR ≤ 1 on top sets",
+        progression:      t("ready.progression")      || "Adding weight on compounds",
+        patternCoverage:  t("ready.patternCoverage")  || "All 4 patterns covered",
+        tenure:           t("ready.tenure")           || "24+ workouts over 12 weeks",
+        heavyEquip:       t("ready.heavyEquip")       || "Heavy equipment unlocked",
+        prsActive:        t("ready.prs")              || "2+ PRs in last 8 weeks",
+      };
+      const firedSignals = Object.entries(readiness.signals)
+        .filter(([, v]) => v)
+        .map(([k]) => labels[k] || k);
+      rec = {
+        direction: "up",
+        from: currentDiff,
+        to: readiness.suggested,
+        reason: (t("ready.reason") || "{n}/4 readiness signals met — {signals}.")
+          .replace("{n}", String(readiness.score))
+          .replace("{signals}", firedSignals.join(" · ")),
+      };
+    }
+  }
   if (!rec) {
     el.levelBanner.classList.add("hidden");
     el.levelBanner.innerHTML = "";

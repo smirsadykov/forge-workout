@@ -160,6 +160,11 @@ const EXERCISES = [
   { name: "Kettlebell One-Arm Jerk", muscle: ["shoulders","triceps","core","quads"], equipment: ["kettlebell"], group: ["push","full_body","cardio"], pattern: "ballistic", difficulty: "intermediate", kbSport: true },
   { name: "Kettlebell Single-Arm Row", muscle: ["back","biceps","core"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Bent-Over Row", muscle: ["back","biceps"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
+  // Added 2026-06: beginner KB users only had 2 pull options before. These
+  // expand the rotation without raising difficulty — both are technique-
+  // friendly variations that don't require extra equipment beyond a KB.
+  { name: "Kettlebell Dead-Stop Row", muscle: ["back","biceps","core"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Pendlay Row", muscle: ["back","biceps"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Gorilla Row", muscle: ["back","biceps","core"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Renegade Row", muscle: ["back","core","biceps"], equipment: ["kettlebell"], group: ["pull","upper","core"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Curl", muscle: ["biceps"], equipment: ["kettlebell"], group: ["pull","upper"], pattern: "isolation", difficulty: "beginner" },
@@ -252,6 +257,14 @@ const EXERCISES = [
   { name: "Kettlebell Walking Lunge", muscle: ["quads","glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Cossack Squat", muscle: ["quads","glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower","mobility"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Suitcase Deadlift", muscle: ["glutes","hamstrings","back","core"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "beginner" },
+  // Added 2026-06: beginner KB users had ONLY Suitcase Deadlift as a hinge
+  // option — every session repeated the same lift. These add the basic
+  // two-hand KB deadlift (foundational pull-from-floor pattern), a supine
+  // glute-bridge variation (no spinal load — accessible recovery work), and
+  // a Good Morning (hip-hinge teaching tool with a light bell at chest).
+  { name: "Kettlebell Deadlift", muscle: ["glutes","hamstrings","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Glute Bridge", muscle: ["glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Good Morning", muscle: ["hamstrings","glutes","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Sumo Deadlift", muscle: ["glutes","hamstrings","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Romanian Deadlift", muscle: ["hamstrings","glutes","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Stiff-Leg Deadlift", muscle: ["hamstrings","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "intermediate" },

@@ -556,6 +556,19 @@
     "level.reasonDown": { en: "Your last {n} sessions averaged {avg}/5 effort — consistently maxing out. Dropping to {next} for a couple weeks will let you build back stronger.", ru: "Последние {n} тренировок в среднем на {avg}/5 — постоянно на максимуме. Снизься до уровня «{next}» на пару недель, чтобы потом вернуться сильнее." },
     "level.reasonUp": { en: "Your last {n} sessions averaged {avg}/5 effort — too easy. Try {next} for real progress.", ru: "Последние {n} тренировок в среднем на {avg}/5 — слишком легко. Попробуй уровень «{next}» для реального прогресса." },
 
+    // Difficulty readiness (behavior-based, no RPE needed)
+    "ready.reason": {
+      en: "You've hit {n}/4 readiness signals — {signals}. Time to unlock more exercises + heavier prescription.",
+      ru: "Сработало {n} из 4 признаков готовности — {signals}. Пора открыть новые упражнения и более тяжёлую программу.",
+    },
+    "ready.consistency":      { en: "8+ workouts in 4 weeks", ru: "8+ тренировок за 4 недели" },
+    "ready.effort":           { en: "RIR ≤ 1 on top sets",    ru: "RIR ≤ 1 на ключевых подходах" },
+    "ready.progression":      { en: "Adding weight on compounds", ru: "Прибавка веса на базовых" },
+    "ready.patternCoverage":  { en: "All 4 patterns covered",  ru: "Все 4 паттерна покрыты" },
+    "ready.tenure":           { en: "24+ workouts over 12 weeks", ru: "24+ тренировок за 12 недель" },
+    "ready.heavyEquip":       { en: "Heavy equipment unlocked", ru: "Используешь тяжёлый инвентарь" },
+    "ready.prs":              { en: "2+ PRs in last 8 weeks", ru: "2+ рекорда за 8 недель" },
+
     // Common controls
     "common.cancel": { en: "Cancel", ru: "Отмена" },
     "common.confirm": { en: "Confirm", ru: "Подтвердить" },
