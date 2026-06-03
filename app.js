@@ -772,6 +772,96 @@ function getPatternBalance(userId, goal) {
 // Per-session intensity replaced the difficulty concept — no readiness
 // nudges needed since the user just picks easy/normal/hard each session.
 
+// ─── Progression-tier plateau detection ──────────────────────────────────
+// Read the user's history and identify which exercises they've "capped" —
+// hit RIR ≤ 1 for 3+ sessions while at or near their stated max load for
+// the implement. Returns a map { family → { plateauedExercise, tier, sessions } }
+// so the generator's scoring loop can boost the next-tier variant of the
+// same family. This is how FORGE follows favor in history.
+//
+// Plateau criteria (any of, conservative — false positives waste a session):
+//   (A) 3+ consecutive sessions with avg top-set RIR ≤ 1
+//   (B) Top weight has been at or above 90% of user's stated max for the
+//       implement for at least 3 sessions (no room to add load → tier up)
+function detectPlateaus(userId) {
+  if (!userId || typeof PROGRESSION_INDEX === "undefined") return {};
+  const stats = getStats(userId);
+  const loads = getLoads(userId);
+  const result = {};  // family → { exName, tier, sessions, reason }
+
+  for (const [exName, stat] of Object.entries(stats)) {
+    const meta = PROGRESSION_INDEX[exName];
+    if (!meta) continue;  // exercise not in any progression chain
+
+    const hist = (stat.history || [])
+      .filter(h => h.date)
+      .sort((a, b) => (b.date || 0) - (a.date || 0));  // newest first
+    if (hist.length < 3) continue;
+
+    const last3 = hist.slice(0, 3);
+    // (A) RIR-based plateau
+    let rirSum = 0, rirCount = 0;
+    for (const h of last3) {
+      const topSet = (h.sets || []).filter(s => typeof s.rir === "number").pop();
+      if (topSet) { rirSum += topSet.rir; rirCount++; }
+    }
+    const rirPlateau = rirCount === 3 && (rirSum / rirCount) <= 1;
+
+    // (B) Load-cap plateau — top weight near user's stated max for implement
+    const ex = EXERCISES.find(e => e.name === exName);
+    if (!ex) continue;
+    let userMax = 0;
+    if (ex.equipment?.includes("kettlebell"))      userMax = loads.maxKettlebellKg || 0;
+    else if (ex.equipment?.includes("dumbbells"))  userMax = loads.maxDumbbellKg   || 0;
+    let loadCapped = false;
+    if (userMax > 0) {
+      const at90 = last3.every(h => {
+        const topW = Math.max(...(h.sets || []).map(s => s.weightKg || 0));
+        return topW >= userMax * 0.9;
+      });
+      loadCapped = at90;
+    }
+
+    if (!rirPlateau && !loadCapped) continue;
+
+    // Only retain the HIGHEST-tier plateau per family. If a user has
+    // plateaued both KB RDL (tier 2) and KB Suitcase Deadlift (tier 1)
+    // in hinge_kb, we want to promote past tier 2, not tier 1.
+    const existing = result[meta.family];
+    if (!existing || meta.tier > existing.tier) {
+      result[meta.family] = {
+        exName,
+        tier: meta.tier,
+        sessions: last3.length,
+        reason: rirPlateau ? "rir" : "load_cap",
+      };
+    }
+  }
+  return result;
+}
+
+// Given a family + the user's plateaued tier in that family, find the
+// next-tier exercise(s) the user has access to (equipment match). Returns
+// an array of candidate exercise names — scoring loop picks among them.
+function getNextTierForFamily(family, currentTier, availableEquipment) {
+  if (typeof PROGRESSION_FAMILIES === "undefined") return [];
+  const tiers = PROGRESSION_FAMILIES[family];
+  if (!tiers) return [];
+  // Walk upward through tiers until we find one with at least one
+  // candidate the user can actually do (equipment-match).
+  for (let t = currentTier + 1; t <= 5; t++) {
+    const names = tiers[t];
+    if (!names) continue;
+    const reachable = names.filter(name => {
+      const ex = EXERCISES.find(e => e.name === name);
+      if (!ex) return false;
+      return ex.equipment.some(e => (availableEquipment || []).includes(e));
+    });
+    if (reachable.length) return reachable;
+  }
+  return [];
+}
+
 // Interpolate intensity (0-1) into a heat color. 0 = cold slate, 0.5 = orange,
 // 1 = bright red. No work at all returns the empty/dark color.
 function heatColor(intensity) {
@@ -4443,6 +4533,21 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
     ? getPatternBalance(session.username, goal)
     : null;
 
+  // Progression chains: detect plateaus across all the user's logged
+  // exercises and build a set of "next-tier" exercise names that get a
+  // big scoring boost. When a user has capped KB Romanian Deadlift (tier
+  // 2 hinge) at their stated max, we surface KB Single-Arm RDL or
+  // Single-Leg RDL (tier 3 hinge) on their next strength workout —
+  // following their training history rather than rotating to a sibling.
+  const plateaus = session?.username ? detectPlateaus(session.username) : {};
+  const nextTierBoost = {};  // exName → { tier, family, fromExName }
+  for (const [family, p] of Object.entries(plateaus)) {
+    const candidates = getNextTierForFamily(family, p.tier, effectiveEquipment);
+    for (const name of candidates) {
+      nextTierBoost[name] = { family, tier: p.tier + 1, fromExName: p.exName, reason: p.reason };
+    }
+  }
+
   // Score each candidate. Higher = preferred.
   const scored = candidates.map(ex => {
     let score = 0;
@@ -4509,6 +4614,13 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
         score += patternBalance[bucket].delta;
       }
     }
+
+    // Progression boost: if this exercise is the next tier in a family
+    // the user has plateaued on, give it a +15 boost — big enough to
+    // override the workout-count complexity bias for new users with
+    // mature pattern history, and clear over goal-pattern bias too.
+    // The intent: surface the textbook next step, not a random sibling.
+    if (nextTierBoost[ex.name]) score += 15;
 
     // Random jitter so equal-scored items shuffle naturally on each regen.
     score += Math.random() * 4;
@@ -4621,13 +4733,20 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   // Update anti-repeat memory with this workout's exercises.
   lastPickedNames = new Set(picked.map(e => e.name));
 
-  const exercises = picked.map(ex => ({
-    name: ex.name,
-    muscle: ex.muscle,
-    pattern: ex.pattern,
-    unilateral: isUnilateralExercise(ex.name),
-    ...pickPrescription(goal, intensity, ex, style, deload, duration),
-  }));
+  const exercises = picked.map(ex => {
+    const boost = nextTierBoost[ex.name];
+    return {
+      name: ex.name,
+      muscle: ex.muscle,
+      pattern: ex.pattern,
+      unilateral: isUnilateralExercise(ex.name),
+      // progression: surface the chain that drove this pick so the card
+      // can render "Progression from {fromExName}". Only set when the
+      // exercise was promoted via plateau detection, not on every pick.
+      ...(boost ? { progression: boost } : {}),
+      ...pickPrescription(goal, intensity, ex, style, deload, duration),
+    };
+  });
 
   // Group into supersets/circuits if the style calls for it.
   if (style === "supersets") pairIntoGroups(exercises, 2);
@@ -5027,6 +5146,10 @@ function renderExerciseCard(ex, units, opts = {}) {
             ${renderExerciseExtras(ex.name)}
           </div>
           <div class="exercise-info">${ex.muscle.map(m => m.replace("_", " ")).join(" · ")}</div>
+          ${ex.progression ? `
+            <div class="progression-badge">↑ ${t("progression.label") || "Progression"}</div>
+            <div class="progression-note">${(t("progression.note") || "From your plateau at {from}. Next step in the chain.").replace("{from}", ex.progression.fromExName)}</div>
+          ` : ""}
           ${ex.technique ? `
             <div class="technique-badge">${ex.technique.name}</div>
             <div class="technique-note">${ex.technique.note}</div>

@@ -107,6 +107,11 @@
     "intensity.easy": { en: "Easy", ru: "Легко" },
     "intensity.normal": { en: "Normal", ru: "Норма" },
     "intensity.hard": { en: "Hard", ru: "Тяжело" },
+    "progression.label": { en: "Progression", ru: "Прогрессия" },
+    "progression.note": {
+      en: "From your plateau at {from}. Next step in the chain.",
+      ru: "Сменили на следующий шаг после плато на {from}.",
+    },
     "gen.difficulty": { en: "Difficulty", ru: "Уровень" },
     "gen.style": { en: "Style", ru: "Стиль" },
     "gen.styleHint": {

@@ -37,6 +37,8 @@ const EXERCISES = [
   { name: "Kettlebell Z-Press", muscle: ["shoulders","core","triceps"], equipment: ["kettlebell","dumbbells"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
   { name: "Kettlebell Arnold Press", muscle: ["shoulders","triceps"], equipment: ["kettlebell"], group: ["push","upper"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell See-Saw Press", muscle: ["shoulders","triceps","core"], equipment: ["kettlebell"], group: ["push","upper"], pattern: "compound", difficulty: "intermediate" },
+  // Double KB press — terminal tier for vertical press progression chain.
+  { name: "Kettlebell Double Press", muscle: ["shoulders","triceps","core"], equipment: ["kettlebell"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
   { name: "Kettlebell Halo", muscle: ["shoulders","core"], equipment: ["kettlebell"], group: ["mobility","upper"], pattern: "mobility", difficulty: "beginner" },
   { name: "Dips", muscle: ["chest","triceps"], equipment: ["bodyweight"], group: ["push","upper"], pattern: "compound", difficulty: "intermediate" },
   { name: "Weighted Dips", muscle: ["chest","triceps"], equipment: ["bodyweight","dumbbells"], group: ["push","upper"], pattern: "compound", difficulty: "advanced" },
@@ -268,6 +270,12 @@ const EXERCISES = [
   { name: "Kettlebell Sumo Deadlift", muscle: ["glutes","hamstrings","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Romanian Deadlift", muscle: ["hamstrings","glutes","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Stiff-Leg Deadlift", muscle: ["hamstrings","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "intermediate" },
+  // High-tier KB hinge variants — added 2026-06 to give the progression
+  // chain real terminal nodes for users who've capped a single bell at
+  // their stated max. Single-Arm RDL = unilateral offset overload, Double
+  // RDL = legitimate jump to 2× the bell weight.
+  { name: "Kettlebell Single-Arm RDL", muscle: ["hamstrings","glutes","back","core"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
+  { name: "Kettlebell Double Romanian Deadlift", muscle: ["hamstrings","glutes","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "advanced" },
   { name: "Kettlebell Pistol Squat Assist", muscle: ["quads","glutes","core"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "advanced" },
 
   // ─── CORE ───────────────────────────────────────────────────────────────
@@ -486,3 +494,68 @@ const COUNT_BY_DURATION = {
   60: 10,
   90: 12,
 };
+
+// ─── PROGRESSION CHAINS ──────────────────────────────────────────────────
+// Maps exercise → family + tier. When a user plateaus on a given exercise
+// (RIR ≤ 1 at their max load for 3+ sessions), the generator surfaces the
+// next tier in the same family instead of rotating to a sibling. This is
+// the "follow favor in history" mechanism: same chain, harder variant.
+//
+// Tiers are sport-science progressions, not arbitrary difficulty bumps:
+//   T1 = base bilateral / two-hand variant (easiest leverage)
+//   T2 = single-implement / unilateral variant (asymmetric load)
+//   T3 = single-side or instability variant (max-difficulty single bell)
+//   T4 = double-implement variant (real load jump)
+//   T5 = explosive / fully advanced (Olympic-style)
+//
+// Adding a new family: pick a key (snake_case), list members by tier.
+// detectPlateaus + getNextTierForFamily live in app.js and read this map.
+const PROGRESSION_FAMILIES = {
+  hinge_kb: {
+    1: ["Kettlebell Suitcase Deadlift", "Kettlebell Deadlift", "Kettlebell Glute Bridge", "Kettlebell Good Morning"],
+    2: ["Kettlebell Sumo Deadlift", "Kettlebell Romanian Deadlift", "Kettlebell Stiff-Leg Deadlift"],
+    3: ["Single-Leg Romanian Deadlift", "Kettlebell Single-Arm RDL"],
+    4: ["Kettlebell Double Romanian Deadlift"],
+  },
+  squat_kb: {
+    1: ["Goblet Squat", "Kettlebell Sumo Squat", "Kettlebell Lunge", "Kettlebell Reverse Lunge", "Kettlebell Step-Up", "Kettlebell Lateral Lunge", "Kettlebell Curtsy Lunge", "Kettlebell Pause Squat", "Kettlebell Walking Lunge"],
+    2: ["Kettlebell Front Squat", "Kettlebell Racked Lunge", "Kettlebell Bulgarian Split Squat", "Kettlebell Cossack Squat"],
+    3: ["Kettlebell Pistol Squat Assist"],
+    4: ["Kettlebell Double Front Squat"],
+  },
+  vpress_kb: {
+    1: ["Kettlebell Overhead Press", "Kettlebell Arnold Press"],
+    2: ["Kettlebell See-Saw Press"],
+    3: ["Kettlebell Bottoms-Up Press", "Kettlebell Z-Press"],
+    4: ["Kettlebell Double Press"],
+  },
+  hpress_kb: {
+    1: ["Kettlebell Floor Press"],
+  },
+  hpull_kb: {
+    1: ["Kettlebell Bent-Over Row", "Kettlebell Dead-Stop Row", "Kettlebell Pendlay Row"],
+    2: ["Kettlebell Single-Arm Row"],
+    3: ["Kettlebell Gorilla Row"],
+    4: ["Kettlebell Renegade Row"],
+  },
+  ballistic_kb: {
+    1: ["Kettlebell Swing"],
+    2: ["Kettlebell Single-Arm Swing", "Kettlebell Clean"],
+    3: ["Kettlebell American Swing", "Kettlebell Half Snatch"],
+    4: ["Kettlebell Snatch", "Kettlebell Clean and Press"],
+  },
+};
+
+// Reverse index: exercise name → { family, tier }. Built once at module
+// load to make per-candidate lookups O(1) during generation scoring.
+const PROGRESSION_INDEX = (() => {
+  const idx = {};
+  for (const [family, tiers] of Object.entries(PROGRESSION_FAMILIES)) {
+    for (const [tier, names] of Object.entries(tiers)) {
+      for (const n of names) {
+        idx[n] = { family, tier: Number(tier) };
+      }
+    }
+  }
+  return idx;
+})();
