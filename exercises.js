@@ -240,6 +240,16 @@ const EXERCISES = [
   { name: "Kettlebell Racked Lunge", muscle: ["quads","glutes","core"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Bulgarian Split Squat", muscle: ["quads","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Step-Up", muscle: ["quads","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
+  // Beginner-accessible KB squat-bucket variations — added because users on
+  // beginner difficulty were stuck with 5 KB leg options (lunge, reverse
+  // lunge, goblet, sumo, step-up) and the rotation felt repetitive across
+  // sessions. These add frontal-plane (lateral), transverse-plane (curtsy),
+  // technique-focused (pause), and locomotor (walking) variety without
+  // raising the difficulty bar.
+  { name: "Kettlebell Lateral Lunge", muscle: ["quads","glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Curtsy Lunge", muscle: ["quads","glutes"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Pause Squat", muscle: ["quads","glutes","core"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
+  { name: "Kettlebell Walking Lunge", muscle: ["quads","glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Cossack Squat", muscle: ["quads","glutes","hamstrings"], equipment: ["kettlebell"], group: ["legs","lower","mobility"], pattern: "compound", difficulty: "intermediate" },
   { name: "Kettlebell Suitcase Deadlift", muscle: ["glutes","hamstrings","back","core"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "beginner" },
   { name: "Kettlebell Sumo Deadlift", muscle: ["glutes","hamstrings","back"], equipment: ["kettlebell"], group: ["legs","lower","pull"], pattern: "compound", difficulty: "intermediate" },
