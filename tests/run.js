@@ -263,6 +263,57 @@
     });
   });
 
+  suite("Required bucket coverage (KB strength 30min full-body)", () => {
+    // Regression: user reported squats were missing from KB-strength-30min-full_body
+    // workouts when squat had recently accumulated >150% of weekly target.
+    // The picker was treating bucket balance as a ceiling-only, allowing
+    // "other"-bucket exercises (carries, get-ups) to outscore penalized squats.
+    test("Squat pattern survives squat-overload penalty", () => {
+      window.session = { username: "__bucketcov__", userId: "__bucketcov__" };
+      // Plant a history that makes squat status "over"
+      const squatExs = EXERCISES.filter(e => getMovementBucket(e) === "squat" && e.equipment.includes("kettlebell")).slice(0, 2);
+      const stats = load(STORAGE_KEYS.stats, {});
+      stats["__bucketcov__"] = {};
+      for (const ex of squatExs) {
+        stats["__bucketcov__"][ex.name] = {
+          history: [
+            { date: Date.now() - 2*86400000, sets: Array.from({length: 5}, () => ({ weightKg: 24, reps: 5 })) },
+          ],
+        };
+      }
+      save(STORAGE_KEYS.stats, stats);
+
+      let squatMissing = 0;
+      const ITER = 15;
+      for (let i = 0; i < ITER; i++) {
+        const w = generateWorkout({
+          goal: "strength", equipment: ["kettlebell"], target: "full_body",
+          duration: 30, difficulty: "intermediate", style: "standard",
+        });
+        const main = w.exercises.filter(e => e.pattern !== "mobility");
+        const buckets = new Set(main.map(e => getMovementBucket(e)));
+        if (!buckets.has("squat")) squatMissing++;
+      }
+      eq(squatMissing, 0, `squat went missing in ${squatMissing}/${ITER} runs despite required-bucket coverage`);
+    });
+    test("All 4 primary buckets present in full_body KB strength 30min", () => {
+      window.session = { username: "__bucketcov__", userId: "__bucketcov__" };
+      let allFourCount = 0;
+      const REQ = ["push", "pull", "squat", "hinge"];
+      const ITER = 10;
+      for (let i = 0; i < ITER; i++) {
+        const w = generateWorkout({
+          goal: "strength", equipment: ["kettlebell"], target: "full_body",
+          duration: 30, difficulty: "intermediate", style: "standard",
+        });
+        const main = w.exercises.filter(e => e.pattern !== "mobility");
+        const buckets = new Set(main.map(e => getMovementBucket(e)));
+        if (REQ.every(b => buckets.has(b))) allFourCount++;
+      }
+      eq(allFourCount, ITER, `only ${allFourCount}/${ITER} runs hit all 4 primary buckets`);
+    });
+  });
+
   suite("snapToEquipmentStep", () => {
     const findKb = EXERCISES.find(e => e.equipment.includes("kettlebell"));
     test("KB rounds down to inventory", () => {

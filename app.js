@@ -4566,10 +4566,41 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   const muscleCount = {};
   const bucketCount = {};
   const picked = [];
+  const pickedSet = new Set();  // O(1) membership for later passes
 
-  // Pass 1: strict — enforce muscle + bucket caps for diversity.
+  // Pass 0: REQUIRED bucket coverage. The original passes treated bucket
+  // balance as a CEILING (≤ perBucketCap per bucket) but not a FLOOR — when
+  // pattern-debt penalized one primary bucket enough that an "other"-bucket
+  // exercise (carry, get-up) outscored it, the required pattern silently went
+  // missing. For a 30min full_body KB strength session that meant 4 slots,
+  // 4 relevant buckets, but the algorithm could still skip squat entirely.
+  // Fix: for each relevant bucket, reserve a slot for its highest-scored
+  // exercise that fits the muscle cap. Pattern-debt still ranks within a
+  // bucket — the over-trained bucket gets its weakest candidate, not none.
+  if (relevantBuckets.length > 0 && relevantBuckets.length <= mainCount) {
+    for (const bucket of relevantBuckets) {
+      const bestInBucket = scored.find(({ ex }) => {
+        if (pickedSet.has(ex.name)) return false;
+        if (getMovementBucket(ex) !== bucket) return false;
+        const primary = ex.muscle[0];
+        return (muscleCount[primary] || 0) < maxPerMuscle;
+      });
+      if (bestInBucket) {
+        const ex = bestInBucket.ex;
+        picked.push(ex);
+        pickedSet.add(ex.name);
+        const primary = ex.muscle[0];
+        muscleCount[primary] = (muscleCount[primary] || 0) + 1;
+        bucketCount[bucket] = (bucketCount[bucket] || 0) + 1;
+      }
+    }
+  }
+
+  // Pass 1: strict — enforce muscle + bucket caps for diversity. Fills the
+  // remaining slots after Pass 0 reserved one per required bucket.
   for (const { ex } of scored) {
     if (picked.length >= mainCount) break;
+    if (pickedSet.has(ex.name)) continue;
     const primary = ex.muscle[0];
     const bucket = getMovementBucket(ex);
 
@@ -4581,6 +4612,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
       bucketCount[bucket]++;
     }
     picked.push(ex);
+    pickedSet.add(ex.name);
     muscleCount[primary]++;
   }
 
@@ -4590,10 +4622,11 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   if (picked.length < mainCount) {
     for (const { ex } of scored) {
       if (picked.length >= mainCount) break;
-      if (picked.includes(ex)) continue;
+      if (pickedSet.has(ex.name)) continue;
       const primary = ex.muscle[0];
       if ((muscleCount[primary] || 0) >= maxPerMuscle) continue;
       picked.push(ex);
+      pickedSet.add(ex.name);
       muscleCount[primary] = (muscleCount[primary] || 0) + 1;
     }
   }
@@ -4602,7 +4635,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   if (picked.length < mainCount) {
     for (const { ex } of scored) {
       if (picked.length >= mainCount) break;
-      if (!picked.includes(ex)) picked.push(ex);
+      if (!pickedSet.has(ex.name)) { picked.push(ex); pickedSet.add(ex.name); }
     }
   }
 
