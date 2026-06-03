@@ -99,11 +99,19 @@
     "gen.equipment": { en: "Equipment (select all you have)", ru: "Инвентарь (выбери всё доступное)" },
     "gen.target": { en: "Target", ru: "Зона" },
     "gen.duration": { en: "Duration", ru: "Длительность" },
+    "gen.intensity": { en: "Intensity", ru: "Интенсивность" },
+    "gen.intensityHint": {
+      en: "Easy: fewer sets, longer rest, RIR 3+ (recovery / light day). Normal: standard prescription. Hard: more sets, shorter rest, RIR 0–1 (push day).",
+      ru: "Легко: меньше подходов, дольше отдых, RIR 3+ (восстановительный/лёгкий день). Норма: стандартное предписание. Тяжело: больше подходов, короче отдых, RIR 0–1 (день максимума).",
+    },
+    "intensity.easy": { en: "Easy", ru: "Легко" },
+    "intensity.normal": { en: "Normal", ru: "Норма" },
+    "intensity.hard": { en: "Hard", ru: "Тяжело" },
     "gen.difficulty": { en: "Difficulty", ru: "Уровень" },
     "gen.style": { en: "Style", ru: "Стиль" },
     "gen.styleHint": {
-      en: "Intensity adds tempo + pause reps for real strength stimulus at any load. Supersets pair exercises with no rest between. Circuits chain 3 exercises and rest after the cycle — burns more calories per minute.",
-      ru: "Intensity добавляет темп и паузы для силового стимула на любом весе. Суперсеты — пара упражнений без отдыха. Круговые — 3 упражнения подряд, отдых после круга, больше калорий в минуту.",
+      en: "Tempo adds slow eccentrics + pause reps for real strength stimulus at any load. Supersets pair exercises with no rest between. Circuits chain 3 exercises and rest after the cycle — burns more calories per minute.",
+      ru: "«Темп» добавляет медленные эксцентрики и паузы для силового стимула на любом весе. Суперсеты — пара упражнений без отдыха. Круговые — 3 упражнения подряд, отдых после круга, больше калорий в минуту.",
     },
     "gen.generate": { en: "Generate Workout", ru: "Создать тренировку" },
     "gen.min": { en: "min", ru: "мин" },
@@ -194,7 +202,9 @@
 
     // Style
     "style.standard": { en: "Standard", ru: "Стандарт" },
-    "style.intensity": { en: "Intensity ⚡", ru: "Интенсивный ⚡" },
+    "style.tempo": { en: "Tempo ⚡", ru: "Темп ⚡" },
+    // legacy alias for old workouts saved with style="intensity"
+    "style.intensity": { en: "Tempo ⚡", ru: "Темп ⚡" },
     "style.supersets": { en: "Supersets", ru: "Суперсеты" },
     "style.circuits": { en: "Circuits", ru: "Круговые" },
 

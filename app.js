@@ -768,133 +768,9 @@ function getPatternBalance(userId, goal) {
   return result;
 }
 
-// ─── Difficulty readiness ────────────────────────────────────────────────
-// Detect when the user has outgrown their current difficulty tier and
-// should bump up to unlock more exercises + better prescription scaling.
-// Returns:
-//   { suggested: "intermediate"|"advanced"|null, signals: {...}, score: 0-4 }
-// The Generator banner only fires when score >= 3 of 4 signals to avoid
-// nagging on noisy data — same threshold used by similar fitness apps.
-function checkDifficultyReadiness(userId, currentDifficulty) {
-  if (!userId) return { suggested: null, signals: {}, score: 0 };
-  const workouts = getWorkouts(userId);
-  const stats = getStats(userId);
-  const loads = getLoads(userId);
-  const now = Date.now();
-
-  // Real workouts only — skip recovery/deload (they're not a fitness signal).
-  const real = workouts.filter(w =>
-    !w.inputs?.deload && w.inputs?.goal !== "recovery");
-
-  if (currentDifficulty === "beginner") {
-    // Beginner → Intermediate (any 3 of 4)
-    const fourWeeksAgo = now - 28 * 86400000;
-    const sixWeeksAgo  = now - 42 * 86400000;
-    const twoWeeksAgo  = now - 14 * 86400000;
-
-    // (1) Consistency: 8+ workouts over 4+ weeks
-    const recent4w = real.filter(w => w.createdAt >= fourWeeksAgo);
-    const consistency = recent4w.length >= 8;
-
-    // (2) Effort calibration: avg RIR ≤ 1 across last 4 strength sessions'
-    //     top sets. If we can't find RIR data, count as fail (conservative).
-    const strengthSessions = real
-      .filter(w => w.inputs?.goal === "strength")
-      .slice(0, 4);
-    let rirSum = 0, rirCount = 0;
-    for (const w of strengthSessions) {
-      for (const ex of (w.exercises || [])) {
-        const hist = stats[ex.name]?.history;
-        if (!hist) continue;
-        const session = hist.find(h => Math.abs((h.date || 0) - w.createdAt) < 86400000);
-        if (!session) continue;
-        const topSet = (session.sets || []).filter(s => typeof s.rir === "number").pop();
-        if (topSet) { rirSum += topSet.rir; rirCount++; }
-      }
-    }
-    const effortCalibrated = rirCount >= 3 && (rirSum / rirCount) <= 1;
-
-    // (3) Progression: 2+ weight bumps on main compounds in last 6 weeks.
-    //     A "bump" = a session's top weight > previous session's top weight
-    //     for the same exercise.
-    let bumps = 0;
-    for (const [exName, stat] of Object.entries(stats)) {
-      const ex = EXERCISES.find(e => e.name === exName);
-      if (!ex || ex.pattern !== "compound") continue;
-      const hist = (stat.history || [])
-        .filter(h => (h.date || 0) >= sixWeeksAgo)
-        .sort((a, b) => (a.date || 0) - (b.date || 0));
-      for (let i = 1; i < hist.length; i++) {
-        const prevMax = Math.max(...(hist[i-1].sets || []).map(s => s.weightKg || 0));
-        const currMax = Math.max(...(hist[i].sets || []).map(s => s.weightKg || 0));
-        if (currMax > prevMax + 0.5) bumps++;
-      }
-    }
-    const progression = bumps >= 2;
-
-    // (4) Pattern coverage: all 4 primary patterns trained in last 14 days
-    const coveredPatterns = new Set();
-    for (const w of real.filter(x => x.createdAt >= twoWeeksAgo)) {
-      for (const ex of (w.exercises || [])) {
-        const fullEx = EXERCISES.find(e => e.name === ex.name);
-        if (!fullEx) continue;
-        const bucket = getMovementBucket(fullEx);
-        if (["push","pull","squat","hinge"].includes(bucket)) coveredPatterns.add(bucket);
-      }
-    }
-    const patternCoverage = coveredPatterns.size === 4;
-
-    const signals = { consistency, effortCalibrated, progression, patternCoverage };
-    const score = Object.values(signals).filter(Boolean).length;
-    return { suggested: score >= 3 ? "intermediate" : null, signals, score };
-  }
-
-  if (currentDifficulty === "intermediate") {
-    // Intermediate → Advanced (any 3 of 4)
-    const twelveWeeksAgo = now - 84 * 86400000;
-    const eightWeeksAgo  = now - 56 * 86400000;
-    const fourWeeksAgo   = now - 28 * 86400000;
-
-    // (1) Tenure: 24+ workouts over 12+ weeks
-    const twelveWkReal = real.filter(w => w.createdAt >= twelveWeeksAgo);
-    const tenure = twelveWkReal.length >= 24;
-
-    // (2) Heavy equipment
-    const heavyEquip = (loads.maxKettlebellKg || 0) >= 32
-      || (loads.maxDumbbellKg || 0) >= 30
-      || !!loads.hasHeavyBarbell;
-
-    // (3) PRs in last 8 weeks. Count PR markers stored on workouts
-    let prsRecent = 0;
-    for (const w of real.filter(x => x.createdAt >= eightWeeksAgo)) {
-      prsRecent += (w.prs || []).length;
-    }
-    const prsActive = prsRecent >= 2;
-
-    // (4) Pattern coverage: all 4 primary trained 3+ times in last 28 days
-    const patternHits = { push: 0, pull: 0, squat: 0, hinge: 0 };
-    for (const w of real.filter(x => x.createdAt >= fourWeeksAgo)) {
-      const seen = new Set();
-      for (const ex of (w.exercises || [])) {
-        const fullEx = EXERCISES.find(e => e.name === ex.name);
-        if (!fullEx) continue;
-        const bucket = getMovementBucket(fullEx);
-        if (bucket in patternHits && !seen.has(bucket)) {
-          patternHits[bucket]++;
-          seen.add(bucket);
-        }
-      }
-    }
-    const patternCoverage = Object.values(patternHits).every(n => n >= 3);
-
-    const signals = { tenure, heavyEquip, prsActive, patternCoverage };
-    const score = Object.values(signals).filter(Boolean).length;
-    return { suggested: score >= 3 ? "advanced" : null, signals, score };
-  }
-
-  // Already advanced — no further bump
-  return { suggested: null, signals: {}, score: 0 };
-}
+// checkDifficultyReadiness removed alongside the difficulty chip (2026-06).
+// Per-session intensity replaced the difficulty concept — no readiness
+// nudges needed since the user just picks easy/normal/hard each session.
 
 // Interpolate intensity (0-1) into a heat color. 0 = cold slate, 0.5 = orange,
 // 1 = bright red. No work at all returns the empty/dark color.
@@ -1448,27 +1324,28 @@ function setLoads(userId, loads) {
   }));
 }
 
-// Decide whether the user's available equipment can support the chosen goal +
-// difficulty. Strength training needs near-maximal loads; with a single light
-// kettlebell or just bodyweight, it's mostly impossible past beginner.
+// Decide whether the user's available equipment can support the chosen goal
+// + intensity. Strength training at "normal" or "hard" intensity needs
+// near-maximal loads; with a single light kettlebell or bodyweight only,
+// it's mostly impossible. (At "easy" intensity, the rep targets are
+// hypertrophy-range so light loads work fine.)
 //
 // Returns null if everything is fine, otherwise an object describing the
 // mismatch (used to render the warning banner).
-function checkLoadAdequacy({ goal, equipment, difficulty, style }, loads) {
+function checkLoadAdequacy({ goal, equipment, intensity, style }, loads) {
   if (goal !== "strength") return null;
-  if (difficulty === "beginner") return null;
-  // Intensity Mode solves the light-load problem — no warning needed.
-  if (style === "intensity") return null;
+  if (intensity === "easy") return null;
+  // Tempo style solves the light-load problem — no warning needed.
+  if (style === "tempo" || style === "intensity") return null;
 
   // "Heavy" sources of resistance: loaded barbell, gym machines.
   const hasHeavyBarbell = equipment.includes("barbell") && loads.hasHeavyBarbell;
   const hasMachine = equipment.includes("machine");
   if (hasHeavyBarbell || hasMachine) return null;
 
-  // Thresholds for strength training (single-implement, near-max load needed).
-  // Intermediate strength: need at least a 20kg DB or 20kg KB.
-  // Advanced strength:     need at least a 30kg DB or 28kg KB.
-  const need = difficulty === "advanced"
+  // Single-implement strength threshold. At "hard" intensity (working
+  // near top of strength rep range), need a heavier minimum than "normal".
+  const need = intensity === "hard"
     ? { db: 30, kb: 28 }
     : { db: 20, kb: 20 };
 
@@ -1486,7 +1363,9 @@ function checkLoadAdequacy({ goal, equipment, difficulty, style }, loads) {
   } else {
     const units = session ? getPrefs(session.username).units : "kg";
     const limit = Math.max(maxDB, maxKB);
-    reason = t("warn.reasonTooLight", { weight: toDisplay(limit, units), units, diff: t(`diff.${difficulty}`) });
+    // Reuse the existing copy — interpolate "Strength" into the {diff}
+    // placeholder so the line stays readable without renaming i18n keys.
+    reason = t("warn.reasonTooLight", { weight: toDisplay(limit, units), units, diff: t(`intensity.${intensity}`) });
   }
 
   return {
@@ -1721,9 +1600,8 @@ function findAlternativeExercise(currentName, inputs, excludeNames) {
     if (exclude.has(ex.name)) return false;
     if (floorOnly && requiresFurniture(ex.name)) return false;
     const equipOk = ex.equipment.some(e => effEquip.includes(e));
-    const diffOk = matchesDifficulty(ex.difficulty, inputs.difficulty);
     const targetOk = matchesTarget(ex, inputs.target);
-    return equipOk && diffOk && targetOk;
+    return equipOk && targetOk;
   });
   if (!baseCandidates.length) return null;
 
@@ -2005,48 +1883,11 @@ function showApp(view = "generator") {
   if (view !== "guided") maybeShowDailySleepModal();
 }
 
-// Look at the user's recent RPE ratings and recommend bumping difficulty
-// up (sessions felt easy) or down (sessions felt all-out). Returns null if
-// not enough data yet.
-const DIFFICULTY_ORDER = ["beginner", "intermediate", "advanced"];
-
-function getLevelRecommendation(userId) {
-  const workouts = getWorkouts(userId);
-  // Only look at the last 5 workouts that have an RPE rating
-  const rated = workouts.filter(w => typeof w.rpe === "number").slice(0, 5);
-  if (rated.length < 2) return null;
-
-  const avgRpe = rated.reduce((s, w) => s + w.rpe, 0) / rated.length;
-  // Mode of difficulty across rated workouts (what they've been training at)
-  const diffCounts = {};
-  rated.forEach(w => {
-    const d = w.inputs?.difficulty;
-    if (d) diffCounts[d] = (diffCounts[d] || 0) + 1;
-  });
-  const currentDiff = Object.keys(diffCounts).sort((a, b) => diffCounts[b] - diffCounts[a])[0];
-  if (!currentDiff) return null;
-  const idx = DIFFICULTY_ORDER.indexOf(currentDiff);
-
-  if (avgRpe >= 4.3 && idx > 0) {
-    const to = DIFFICULTY_ORDER[idx - 1];
-    return {
-      direction: "down",
-      from: currentDiff,
-      to,
-      reason: t("level.reasonDown", { n: rated.length, avg: avgRpe.toFixed(1), next: t(`diff.${to}`) }),
-    };
-  }
-  if (avgRpe <= 2 && idx < DIFFICULTY_ORDER.length - 1) {
-    const to = DIFFICULTY_ORDER[idx + 1];
-    return {
-      direction: "up",
-      from: currentDiff,
-      to,
-      reason: t("level.reasonUp", { n: rated.length, avg: avgRpe.toFixed(1), next: t(`diff.${to}`) }),
-    };
-  }
-  return null;
-}
+// Level recommendation + readiness check were removed alongside the
+// difficulty chip (2026-06). Intensity replaces them — per-session
+// effort dial is self-explanatory and doesn't need a "ready to bump"
+// nudge. refreshLevelBanner stays as a no-op so coordinateBanners' list
+// of banner IDs still resolves cleanly.
 
 // After each banner's refresh runs, only the highest-priority visible one
 // stays open. Others collapse into a "more reasons ↓" chevron that, when
@@ -2095,82 +1936,13 @@ function coordinateBanners() {
 }
 
 function refreshLevelBanner() {
-  if (!session || !el.levelBanner) return;
-  // Don't show if user already picked a difficulty
-  if (formState.difficulty) {
+  // Removed alongside the difficulty chip (2026-06). Kept as a no-op so
+  // coordinateBanners() can still reference levelBanner by id without
+  // a null-check carve-out. Element stays hidden permanently.
+  if (el.levelBanner) {
     el.levelBanner.classList.add("hidden");
     el.levelBanner.innerHTML = "";
-    return;
   }
-  // First try RPE-based recommendation (existing — needs rated workouts).
-  // Then fall back to behavior-based readiness check that doesn't need RPE.
-  let rec = getLevelRecommendation(session.username);
-  if (!rec) {
-    // Infer current difficulty from the mode of the last 8 workouts (any
-    // RPE state). If user has never logged, default to beginner.
-    const workouts = getWorkouts(session.username);
-    const recent = workouts.slice(0, 8);
-    let currentDiff = "beginner";
-    if (recent.length > 0) {
-      const counts = {};
-      for (const w of recent) {
-        const d = w.inputs?.difficulty;
-        if (d) counts[d] = (counts[d] || 0) + 1;
-      }
-      currentDiff = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "beginner";
-    }
-    const readiness = checkDifficultyReadiness(session.username, currentDiff);
-    if (readiness.suggested) {
-      // Build a reason string from the signals that fired
-      const labels = {
-        consistency:      t("ready.consistency")      || "8+ workouts in 4 weeks",
-        effortCalibrated: t("ready.effort")           || "RIR ≤ 1 on top sets",
-        progression:      t("ready.progression")      || "Adding weight on compounds",
-        patternCoverage:  t("ready.patternCoverage")  || "All 4 patterns covered",
-        tenure:           t("ready.tenure")           || "24+ workouts over 12 weeks",
-        heavyEquip:       t("ready.heavyEquip")       || "Heavy equipment unlocked",
-        prsActive:        t("ready.prs")              || "2+ PRs in last 8 weeks",
-      };
-      const firedSignals = Object.entries(readiness.signals)
-        .filter(([, v]) => v)
-        .map(([k]) => labels[k] || k);
-      rec = {
-        direction: "up",
-        from: currentDiff,
-        to: readiness.suggested,
-        reason: (t("ready.reason") || "{n}/4 readiness signals met — {signals}.")
-          .replace("{n}", String(readiness.score))
-          .replace("{signals}", firedSignals.join(" · ")),
-      };
-    }
-  }
-  if (!rec) {
-    el.levelBanner.classList.add("hidden");
-    el.levelBanner.innerHTML = "";
-    return;
-  }
-  el.levelBanner.classList.remove("hidden");
-  const arrow = rec.direction === "up" ? "↑" : "↓";
-  el.levelBanner.innerHTML = `
-    <div class="level-banner-icon">${arrow}</div>
-    <div class="level-banner-content">
-      <div class="level-banner-title">${rec.direction === "up" ? t("level.titleUp") : t("level.titleDown")}</div>
-      <div class="level-banner-body">${rec.reason}</div>
-    </div>
-    <div class="level-banner-actions">
-      <button class="primary-btn" data-level-action="apply" data-target="${rec.to}">${t("level.try", { level: t(`diff.${rec.to}`) })}</button>
-      <button class="secondary-btn" data-level-action="dismiss">${t("level.skip")}</button>
-    </div>
-  `;
-  el.levelBanner.querySelector("[data-level-action='apply']").addEventListener("click", (e) => {
-    const target = e.target.dataset.target;
-    const chip = document.querySelector(`.chip[data-value="${target}"]`);
-    if (chip) chip.click();
-    el.levelBanner.classList.add("hidden");
-  });
-  el.levelBanner.querySelector("[data-level-action='dismiss']").addEventListener("click", () => {
-    el.levelBanner.classList.add("hidden");
-  });
 }
 
 // Pick a target the user hasn't trained recently. Body-part balance.
@@ -3798,7 +3570,11 @@ el.logoutBtn.addEventListener("click", async () => {
 });
 
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
-const formState = { goal: null, equipment: [], target: null, duration: null, difficulty: null, style: "standard", deload: false, sport: null };
+// `intensity` replaced the old `difficulty` chip (2026-06). Intensity
+// controls per-session prescription (sets, reps, rest, RIR target).
+// Exercise complexity is now soft-biased by workout count instead of
+// hard-gated by a user-picked level — see generateWorkout scoring.
+const formState = { goal: null, equipment: [], target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
 
 // ─── DELOAD DETECTION ────────────────────────────────────────────────────
 // Counts ISO weeks containing a saved workout, since the last marked deload.
@@ -3923,7 +3699,7 @@ function resetForm() {
   formState.equipment = [];
   formState.target = null;
   formState.duration = null;
-  formState.difficulty = null;
+  formState.intensity = "normal";
   formState.style = "standard";
   formState.sport = null;
   // Sport sub-selector goes back to hidden too
@@ -3937,14 +3713,14 @@ function resetForm() {
 // ─── LOAD WARNING ────────────────────────────────────────────────────────
 function refreshLoadWarning() {
   if (!session || !el.loadWarning) return;
-  const { goal, equipment, difficulty, style } = formState;
-  if (!goal || !equipment.length || !difficulty) {
+  const { goal, equipment, intensity, style } = formState;
+  if (!goal || !equipment.length) {
     el.loadWarning.classList.add("hidden");
     el.loadWarning.innerHTML = "";
     return;
   }
   const loads = getLoads(session.username);
-  const issue = checkLoadAdequacy({ goal, equipment, difficulty, style }, loads);
+  const issue = checkLoadAdequacy({ goal, equipment, intensity: intensity || "normal", style }, loads);
   if (!issue) {
     el.loadWarning.classList.add("hidden");
     el.loadWarning.innerHTML = "";
@@ -3952,7 +3728,7 @@ function refreshLoadWarning() {
   }
   el.loadWarning.classList.remove("hidden");
   el.loadWarning.innerHTML = `
-    <div class="load-warning-title">${t("warn.loadTitle", { diff: t(`diff.${difficulty}`) })}</div>
+    <div class="load-warning-title">${t("warn.loadTitle", { diff: t(`intensity.${intensity || "normal"}`) })}</div>
     <div class="load-warning-body">${issue.reason} ${issue.recommendation} <strong>${t("warn.intensityHint")}</strong></div>
     <div class="load-warning-actions">
       <button class="primary-btn" data-warn-action="switch-goal" data-goal="${issue.suggestedGoal}">${t("warn.switchTo", { goal: GOAL_LABELS[issue.suggestedGoal] })}</button>
@@ -3966,7 +3742,10 @@ function refreshLoadWarning() {
     if (chip) chip.click();
   });
   el.loadWarning.querySelector("[data-warn-action='use-intensity']").addEventListener("click", () => {
-    const chip = document.querySelector('.chip[data-value="intensity"]');
+    // "use intensity" historically meant the tempo style — wired to the
+    // tempo chip now (was renamed from "intensity" to disambiguate from
+    // the new per-session intensity chip).
+    const chip = document.querySelector('.chip[data-value="tempo"]');
     if (chip) chip.click();
   });
   el.loadWarning.querySelector("[data-warn-action='open-settings']").addEventListener("click", () => {
@@ -4071,30 +3850,30 @@ function displayReps(ex) {
 // inherit 5-set ballistic prescriptions that take 10+ minutes each.
 // maxSetsForDuration moved to lib/utils.js.
 
-function pickPrescription(goal, difficulty, exercise, style = "standard", deload = false, duration = 45) {
+function pickPrescription(goal, intensity, exercise, style = "standard", deload = false, duration = 45) {
   // Mobility exercises always use the mobility prescription regardless of
   // the workout's main goal — they're brief warm-ups, not the main work.
   const effectiveGoal = exercise.pattern === "mobility" ? "mobility" : goal;
   const p = PRESCRIPTIONS[effectiveGoal] || PRESCRIPTIONS.hypertrophy;
   let sets = randInt(p.sets[0], p.sets[1]);
   let rest = p.rest;
-  // Recovery goal disables intensity techniques (whole point is to be easy).
+  // Recovery goal disables tempo techniques (whole point is to be easy).
   // Strength goal with a strength-incompatible exercise (e.g. bodyweight
-  // squat) auto-applies intensity — without external load, time-under-
-  // tension (tempo, pause) is the only path to a strength-like stimulus.
+  // squat) auto-applies tempo — without external load, time-under-tension
+  // is the only path to a strength-like stimulus.
   const strengthMismatch = goal === "strength"
     && exercise.pattern !== "mobility"
     && exercise.pattern !== "conditioning"
     && exercise.pattern !== "ballistic"
     && !canDeliverStrength(exercise);
-  const intensity = goal !== "recovery" && (style === "intensity" || strengthMismatch);
+  const useTempoTechniques = goal !== "recovery" && (style === "tempo" || style === "intensity" || strengthMismatch);
 
   // Ballistic / explosive movements (KB swings, jumps, plyos) follow their own
   // template: moderate reps with explosive intent, generous rest for power
   // output. The strength rep scheme of "3-4 reps" is wrong here — swings are
   // about hip drive, not 1RM strength.
   if (exercise.pattern === "ballistic") {
-    sets = difficulty === "beginner" ? 3 : difficulty === "advanced" ? 5 : 4;
+    sets = intensity === "easy" ? 3 : intensity === "hard" ? 5 : 4;
     // Cap by duration so short workouts don't blow past the time budget.
     sets = Math.min(sets, maxSetsForDuration(duration));
     let lo, hi;
@@ -4131,11 +3910,13 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
     return { sets, reps, rest: roundRest(ballisticRest) };
   }
 
-  // Difficulty scales volume + rest.
-  if (difficulty === "beginner") {
+  // Intensity scales volume + rest (replaced the old difficulty-based math).
+  // Easy: fewer sets, longer rest. Hard: more sets, shorter rest. Normal:
+  // unchanged from the goal's base prescription.
+  if (intensity === "easy") {
     sets = Math.max(2, sets - 1);
     rest = rest * 1.2;
-  } else if (difficulty === "advanced") {
+  } else if (intensity === "hard") {
     sets = sets + 1;
     rest = Math.max(20, rest * 0.85);
   }
@@ -4189,7 +3970,7 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   const isIso = exercise.pattern === "isolation";
   let repsRange = isIso ? p.isoReps : p.reps;
 
-  if (difficulty === "advanced" && !isIso) {
+  if (intensity === "hard" && !isIso) {
     if (goal === "strength") repsRange = [Math.max(3, repsRange[0] - 1), repsRange[0]];
     if (goal === "hypertrophy") repsRange = [repsRange[0], repsRange[1] + 3];
   }
@@ -4197,16 +3978,16 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
   let reps = `${repsRange[0]}–${repsRange[1]}`;
   if (exercise.pattern === "mobility") reps = "30–60 sec";
   if (exercise.pattern === "conditioning" && goal !== "strength") {
-    const time = difficulty === "advanced" ? "40–60 sec" : difficulty === "beginner" ? "20–30 sec" : "30–45 sec";
+    const time = intensity === "hard" ? "40–60 sec" : intensity === "easy" ? "20–30 sec" : "30–45 sec";
     reps = time;
   }
 
-  // Intensity techniques: each rep is much harder due to tempo/pause, so reduce
+  // Tempo techniques: each rep is much harder due to tempo/pause, so reduce
   // reps and extend rest. Only applies to compound/isolation lifts (ballistic
   // / mobility / conditioning already returned above).
   let technique = null;
   let finisher = null;
-  if (intensity && (exercise.pattern === "compound" || exercise.pattern === "isolation")) {
+  if (useTempoTechniques && (exercise.pattern === "compound" || exercise.pattern === "isolation")) {
     technique = getIntensityTechnique(exercise);
     finisher = getIntensityFinisher(exercise);
     if (technique) {
@@ -4270,7 +4051,7 @@ function pickPrescription(goal, difficulty, exercise, style = "standard", deload
 
 // Cardio target produces one (or two) steady-state blocks rather than picking
 // six different cardio "exercises". Warm-up still prepended.
-function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
+function generateCardioWorkout({ goal, equipment, duration, intensity = "normal" }) {
   const warmupCount = duration >= 30 ? 2 : 1;
   const warmupMin = warmupCount * 2;
   const cardioMin = Math.max(duration - warmupMin, 8);
@@ -4283,7 +4064,7 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
     muscle: ex.muscle,
     pattern: ex.pattern,
     unilateral: isUnilateralExercise(ex.name),
-    ...pickPrescription(goal, difficulty, ex, "standard", false, duration),
+    ...pickPrescription(goal, intensity, ex, "standard", false, duration),
   }));
 
   const floorOnly = equipment.includes("floor_only");
@@ -4325,7 +4106,7 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal, equipment, target: "cardio", duration, difficulty, style: "standard", deload: false },
+    inputs: { goal, equipment, target: "cardio", duration, intensity, style: "standard", deload: false },
     exercises: [...warmupExercises, ...cardioExercises],
   };
 }
@@ -4334,7 +4115,7 @@ function generateCardioWorkout({ goal, equipment, duration, difficulty }) {
 // warmup → 1-3 time-based main lifts (continuous, no setting the bell down)
 // → optional accessory → cool-down. Each main lift is an 8-10 min block at
 // a target pace (reps/min), scaled by difficulty.
-function generateKbSportWorkout({ equipment, duration, difficulty }) {
+function generateKbSportWorkout({ equipment, duration, intensity = "normal" }) {
   // Number of main blocks fits the requested duration.
   let numBlocks;
   let perBlockMin;
@@ -4350,25 +4131,25 @@ function generateKbSportWorkout({ equipment, duration, difficulty }) {
       muscle: ex.muscle,
       pattern: ex.pattern,
       unilateral: isUnilateralExercise(ex.name),
-      ...pickPrescription("mobility", difficulty, ex, "standard", false, duration),
+      ...pickPrescription("mobility", intensity, ex, "standard", false, duration),
     }));
 
-  // Target pace per minute, scaled by skill. KB Sport competition paces
-  // run ~16-20/min advanced; beginners pace lower to maintain form for
-  // the full set.
-  const paceByDiff = {
-    beginner:     [10, 12],
-    intermediate: [14, 16],
-    advanced:     [17, 20],
+  // Target pace per minute, scaled by session intensity. KB Sport competition
+  // paces run ~16-20/min at high effort; easier days pace lower to maintain
+  // form for the full set.
+  const paceByIntensity = {
+    easy:   [10, 12],
+    normal: [14, 16],
+    hard:   [17, 20],
   };
-  const [paceLo, paceHi] = paceByDiff[difficulty] || paceByDiff.intermediate;
+  const [paceLo, paceHi] = paceByIntensity[intensity] || paceByIntensity.normal;
 
-  // Pick from kbSport-tagged lifts. Fall back to KB ballistic if the
-  // kbSport pool happens to be filtered out (e.g., difficulty cap).
+  // Pick from kbSport-tagged lifts. No difficulty filter — all KB Sport
+  // lifts are competition movements (Jerk, Long Cycle, Snatch) and any
+  // user opting into KB Sport already chose a technical discipline.
   const kbCandidates = EXERCISES.filter(e =>
     e.kbSport === true &&
-    e.equipment.includes("kettlebell") &&
-    matchesDifficulty(e.difficulty, difficulty)
+    e.equipment.includes("kettlebell")
   );
   const shuffled = shuffle(kbCandidates);
   if (shuffled.length === 0) return null;
@@ -4417,7 +4198,7 @@ function generateKbSportWorkout({ equipment, duration, difficulty }) {
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal: "kb_sport", equipment, target: "full_body", duration, difficulty, style: "standard", deload: false },
+    inputs: { goal: "kb_sport", equipment, target: "full_body", duration, intensity, style: "standard", deload: false },
     exercises: [...warmups, ...mainExercises, ...cooldown],
   };
 }
@@ -4428,23 +4209,22 @@ function generateKbSportWorkout({ equipment, duration, difficulty }) {
 // pool includes Nordic curls + tibialis raises + glute med work).
 //
 // Shape: 1-2 mobility warmups → 3-5 prep/prehab moves → 1 cooldown stretch.
-function generateSportPrepWorkout({ equipment, duration, difficulty, sport }) {
+function generateSportPrepWorkout({ equipment, duration, intensity = "normal", sport }) {
   const pool = SPORT_EXERCISES[sport];
   if (!pool || pool.length === 0) return null;
 
   const floorOnly = equipment.includes("floor_only");
   const effEquip = floorOnly ? ["bodyweight"] : equipment;
 
-  // Filter the sport's pool by available equipment + difficulty.
-  // For exercises that have multiple equipment options (e.g., "bodyweight,
-  // dumbbells"), pass if ANY available equipment fits. Floor-only also
-  // applies the furniture filter.
+  // Filter the sport's pool by equipment only. Sport-prep work is
+  // low-load activation by design — the difficulty filter that used to
+  // gate this is no longer meaningful (all the prehab moves are
+  // intentionally accessible).
   const candidates = pool
     .map(name => EXERCISES.find(e => e.name === name))
     .filter(e =>
       e &&
       e.equipment.some(eq => effEquip.includes(eq)) &&
-      matchesDifficulty(e.difficulty, difficulty) &&
       (!floorOnly || !requiresFurniture(e.name))
     );
 
@@ -4487,13 +4267,13 @@ function generateSportPrepWorkout({ equipment, duration, difficulty, sport }) {
     muscle: ex.muscle,
     pattern: ex.pattern,
     unilateral: isUnilateralExercise(ex.name),
-    ...pickPrescription("sport_prep", difficulty, ex, "standard", false, duration),
+    ...pickPrescription("sport_prep", intensity, ex, "standard", false, duration),
   });
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal: "sport_prep", equipment, target: "full_body", duration, difficulty, style: "standard", deload: false, sport },
+    inputs: { goal: "sport_prep", equipment, target: "full_body", duration, intensity, style: "standard", deload: false, sport },
     exercises: [
       ...warmups.map(toExercise),
       ...mainPicks.map(toExercise),
@@ -4588,24 +4368,36 @@ function pickWarmupExercises(target, count) {
   return scored.slice(0, count).map(s => s.ex);
 }
 
-function generateWorkout({ goal, equipment, target, duration, difficulty, style = "standard", deload = false, sport = null }) {
+function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, sport = null }) {
+  // Legacy alias: old workouts saved style="intensity" before the rename
+  // to style="tempo" — treat them as the same for any read paths that
+  // re-enter here. New writes always use "tempo".
+  if (style === "intensity") style = "tempo";
+
   // KB Sport goal: completely different shape (time-based continuous lifts).
   // Routed before cardio because cardio still treats it as sets×reps.
   if (goal === "kb_sport") {
-    return generateKbSportWorkout({ equipment, duration, difficulty });
+    return generateKbSportWorkout({ equipment, duration, intensity });
   }
   // Sport Prep goal: tailored prep + prehab pool keyed to the chosen sport.
   if (goal === "sport_prep") {
-    return generateSportPrepWorkout({ equipment, duration, difficulty, sport });
+    return generateSportPrepWorkout({ equipment, duration, intensity, sport });
   }
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
   if (target === "cardio") {
-    return generateCardioWorkout({ goal, equipment, duration, difficulty });
+    return generateCardioWorkout({ goal, equipment, duration, intensity });
   }
 
   const count = COUNT_BY_DURATION[duration] || 6;
-  const targetDiff = DIFF_ORDER[difficulty];
+  // User experience proxy from logged workout count. Replaces the old
+  // user-picked difficulty — newer users get a soft scoring bias toward
+  // simpler exercises without hard-gating anything. Numbers tuned so:
+  //   <8 workouts:   strong bias toward beginner (advanced -8)
+  //   8-25 workouts: gentle bias toward intermediate
+  //   25+ workouts:  no bias, all exercises compete equally
+  const userWorkoutCount = session?.username ? getWorkouts(session.username).length : 0;
+  const newnessFactor = Math.max(0, 1 - userWorkoutCount / 25);
 
   // "Floor only" mode: the floor_only chip is mutually exclusive with all
   // other equipment. Internally we treat it as bodyweight + a strict furniture
@@ -4636,9 +4428,10 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     const matchesUserEquip = ex.equipment.some(e => effectiveEquipment.includes(e));
     const isBwFallback = !userHasBodyweight && !floorOnly && ex.equipment.includes("bodyweight");
     if (!matchesUserEquip && !isBwFallback) return false;
-    const diffOk = matchesDifficulty(ex.difficulty, difficulty);
-    const targetOk = matchesTarget(ex, target);
-    return diffOk && targetOk;
+    // No more difficulty hard-filter — complexity is biased in scoring
+    // below via workout-count proxy. Lets advanced moves surface for
+    // experienced users without forcing a self-rating step.
+    return matchesTarget(ex, target);
   });
 
   // Cross-session load distribution: compute pattern-debt ONCE before
@@ -4662,11 +4455,14 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
       && !ex.equipment.some(e => effectiveEquipment.includes(e));
     if (isBwFallback) score -= 8;
 
-    // Strong bias toward exercises matching the chosen difficulty.
-    const diffGap = targetDiff - exDiff;       // 0 = exact, 1 = one below, 2 = two below
-    if (diffGap === 0) score += 12;
-    else if (diffGap === 1) score += 5;
-    else if (diffGap === 2) score += 1;
+    // Soft complexity bias by workout count (replaces the old user-picked
+    // difficulty hard filter). newnessFactor: 1.0 at 0 workouts, 0 at 25+.
+    // Intermediate gets -4, advanced gets -8 for brand-new users; bias
+    // diminishes linearly and disappears once the user has 25+ logged
+    // sessions. Equipment match (+12 effective when no fallback) still
+    // dominates the top-of-list ranking — this is a tiebreaker for newer
+    // users, not a hard wall.
+    score -= exDiff * 4 * newnessFactor;
 
     // Goal-pattern bias
     if ((goal === "strength" || goal === "hypertrophy") && ex.pattern === "compound") score += 6;
@@ -4830,7 +4626,7 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
     muscle: ex.muscle,
     pattern: ex.pattern,
     unilateral: isUnilateralExercise(ex.name),
-    ...pickPrescription(goal, difficulty, ex, style, deload, duration),
+    ...pickPrescription(goal, intensity, ex, style, deload, duration),
   }));
 
   // Group into supersets/circuits if the style calls for it.
@@ -4854,12 +4650,12 @@ function generateWorkout({ goal, equipment, target, duration, difficulty, style 
   // Bodyweight fallback exercises are already in the scored candidates list
   // (added in the candidate filter above with a score penalty). They flow
   // through to leftoverCandidates naturally for fillTimeBudget.
-  fillTimeBudget(exercises, duration, pickPrescription, goal, difficulty, style, deload, leftoverCandidates);
+  fillTimeBudget(exercises, duration, pickPrescription, goal, intensity, style, deload, leftoverCandidates);
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal, equipment, target, duration, difficulty, style, deload },
+    inputs: { goal, equipment, target, duration, intensity, style, deload },
     exercises,
   };
 }
@@ -4925,7 +4721,7 @@ function enforceTimeBudget(exercises, durationMin) {
 //   1. Adding a set to under-set exercises (cheaper, keeps variety low)
 //   2. Pulling more exercises from the candidate pool
 // Aims to land in the 85-110% band of the requested duration.
-function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficulty, style, deload, extraCandidates = [], bodyweightFallback = []) {
+function fillTimeBudget(exercises, durationMin, pickPrescription, goal, intensity, style, deload, extraCandidates = [], bodyweightFallback = []) {
   if (!durationMin) return;
   const budgetSec = durationMin * 60;
   const floor = budgetSec * 0.85;
@@ -4966,7 +4762,7 @@ function fillTimeBudget(exercises, durationMin, pickPrescription, goal, difficul
     let next = extraCandidates.find(c => !usedNames.has(c.name));
     if (!next) next = bodyweightFallback.find(c => !usedNames.has(c.name));
     if (!next) break;
-    const p = pickPrescription(goal, difficulty, next, style, deload, durationMin);
+    const p = pickPrescription(goal, intensity, next, style, deload, durationMin);
     exercises.push({
       name: next.name,
       muscle: next.muscle,
@@ -5355,12 +5151,18 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   const dateStr = new Date(workout.createdAt).toLocaleString();
   const units = session ? getPrefs(session.username).units : "kg";
 
+  // Show intensity (new) or fall back to legacy difficulty for old workouts.
+  const intensityTag = inputs.intensity
+    ? t(`intensity.${inputs.intensity}`) || (inputs.intensity[0].toUpperCase() + inputs.intensity.slice(1))
+    : inputs.difficulty
+      ? inputs.difficulty[0].toUpperCase() + inputs.difficulty.slice(1)
+      : null;
   const tags = [
     GOAL_LABELS[inputs.goal],
     TARGET_LABELS[inputs.target],
     `${inputs.duration} min`,
-    inputs.difficulty[0].toUpperCase() + inputs.difficulty.slice(1),
-  ].map(t => `<span class="tag">${t}</span>`).join("");
+    intensityTag,
+  ].filter(Boolean).map(tg => `<span class="tag">${tg}</span>`).join("");
 
   // Section headers (WARMUP / MAIN / COOLDOWN / CONDITIONING) are emitted
   // inside renderExerciseList based on each exercise's annotated section.
@@ -5369,8 +5171,8 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   // vs cooldown by their position relative to the last main work block.
   const exercisesHtml = `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
 
-  const intensityFlag = inputs.style === "intensity"
-    ? `<span class="intensity-flag">Intensity Mode</span>` : "";
+  const intensityFlag = (inputs.style === "tempo" || inputs.style === "intensity")
+    ? `<span class="intensity-flag">Tempo Mode</span>` : "";
   const deloadFlag = inputs.deload
     ? `<span class="deload-flag">${t("wo.deloadFlag")}</span>` : "";
 
@@ -5433,12 +5235,12 @@ let currentWorkout = null;
 
 el.generateBtn.addEventListener("click", () => {
   el.formError.textContent = "";
-  const { goal, equipment, target, duration, difficulty, sport } = formState;
+  const { goal, equipment, target, duration, intensity, sport } = formState;
   if (!goal) return el.formError.textContent = "Pick a goal.";
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";
   if (!duration) return el.formError.textContent = "Pick a duration.";
-  if (!difficulty) return el.formError.textContent = "Pick a difficulty.";
+  // Intensity defaults to "normal" — no need to error if user skipped it.
   if (goal === "sport_prep" && !sport) return el.formError.textContent = t("sport.pickFirst") || "Pick a sport first.";
   // KB Sport requires a kettlebell + intermediate skill — the lifts are
   // technical (Jerk, Long Cycle, Snatch) and don't have beginner variants
@@ -5447,15 +5249,12 @@ el.generateBtn.addEventListener("click", () => {
     if (!equipment.includes("kettlebell")) {
       return el.formError.textContent = t("kbsport.needKb") || "KB Sport needs a kettlebell. Add kettlebell to Equipment.";
     }
-    if (difficulty === "beginner") {
-      return el.formError.textContent = t("kbsport.needIntermediate") || "KB Sport lifts (Jerk, Long Cycle, Snatch) are technical. Pick Intermediate or Advanced; start with a lighter bell.";
-    }
   }
 
   currentWorkout = generateWorkout({
     goal, equipment, target,
     duration: parseInt(duration, 10),
-    difficulty,
+    intensity: intensity || "normal",
     style: formState.style || "standard",
     deload: !!formState.deload,
     sport,
@@ -5754,7 +5553,8 @@ function attachWorkoutActions() {
         name: alt.name,
         muscle: alt.muscle,
         pattern: alt.pattern,
-        ...pickPrescription(inputs.goal, inputs.difficulty, alt, inputs.style || "standard"),
+        // Prefer intensity (new); fall back to difficulty for legacy workouts
+        ...pickPrescription(inputs.goal, inputs.intensity || inputs.difficulty || "normal", alt, inputs.style || "standard"),
       };
       currentWorkout.exercises[idx] = newEx;
 
@@ -5929,8 +5729,8 @@ function renderHistory() {
           <div class="workout-meta">
             <span class="tag">${w.inputs.duration} min</span>
             <span class="tag">${w.exercises.length} exercises</span>
-            <span class="tag">${w.inputs.difficulty}</span>
-            ${w.inputs.style === "intensity" ? `<span class="tag">Intensity ⚡</span>` : ""}
+            ${w.inputs.intensity ? `<span class="tag">${t(`intensity.${w.inputs.intensity}`) || w.inputs.intensity}</span>` : (w.inputs.difficulty ? `<span class="tag">${w.inputs.difficulty}</span>` : "")}
+            ${(w.inputs.style === "tempo" || w.inputs.style === "intensity") ? `<span class="tag">Tempo ⚡</span>` : ""}
             ${w.inputs.deload ? `<span class="tag">Deload</span>` : ""}
           </div>
           ${notesPreview}

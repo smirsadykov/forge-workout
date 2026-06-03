@@ -288,7 +288,7 @@
       for (let i = 0; i < ITER; i++) {
         const w = generateWorkout({
           goal: "strength", equipment: ["kettlebell"], target: "full_body",
-          duration: 30, difficulty: "intermediate", style: "standard",
+          duration: 30, intensity: "normal", style: "standard",
         });
         const main = w.exercises.filter(e => e.pattern !== "mobility");
         const buckets = new Set(main.map(e => getMovementBucket(e)));
@@ -304,7 +304,7 @@
       for (let i = 0; i < ITER; i++) {
         const w = generateWorkout({
           goal: "strength", equipment: ["kettlebell"], target: "full_body",
-          duration: 30, difficulty: "intermediate", style: "standard",
+          duration: 30, intensity: "normal", style: "standard",
         });
         const main = w.exercises.filter(e => e.pattern !== "mobility");
         const buckets = new Set(main.map(e => getMovementBucket(e)));
@@ -381,16 +381,16 @@
     ];
     const targets = ["full_body", "upper", "lower", "push", "pull", "legs", "core"];
     const durations = [15, 30, 45, 60];
-    const difficulties = ["beginner", "intermediate", "advanced"];
+    const intensities = ["easy", "normal", "hard"];
 
     let total = 0, nullCount = 0, overrunCount = 0, untrackable = 0;
     for (const goal of goals)
     for (const equipment of equipments)
     for (const target of targets)
     for (const duration of durations)
-    for (const difficulty of difficulties) {
+    for (const intensity of intensities) {
       total++;
-      const w = generateWorkout({ goal, equipment, target, duration, difficulty, style: "standard" });
+      const w = generateWorkout({ goal, equipment, target, duration, intensity, style: "standard" });
       if (!w) { nullCount++; continue; }
       const estSec = estimateWorkoutSeconds(w.exercises);
       if (estSec > duration * 60 * 1.20) overrunCount++;
