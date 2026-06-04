@@ -1173,6 +1173,51 @@ input {
   margin-top: 4px;
 }
 
+/* Per-exercise "for other goals" advice — collapsed details panel
+   showing strength / endurance / fat-loss alternate prescriptions.
+   Educational alternative to forcing the user to pick a goal upfront. */
+.goal-advice {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.goal-advice > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 4px 0;
+  list-style: none;
+}
+.goal-advice > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.goal-advice[open] > summary::before {
+  transform: rotate(90deg);
+}
+.goal-advice > summary::-webkit-details-marker {
+  display: none;
+}
+.goal-advice-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0 5px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.goal-advice-row:last-child { border-bottom: none; }
+.goal-advice-label {
+  color: var(--text);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.goal-advice-rx {
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .intensity-flag {
   display: inline-flex;
   align-items: center;

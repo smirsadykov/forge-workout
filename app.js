@@ -3664,7 +3664,10 @@ el.logoutBtn.addEventListener("click", async () => {
 // controls per-session prescription (sets, reps, rest, RIR target).
 // Exercise complexity is now soft-biased by workout count instead of
 // hard-gated by a user-picked level — see generateWorkout scoring.
-const formState = { goal: null, equipment: [], target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
+// goal defaults to "standard" — the chip is preselected in index.html
+// and maps to "hypertrophy" internally at generate time. This makes the
+// form valid on first interaction without forcing a goal click.
+const formState = { goal: "standard", equipment: [], target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
 
 // ─── DELOAD DETECTION ────────────────────────────────────────────────────
 // Counts ISO weeks containing a saved workout, since the last marked deload.
@@ -3785,7 +3788,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
 });
 
 function resetForm() {
-  formState.goal = null;
+  formState.goal = "standard";
   formState.equipment = [];
   formState.target = null;
   formState.duration = null;
@@ -3939,6 +3942,18 @@ function displayReps(ex) {
 // Cap sets based on requested workout duration so short sessions don't
 // inherit 5-set ballistic prescriptions that take 10+ minutes each.
 // maxSetsForDuration moved to lib/utils.js.
+
+// Whether this exercise should get goal-alternate advice attached.
+// Skip mobility/warmups (no real strength alt makes sense), ballistic
+// (already uses a specialized template), and conditioning (cardio
+// blocks don't change shape with goal). Compound/isolation lifts and
+// loaded ballistic carries are the canonical candidates.
+function exercise_pattern_allows_alternates(exercise) {
+  if (!exercise) return false;
+  if (exercise.pattern === "mobility") return false;
+  if (exercise.pattern === "conditioning") return false;
+  return true;
+}
 
 function pickPrescription(goal, intensity, exercise, style = "standard", deload = false, duration = 45) {
   // Mobility exercises always use the mobility prescription regardless of
@@ -4735,6 +4750,21 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
 
   const exercises = picked.map(ex => {
     const boost = nextTierBoost[ex.name];
+    const main = pickPrescription(goal, intensity, ex, style, deload, duration);
+    // Per-card advice: compute strength/endurance/fat_loss alternates for
+    // the SAME exercise. Only attach when the session is the user-facing
+    // "Standard" default (goal=hypertrophy + style=standard) — for Recovery
+    // / Mobility / KB Sport / Sport Prep the alternates don't make sense
+    // (different session shape entirely). Skip for warmups/mobility too.
+    let goalAlternates = null;
+    if (goal === "hypertrophy" && style === "standard"
+        && exercise_pattern_allows_alternates(ex)) {
+      goalAlternates = {
+        strength:  pickPrescription("strength",  intensity, ex, "standard", deload, duration),
+        endurance: pickPrescription("endurance", intensity, ex, "standard", deload, duration),
+        fat_loss:  pickPrescription("fat_loss",  intensity, ex, "standard", deload, duration),
+      };
+    }
     return {
       name: ex.name,
       muscle: ex.muscle,
@@ -4744,7 +4774,8 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
       // can render "Progression from {fromExName}". Only set when the
       // exercise was promoted via plateau detection, not on every pick.
       ...(boost ? { progression: boost } : {}),
-      ...pickPrescription(goal, intensity, ex, style, deload, duration),
+      ...(goalAlternates ? { goalAlternates } : {}),
+      ...main,
     };
   });
 
@@ -5150,6 +5181,14 @@ function renderExerciseCard(ex, units, opts = {}) {
             <div class="progression-badge">↑ ${t("progression.label") || "Progression"}</div>
             <div class="progression-note">${(t("progression.note") || "From your plateau at {from}. Next step in the chain.").replace("{from}", ex.progression.fromExName)}</div>
           ` : ""}
+          ${ex.goalAlternates ? `
+            <details class="goal-advice">
+              <summary>${t("advice.title") || "For other goals"}</summary>
+              <div class="goal-advice-row"><span class="goal-advice-label">${t("advice.strength") || "Strength"}</span><span class="goal-advice-rx">${ex.goalAlternates.strength.sets} × ${ex.goalAlternates.strength.reps} · rest ${ex.goalAlternates.strength.rest}s · ${t("advice.strengthCue") || "push to RIR 0–1"}</span></div>
+              <div class="goal-advice-row"><span class="goal-advice-label">${t("advice.endurance") || "Endurance"}</span><span class="goal-advice-rx">${ex.goalAlternates.endurance.sets} × ${ex.goalAlternates.endurance.reps} · rest ${ex.goalAlternates.endurance.rest}s · ${t("advice.enduranceCue") || "light load, no failure"}</span></div>
+              <div class="goal-advice-row"><span class="goal-advice-label">${t("advice.fat_loss") || "Fat-loss"}</span><span class="goal-advice-rx">${ex.goalAlternates.fat_loss.sets} × ${ex.goalAlternates.fat_loss.reps} · rest ${ex.goalAlternates.fat_loss.rest}s · ${t("advice.fatLossCue") || "superset with cardio"}</span></div>
+            </details>
+          ` : ""}
           ${ex.technique ? `
             <div class="technique-badge">${ex.technique.name}</div>
             <div class="technique-note">${ex.technique.note}</div>
@@ -5358,7 +5397,13 @@ let currentWorkout = null;
 
 el.generateBtn.addEventListener("click", () => {
   el.formError.textContent = "";
-  const { goal, equipment, target, duration, intensity, sport } = formState;
+  let { goal, equipment, target, duration, intensity, sport } = formState;
+  // 2026-06 collapse: "standard" is the user-facing chip that maps to
+  // hypertrophy internally. All downstream logic still keys on the
+  // canonical goal names. The session-type chips that survived this
+  // collapse (recovery/mobility/kb_sport/sport_prep) pass through
+  // unchanged.
+  if (goal === "standard") goal = "hypertrophy";
   if (!goal) return el.formError.textContent = "Pick a goal.";
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";

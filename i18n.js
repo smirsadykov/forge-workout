@@ -121,15 +121,34 @@
     "gen.generate": { en: "Generate Workout", ru: "Создать тренировку" },
     "gen.min": { en: "min", ru: "мин" },
 
-    // Goals
+    // Session type — 2026-06: collapsed strength/hypertrophy/endurance/
+    // fat_loss into "Standard" (hypertrophy default). Per-card advice
+    // teaches users how to bias toward other goals without forcing them
+    // to pick one upfront.
+    "gen.sessionType": { en: "Session type", ru: "Тип сессии" },
+    "gen.sessionTypeHint": {
+      en: "Standard is hypertrophy programming — drives strength, muscle & work capacity simultaneously. Each exercise card shows how to adjust if you want a strength, endurance, or fat-loss bias.",
+      ru: "«Стандарт» — гипертрофия. Развивает силу, массу и работоспособность одновременно. На каждой карточке упражнения есть подсказки, как сместить акцент на силу, выносливость или сжигание жира.",
+    },
+    "goal.standard": { en: "Standard", ru: "Стандарт" },
+    // Legacy goal labels — kept so old saved workouts render readable in history.
     "goal.strength": { en: "Strength", ru: "Сила" },
-    "goal.hypertrophy": { en: "Hypertrophy", ru: "Масса" },
+    "goal.hypertrophy": { en: "Standard", ru: "Стандарт" },
     "goal.fat_loss": { en: "Fat Loss", ru: "Сжигание жира" },
     "goal.endurance": { en: "Endurance", ru: "Выносливость" },
     "goal.mobility": { en: "Mobility", ru: "Мобильность" },
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
     "goal.kb_sport": { en: "🔔 KB Sport", ru: "🔔 Гиревой спорт" },
     "goal.sport_prep": { en: "🏃 Sport Prep", ru: "🏃 Подготовка к спорту" },
+
+    // Per-card "For other goals" advice section
+    "advice.title": { en: "For other goals", ru: "Для других целей" },
+    "advice.strength": { en: "Strength", ru: "Сила" },
+    "advice.endurance": { en: "Endurance", ru: "Выносливость" },
+    "advice.fat_loss": { en: "Fat-loss", ru: "Сжигание жира" },
+    "advice.strengthCue": { en: "push to RIR 0–1", ru: "до RIR 0–1" },
+    "advice.enduranceCue": { en: "light load, no failure", ru: "лёгкий вес, без отказа" },
+    "advice.fatLossCue": { en: "superset with cardio", ru: "суперсет с кардио" },
     "gen.sport": { en: "Sport", ru: "Вид спорта" },
     "sport.running": { en: "Running", ru: "Бег" },
     "sport.cycling": { en: "Cycling", ru: "Велоспорт" },
