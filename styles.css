@@ -4798,6 +4798,46 @@ input:focus, select:focus, textarea:focus {
   line-height: 1.5;
 }
 
+/* History skeleton — shown while cloud sync is fetching the user's
+   workouts on a fresh device. Better than showing the empty state and
+   then flashing real data — the user sees a clear "loading" affordance
+   instead of "you have nothing" → "oh wait, you do". */
+.history-skeleton {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.skeleton-block {
+  height: 18px;
+  background: var(--bg-card-hover);
+  border-radius: 6px;
+  width: 100%;
+}
+.skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card-hover) 0%,
+    var(--bg-elevated) 50%,
+    var(--bg-card-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-loading-text {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  margin-top: 10px;
+}
+
 /* Large empty state with CTA — for "no workouts" view */
 .empty-state-large {
   padding: 60px 24px 48px;

@@ -179,10 +179,18 @@ function cloudPush(fn) {
 const syncState = { status: "idle", lastOk: 0, lastErr: 0 };
 
 function setSyncStatus(status) {
+  const prev = syncState.status;
   syncState.status = status;
   if (status === "ok") syncState.lastOk = Date.now();
   if (status === "error") syncState.lastErr = Date.now();
   renderSyncIndicator();
+  // Re-render History if sync just transitioned out of "syncing" — the
+  // user might have been looking at the skeleton state. Cheap to check
+  // since renderHistory is fast and idempotent.
+  if (prev === "syncing" && status !== "syncing"
+      && el?.historyView && !el.historyView.classList.contains("hidden")) {
+    if (typeof renderHistory === "function" && session) renderHistory();
+  }
 }
 
 function renderSyncIndicator() {
@@ -6510,12 +6518,20 @@ function renderHistory() {
       ${insightsHtml}
       ${heatmapHtml}
       ${volumeChartHtml}
-      <div class="empty-state empty-state-large">
-        <div class="empty-state-icon">${icon("dumbbell", { size: 56 })}</div>
-        <div class="empty-state-title">${t("history.empty")}</div>
-        <div class="empty-state-sub">${t("history.emptySub")}</div>
-        <button class="primary-btn empty-state-cta" id="emptyStateGotoGenBtn">${t("history.emptyCta") || "Generate your first workout"}</button>
-      </div>
+      ${syncState?.status === "syncing"
+        ? `<div class="history-skeleton">
+            <div class="skeleton-block skeleton-pulse"></div>
+            <div class="skeleton-block skeleton-pulse" style="width:80%"></div>
+            <div class="skeleton-block skeleton-pulse" style="width:60%"></div>
+            <div class="skeleton-loading-text">${t("history.syncing") || "Loading your training history…"}</div>
+          </div>`
+        : `<div class="empty-state empty-state-large">
+            <div class="empty-state-icon">${icon("dumbbell", { size: 56 })}</div>
+            <div class="empty-state-title">${t("history.empty")}</div>
+            <div class="empty-state-sub">${t("history.emptySub")}</div>
+            <button class="primary-btn empty-state-cta" id="emptyStateGotoGenBtn">${t("history.emptyCta") || "Generate your first workout"}</button>
+          </div>`
+      }
     `;
     document.getElementById("emptyStateGotoGenBtn")?.addEventListener("click", () => showApp("generator"));
     return;

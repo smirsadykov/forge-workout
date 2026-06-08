@@ -451,6 +451,7 @@
     "history.empty": { en: "No saved workouts yet", ru: "Тренировок пока нет" },
     "history.emptySub": { en: "Generate one and hit Save to see it here. Each workout you log builds your training history — patterns, progressions, plateau detection all start working.", ru: "Создай тренировку и нажми Сохранить — появится здесь. Каждая записанная тренировка строит твою историю — паттерны, прогрессии, отслеживание плато." },
     "history.emptyCta": { en: "Generate your first workout", ru: "Создать первую тренировку" },
+    "history.syncing": { en: "Loading your training history…", ru: "Загружаем твою историю тренировок…" },
     "history.bodyHeatmap": { en: "Body heatmap", ru: "Карта тела" },
     "history.bodyHeatmapSub": { en: "last 14 days · hover for details", ru: "за 14 дней · наведи для деталей" },
     "history.weeklyVolume": { en: "Weekly volume", ru: "Недельный объём" },
