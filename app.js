@@ -4519,6 +4519,10 @@ function generateAnimalFlowWorkout({ duration, intensity = "normal" }) {
         rest: 60,
         afSection: "flow",
         isFlowSequence: true,
+        // Component names preserved so renderExerciseExtras can render one
+        // video link PER component instead of a single useless search for
+        // the whole chained-string name.
+        flowComponents: flowChain.map(c => c.name),
       };
     }
   }
@@ -5368,7 +5372,7 @@ function renderExerciseCard(ex, units, opts = {}) {
         <div class="exercise-main">
           <div class="exercise-name-row">
             <div class="exercise-name">${positionPrefix}${ex.name}${ex.unilateral ? ` <span class="unilateral-tag">${/\blunges?\b|split squat|step-?up|single-?leg|pistol|shrimp/i.test(ex.name) ? "per leg" : "per side"}</span>` : ""}</div>
-            ${renderExerciseExtras(ex.name)}
+            ${renderExerciseExtras(ex.name, { components: ex.flowComponents })}
           </div>
           <div class="exercise-info">${ex.muscle.map(m => m.replace("_", " ")).join(" · ")}</div>
           ${ex.progression ? `
@@ -6252,7 +6256,7 @@ function renderLibrary() {
     <div class="library-card" data-name="${escapeAttr(ex.name)}">
       <div class="library-card-head">
         <div class="library-card-name">${ex.name}</div>
-        ${renderExerciseExtras(ex.name)}
+        ${renderExerciseExtras(ex.name, { components: ex.flowComponents })}
       </div>
       <div class="library-card-meta">
         <span class="tag">${PATTERN_LABELS[ex.pattern] || ex.pattern}</span>
@@ -6883,7 +6887,24 @@ function exerciseSearchUrl(name) {
   return `https://www.youtube.com/results?search_query=${q}`;
 }
 
-function renderExerciseExtras(name) {
+function renderExerciseExtras(name, opts = {}) {
+  // Flow sequences (Animal Flow finishers) chain N moves into one
+  // exercise. A single video search for the chained-string name is
+  // useless ("how to Flow: Beast → Ape Hop → Step Through form" returns
+  // nothing). Render one labeled video button per component instead so
+  // the user can review each move's form individually.
+  const components = opts.components;
+  if (Array.isArray(components) && components.length > 1) {
+    const buttons = components.map(c => `
+      <a class="ex-icon-btn flow-demo-btn" href="${exerciseSearchUrl(c)}" target="_blank" rel="noopener noreferrer" title="Watch demo: ${escapeAttr(c)}" aria-label="Watch demo: ${escapeAttr(c)}">▶ ${escapeAttr(c)}</a>
+    `).join("");
+    return `
+      <span class="ex-icon-row flow-demo-row">
+        ${buttons}
+        <button class="ex-icon-btn" data-action="toggle-cues" title="Form cues" aria-label="Toggle form cues">ⓘ</button>
+      </span>
+    `;
+  }
   const url = exerciseSearchUrl(name);
   return `
     <span class="ex-icon-row">
@@ -7260,7 +7281,7 @@ function renderGuided() {
     ${groupContext}
     <h2 class="guided-exercise-name">${ex.name}</h2>
     <div class="guided-muscle">${muscleStr}</div>
-    <div class="guided-icon-row">${renderExerciseExtras(ex.name)}</div>
+    <div class="guided-icon-row">${renderExerciseExtras(ex.name, { components: ex.flowComponents })}</div>
     ${renderFormCues(ex.name)}
     ${renderProgressChart(ex.name)}
     ${techHtml}

@@ -950,6 +950,26 @@ input {
   background: var(--accent-soft);
 }
 
+/* Flow demo row — for Animal Flow chained sequences, one labeled video
+   link per component move instead of a single useless search link for
+   the whole chained-name string. Each button is auto-width to fit its
+   move name, so the row may wrap on narrow viewports. */
+.flow-demo-row {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.flow-demo-btn {
+  width: auto;
+  height: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .form-cues {
   margin-top: 12px;
   padding: 12px 14px;
