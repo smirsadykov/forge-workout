@@ -3157,26 +3157,43 @@ function refreshProgramBanner() {
   banner.querySelector('[data-prog-banner-action="use"]')?.addEventListener("click", () => {
     // Pre-fill form with the program's goal + target. If it's a deload week,
     // also flip the deload flag so the existing deload prescription logic kicks in.
+    //
+    // Goal collapse (2026-06): the form now has only "Standard" + the
+    // special types (Mobility/Recovery/KB Sport/Sport Prep/Animal Flow).
+    // The 4 legacy goals (strength/hypertrophy/endurance/fat_loss) that
+    // programs were built on no longer have matching chips. We map them
+    // all to the "Standard" chip visually but PRESERVE the legacy goal
+    // in formState so pickPrescription still produces a real strength/
+    // endurance/etc. session — the program intent isn't lost, just the
+    // chip is collapsed.
     formState.goal = next.goal;
     formState.target = next.target;
     formState.deload = !!next.deload;
-    // Reflect in the UI chip rows
+    const LEGACY_TO_STANDARD = new Set(["strength", "hypertrophy", "endurance", "fat_loss"]);
+    const chipValue = LEGACY_TO_STANDARD.has(next.goal) ? "standard" : next.goal;
     document.querySelectorAll('.chip-row[data-field="goal"] .chip').forEach(c => {
-      c.classList.toggle("selected", c.dataset.value === next.goal);
+      c.classList.toggle("selected", c.dataset.value === chipValue);
     });
     document.querySelectorAll('.chip-row[data-field="target"] .chip').forEach(c => {
       c.classList.toggle("selected", c.dataset.value === next.target);
     });
-    // Show/hide the sport sub-selector if user switched away from sport_prep
     const sportGroup = document.getElementById("sportSubGroup");
     if (sportGroup) sportGroup.classList.add("hidden");
-    // Refresh other banners that might depend on goal/target
+
     refreshLoadWarning();
     refreshRecommendationBanner();
     refreshRecoveryBanner();
     refreshLevelBanner();
     el.formError.textContent = "";
-    // Scroll up to the form for visual continuity
+
+    // Confirmation toast — the silent failure that made this feature
+    // appear broken was the visible bug, but even with the chip mapping
+    // fixed, the user needs feedback that the click did something.
+    const goalLabel = GOAL_LABELS[next.goal] || next.goal;
+    const targetLabel = TARGET_LABELS[next.target] || next.target;
+    const deloadSuffix = next.deload ? ` · ${t("program.deloadFlag") || "Deload"}` : "";
+    showToast(`✓ ${t("program.bannerUseConfirm") || "Program session loaded"}: ${goalLabel} · ${targetLabel}${deloadSuffix}`);
+
     document.querySelector('.form-grid')?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
@@ -5336,6 +5353,32 @@ const MUSCLE_LABELS = _labelProxy("muscle");
 
 function escapeAttr(s) {
   return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+// Lightweight toast — ephemeral confirmation that an action completed.
+// Stacks if called multiple times; auto-dismisses after 3 seconds.
+// Used for "Program session loaded", "Goal saved", etc. — anywhere the
+// user clicks something and needs visible feedback that it worked.
+function showToast(message, opts = {}) {
+  const duration = opts.duration ?? 3000;
+  const kind = opts.kind || "info";  // "info" | "success" | "error"
+  let host = document.getElementById("toastHost");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "toastHost";
+    host.className = "toast-host";
+    document.body.appendChild(host);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${kind}`;
+  toast.textContent = message;
+  host.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("toast-in"));
+  setTimeout(() => {
+    toast.classList.remove("toast-in");
+    toast.classList.add("toast-out");
+    setTimeout(() => toast.remove(), 250);
+  }, duration);
 }
 
 function renderExerciseLog(ex, units) {

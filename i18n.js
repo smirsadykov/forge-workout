@@ -180,6 +180,7 @@
     "settings.goalTargetReps": { en: "Target reps", ru: "Целевые повторения" },
     "settings.goalDeadline": { en: "Deadline", ru: "Дедлайн" },
     "settings.saveGoal": { en: "Save goal", ru: "Сохранить цель" },
+    "program.bannerUseConfirm": { en: "Program session loaded", ru: "Сессия из программы загружена" },
     "af.activations": { en: "ACTIVATIONS", ru: "АКТИВАЦИЯ" },
     "af.reaches": { en: "FORM-SPECIFIC STRETCHES", ru: "РАСТЯЖКИ С ФОРМОЙ" },
     "af.travels": { en: "TRAVELING FORMS", ru: "ПЕРЕДВИЖЕНИЕ" },
