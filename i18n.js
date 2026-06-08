@@ -140,6 +140,15 @@
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
     "goal.kb_sport": { en: "🔔 KB Sport", ru: "🔔 Гиревой спорт" },
     "goal.sport_prep": { en: "🏃 Sport Prep", ru: "🏃 Подготовка к спорту" },
+    "goal.animal_flow": { en: "🐒 Animal Flow", ru: "🐒 Animal Flow" },
+    "af.activations": { en: "ACTIVATIONS", ru: "АКТИВАЦИЯ" },
+    "af.reaches": { en: "FORM-SPECIFIC STRETCHES", ru: "РАСТЯЖКИ С ФОРМОЙ" },
+    "af.travels": { en: "TRAVELING FORMS", ru: "ПЕРЕДВИЖЕНИЕ" },
+    "af.flow": { en: "FLOW SEQUENCE", ru: "ПОТОК" },
+    "af.flowNote": {
+      en: "Chain these 3 moves continuously, then rest. Repeat for {rounds} rounds.",
+      ru: "Объединяй 3 движения непрерывно, затем отдых. Повтори {rounds} раундов.",
+    },
 
     // Per-card "For other goals" advice section
     "advice.title": { en: "For other goals", ru: "Для других целей" },

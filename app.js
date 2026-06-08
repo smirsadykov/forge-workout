@@ -4403,6 +4403,166 @@ function generateSportPrepWorkout({ equipment, duration, intensity = "normal", s
   };
 }
 
+// Animal Flow generator. The Mike Fitch curriculum structures every flow
+// session around 5 buckets:
+//   (1) Wrist mobilizations + joint prep      → warmup
+//   (2) Activations — Beast/Crab/Ape holds    → static engagement
+//   (3) Form-Specific Stretches — Reaches     → range + control
+//   (4) Traveling Forms — Beast Travel etc.   → locomotion under load
+//   (5) Flow — chain 3 moves continuously     → integration / finisher
+//
+// We pull from the 14 AF exercises already in the library (mobility-pattern
+// holds & reaches, conditioning-pattern travels & switches), pick 1-3 per
+// bucket scaled by duration, and tag the "flow finisher" with a special
+// reps string that tells the user to chain 3 moves continuously for N
+// rounds. Intensity scales hold time, rep count, and round count.
+function generateAnimalFlowWorkout({ duration, intensity = "normal" }) {
+  // Bucket the AF library by curriculum role. These regex tags match the
+  // exact names we shipped in exercises.js.
+  const allAF = EXERCISES.filter(e =>
+    /beast|crab|ape|scorpion|loaded beast|underswitch|kick through|step through/i.test(e.name)
+    && e.equipment.includes("bodyweight")
+  );
+  const activations = allAF.filter(e => /\bhold\b|rock/i.test(e.name));
+  const reaches     = allAF.filter(e => /reach/i.test(e.name));
+  const travels     = allAF.filter(e => /travel|hop/i.test(e.name));
+  const switches    = allAF.filter(e => /underswitch|kick through|step through|switch/i.test(e.name));
+
+  if (activations.length === 0 || reaches.length === 0) return null;
+
+  // Count by duration. AF sessions are dense — lots of distinct positions
+  // per minute compared to a strength workout.
+  let nActivations, nReaches, nTravels, nFlow;
+  if (duration <= 15)      { nActivations = 1; nReaches = 1; nTravels = 1; nFlow = 0; }
+  else if (duration <= 30) { nActivations = 2; nReaches = 2; nTravels = 1; nFlow = 1; }
+  else if (duration <= 45) { nActivations = 2; nReaches = 3; nTravels = 2; nFlow = 1; }
+  else                     { nActivations = 3; nReaches = 3; nTravels = 2; nFlow = 1; }
+
+  // Hold duration / rep counts scale by intensity. Easy: shorter holds,
+  // fewer reps. Hard: longer holds, more reps + more flow rounds.
+  const holdSecs = intensity === "easy" ? "20–30 sec" : intensity === "hard" ? "45–60 sec" : "30–45 sec";
+  const reachReps = intensity === "easy" ? "4–6 per side" : intensity === "hard" ? "8–10 per side" : "6–8 per side";
+  const travelTime = intensity === "easy" ? "20–30 sec" : intensity === "hard" ? "45–60 sec" : "30–45 sec";
+  const flowRounds = intensity === "easy" ? 3 : intensity === "hard" ? 6 : 5;
+
+  // Warmup: joint prep. Pull from existing mobility pool — wrist circles,
+  // cat-cow, hip openers. 1-2 moves depending on duration.
+  const warmupCount = duration <= 15 ? 1 : 2;
+  const warmupCandidates = EXERCISES.filter(e =>
+    e.pattern === "mobility"
+    && e.equipment.includes("bodyweight")
+    && /wrist|cat-?cow|spinal|hip|shoulder dis|wall slid|world|downward dog/i.test(e.name)
+  );
+  const warmups = shuffle(warmupCandidates).slice(0, warmupCount).map(ex => ({
+    name: ex.name,
+    muscle: ex.muscle,
+    pattern: "mobility",
+    unilateral: false,
+    sets: 1,
+    reps: "30–45 sec",
+    rest: 0,
+  }));
+
+  // Activations (holds)
+  const pickedActivations = shuffle(activations).slice(0, nActivations).map(ex => ({
+    name: ex.name,
+    muscle: ex.muscle,
+    pattern: ex.pattern,
+    unilateral: false,
+    sets: intensity === "hard" ? 3 : 2,
+    reps: holdSecs,
+    rest: 30,
+    afSection: "activation",
+  }));
+
+  // Reaches
+  const pickedReaches = shuffle(reaches).slice(0, nReaches).map(ex => ({
+    name: ex.name,
+    muscle: ex.muscle,
+    pattern: ex.pattern,
+    unilateral: true,
+    sets: intensity === "hard" ? 3 : 2,
+    reps: reachReps,
+    rest: 30,
+    afSection: "reach",
+  }));
+
+  // Traveling Forms
+  const pickedTravels = travels.length > 0
+    ? shuffle(travels).slice(0, nTravels).map(ex => ({
+        name: ex.name,
+        muscle: ex.muscle,
+        pattern: ex.pattern,
+        unilateral: false,
+        sets: 2,
+        reps: travelTime,
+        rest: 45,
+        afSection: "travel",
+      }))
+    : [];
+
+  // Flow finisher — pick 3 distinct moves and chain them. The reps string
+  // is the actual instruction since the prescription isn't sets×reps but
+  // "chain these moves continuously for N rounds".
+  let flowExercise = null;
+  if (nFlow > 0 && switches.length > 0) {
+    const flowCandidates = [...switches, ...travels].filter(e => e);
+    const flowChain = shuffle(flowCandidates).slice(0, 3);
+    if (flowChain.length === 3) {
+      flowExercise = {
+        name: `Flow: ${flowChain.map(c => c.name).join(" → ")}`,
+        muscle: ["full_body", "core"],
+        pattern: "conditioning",
+        unilateral: false,
+        sets: flowRounds,
+        reps: "1 round (30–45 sec)",
+        rest: 60,
+        afSection: "flow",
+        isFlowSequence: true,
+      };
+    }
+  }
+
+  // Cooldown — one stretch
+  const cooldownCandidates = EXERCISES.filter(e =>
+    e.pattern === "mobility"
+    && e.equipment.includes("bodyweight")
+    && /pose|stretch|cobra|child/i.test(e.name)
+  );
+  const cooldownPick = shuffle(cooldownCandidates)[0];
+  const cooldown = cooldownPick ? [{
+    name: cooldownPick.name,
+    muscle: cooldownPick.muscle,
+    pattern: "mobility",
+    unilateral: false,
+    sets: 2,
+    reps: "30–45 sec",
+    rest: 0,
+  }] : [];
+
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: {
+      goal: "animal_flow",
+      equipment: ["bodyweight"],
+      target: "full_body",
+      duration,
+      intensity,
+      style: "standard",
+      deload: false,
+    },
+    exercises: [
+      ...warmups,
+      ...pickedActivations,
+      ...pickedReaches,
+      ...pickedTravels,
+      ...(flowExercise ? [flowExercise] : []),
+      ...cooldown,
+    ],
+  };
+}
+
 // Anti-repeat memory: exercises picked in the immediately previous workout
 // get penalized so Regenerate produces visibly different sessions.
 let lastPickedNames = new Set();
@@ -4503,6 +4663,13 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   // Sport Prep goal: tailored prep + prehab pool keyed to the chosen sport.
   if (goal === "sport_prep") {
     return generateSportPrepWorkout({ equipment, duration, intensity, sport });
+  }
+  // Animal Flow: bodyweight ground-based locomotion + holds + reaches + flow
+  // sequences. The 14 AF exercises are tagged in EXERCISES (Beast/Crab/Ape
+  // holds, Reaches, Travels, Switches). Standard programming groups them
+  // into the Mike Fitch curriculum buckets.
+  if (goal === "animal_flow") {
+    return generateAnimalFlowWorkout({ duration, intensity });
   }
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
@@ -5432,6 +5599,13 @@ el.generateBtn.addEventListener("click", () => {
   // unchanged.
   if (goal === "standard") goal = "hypertrophy";
   if (!goal) return el.formError.textContent = "Pick a goal.";
+  // Animal Flow is bodyweight-only by definition — skip the equipment
+  // requirement and quietly inject bodyweight if missing. Same shape as
+  // the other special session types that prescribe their own equipment.
+  if (goal === "animal_flow") {
+    equipment = ["bodyweight"];
+    target = target || "full_body";
+  }
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";
   if (!duration) return el.formError.textContent = "Pick a duration.";
