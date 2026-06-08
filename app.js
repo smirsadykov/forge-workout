@@ -4438,17 +4438,72 @@ function generateCardioWorkout({ goal, equipment, duration, intensity = "normal"
   };
   const styleLabel = styleByGoal[goal] || "steady state";
 
+  // Format the prescription based on the actual exercise structure.
+  // Steady-state blocks work for true cardio machines (treadmill, bike,
+  // rower). They DON'T work for loaded carries (grip fatigue dominates
+  // before HR adapts — needs broken sets) or KB ballistics (which want
+  // EMOM/interval structure). Detect the exercise type and prescribe
+  // accordingly so the user gets real sport-science programming, not
+  // "26 min straight suitcase carry" — which is bad endurance work.
   for (let i = 0; i < numBlocks && i < shuffled.length; i++) {
     const ex = shuffled[i];
-    cardioExercises.push({
-      name: ex.name,
-      muscle: ex.muscle,
-      pattern: ex.pattern,
-      sets: 1,
-      reps: `${perBlockMin} min ${styleLabel}`,
-      rest: numBlocks > 1 && i < numBlocks - 1 ? 60 : 0,
-      isTimeBlock: true,
-    });
+    const name = ex.name.toLowerCase();
+    const isCarry = /carry|march/i.test(name);
+    const isBallistic = ex.pattern === "ballistic" || /swing|snatch|clean|jerk/i.test(name);
+    const isUni = isUnilateralExercise(ex.name);
+    const isCardioMachine = ex.equipment.includes("cardio_machine");
+
+    if (isCarry) {
+      // Broken-set carries: 3-5 min per round × N rounds with 60-90s rest.
+      // Grip recovers each round so HR can ramp up cleanly. Per-side
+      // when unilateral so total carry time matches a bilateral block.
+      const roundMin = duration <= 30 ? 3 : duration <= 45 ? 4 : 5;
+      const restSec = 75;
+      const computedRounds = Math.max(3, Math.floor(perBlockMin / (roundMin + restSec / 60)));
+      cardioExercises.push({
+        name: ex.name,
+        muscle: ex.muscle,
+        pattern: ex.pattern,
+        unilateral: isUni,
+        sets: computedRounds,
+        reps: isUni
+          ? `${roundMin} min per side · switch arms each round`
+          : `${roundMin} min carry`,
+        rest: restSec,
+        isTimeBlock: true,
+        isLoaded: true,  // enables weight-input UI in the card
+      });
+    } else if (isBallistic) {
+      // EMOM-style intervals for KB ballistics: a fixed rep count every
+      // minute on the minute. The rest comes from finishing the reps
+      // fast and recovering until the next minute. Scales by intensity.
+      const repsPerMin = intensity === "hard" ? 12 : intensity === "easy" ? 8 : 10;
+      cardioExercises.push({
+        name: ex.name,
+        muscle: ex.muscle,
+        pattern: ex.pattern,
+        unilateral: isUni,
+        sets: 1,
+        reps: isUni
+          ? `EMOM ${perBlockMin} min · ${Math.round(repsPerMin/2)} reps per side every minute`
+          : `EMOM ${perBlockMin} min · ${repsPerMin} reps every minute`,
+        rest: numBlocks > 1 && i < numBlocks - 1 ? 60 : 0,
+        isTimeBlock: true,
+        isLoaded: true,
+      });
+    } else {
+      // True cardio (machine / bodyweight conditioning): steady state.
+      cardioExercises.push({
+        name: ex.name,
+        muscle: ex.muscle,
+        pattern: ex.pattern,
+        sets: 1,
+        reps: `${perBlockMin} min ${styleLabel}`,
+        rest: numBlocks > 1 && i < numBlocks - 1 ? 60 : 0,
+        isTimeBlock: true,
+        isLoaded: !isCardioMachine && !ex.equipment.includes("bodyweight"),
+      });
+    }
   }
 
   return {
@@ -7713,9 +7768,32 @@ function renderGuided() {
     : "";
 
   // For time-based exercises the reps "input" doesn't make sense (user can't
-  // type "30 sec" as a number). Show repsHtml but hide the inputs row when
-  // we already have a timer — the auto-fill on Done Set covers it.
-  const inputsBlock = setTimeSec ? "" : inputsHtml;
+  // type "30 sec" as a number). The timer auto-fills duration on Done Set,
+  // so hiding the reps input is correct. BUT for LOADED time exercises
+  // (Suitcase Carry, weighted plank, etc.) we still need the weight input
+  // so the user can adjust the prescribed weight to what they actually
+  // have. Without this, a 12kg-prescribed carry with no UI to change to
+  // 16kg leaves the user stuck with the wrong weight.
+  let inputsBlock = "";
+  if (setTimeSec) {
+    if (trackable && usesWeight) {
+      const buffered = guidedSession.exerciseSets?.[ex.name] || [];
+      const prevSet = buffered[buffered.length - 1];
+      const sugW = prevSet
+        ? toDisplay(prevSet.weightKg, units)
+        : (suggestion?.next ? toDisplay(suggestion.next.weightKg, units) : "");
+      inputsBlock = `
+        <div class="guided-log-row">
+          <label class="log-field">
+            <input type="number" id="guidedWeight" min="0" step="${units === "lb" ? 5 : 2.5}" value="${sugW || ""}" placeholder="weight"/>
+            <span class="log-field-suffix">${units}</span>
+          </label>
+        </div>
+      `;
+    }
+  } else {
+    inputsBlock = inputsHtml;
+  }
 
   document.getElementById("guidedContent").innerHTML = `
     <div class="guided-section-badge">${getSection(ex.pattern)}</div>
