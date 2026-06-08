@@ -4455,8 +4455,12 @@ function generateCardioWorkout({ goal, equipment, duration, intensity = "normal"
 
     if (isCarry) {
       // Broken-set carries: 3-5 min per round × N rounds with 60-90s rest.
-      // Grip recovers each round so HR can ramp up cleanly. Per-side
-      // when unilateral so total carry time matches a bilateral block.
+      // Grip recovers each round so HR can ramp up cleanly.
+      // IMPORTANT: each round is `roundMin` TOTAL (with sides switched
+      // mid-round if unilateral) — NOT roundMin per side. Otherwise grip
+      // dies at 6+ min single-arm and the time estimator double-counts
+      // the unilateral flag against the budget. We omit the unilateral
+      // flag here for the same reason: the round is a single time block.
       const roundMin = duration <= 30 ? 3 : duration <= 45 ? 4 : 5;
       const restSec = 75;
       const computedRounds = Math.max(3, Math.floor(perBlockMin / (roundMin + restSec / 60)));
@@ -4464,14 +4468,14 @@ function generateCardioWorkout({ goal, equipment, duration, intensity = "normal"
         name: ex.name,
         muscle: ex.muscle,
         pattern: ex.pattern,
-        unilateral: isUni,
+        unilateral: false,
         sets: computedRounds,
         reps: isUni
-          ? `${roundMin} min per side · switch arms each round`
+          ? `${roundMin} min carry · switch arms at ${Math.round(roundMin * 30)}s mark`
           : `${roundMin} min carry`,
         rest: restSec,
         isTimeBlock: true,
-        isLoaded: true,  // enables weight-input UI in the card
+        isLoaded: true,
       });
     } else if (isBallistic) {
       // EMOM-style intervals for KB ballistics: a fixed rep count every
@@ -8350,6 +8354,36 @@ function showSharedWorkout(workout) {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────
+// ─── THEME ───────────────────────────────────────────────────────────────
+// Read saved preference + apply to <html data-theme>. Default = dark
+// (no attr set) so existing users see no change unless they opt in.
+// Persisted to localStorage as a device-level pref (not per-user) since
+// users typically want their theme to match their environment, not
+// follow them across accounts.
+function getTheme() {
+  return localStorage.getItem("forge:theme") || "dark";
+}
+function applyTheme(theme) {
+  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+}
+function setTheme(theme) {
+  applyTheme(theme);
+  localStorage.setItem("forge:theme", theme);
+}
+applyTheme(getTheme());  // run early so there's no flash of wrong theme
+
+// Wire toggle button — cycles dark ↔ light.
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("themeToggle");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const next = getTheme() === "dark" ? "light" : "dark";
+      setTheme(next);
+    });
+  }
+});
+
 async function bootstrap() {
   // Always render the cloud status pill at boot, regardless of which path
   // bootstrap takes. Diagnostic value: if anything else errors, the pill

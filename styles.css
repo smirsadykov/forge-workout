@@ -86,6 +86,45 @@
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ─── LIGHT THEME ──────────────────────────────────────────────────────
+   Triggered via `<html data-theme="light">`. Default is dark (no attr
+   needed) so existing behavior is preserved. Brand + status colors are
+   semantic — they read correctly on either background, so we don't
+   override them. Only the surface (bg/border) and text tokens flip.
+
+   Background ramp uses very pale near-white to avoid harsh pure-white
+   eyestrain (matches Notion/Linear/Stripe modern light palettes).
+   Text is near-black with progressively dimmer secondary/dim/muted
+   tiers, all WCAG AA against the pale bg.
+
+   Soft state variants get slightly higher opacity since semitransparent
+   tints read fainter on white than they do on near-black. */
+:root[data-theme="light"] {
+  --bg: #f6f7fa;
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #eef0f5;
+  --border: #e2e5ed;
+  --border-strong: #c4cad8;
+
+  --text: #14171c;          /* primary — 16:1 against --bg */
+  --text-secondary: #424752; /* labels  — 9:1 */
+  --text-dim: #6b7280;       /* hints   — 5:1 */
+  --text-muted: #828b9a;     /* meta    — 4.5:1 */
+
+  --shadow: 0 8px 28px rgba(20, 30, 60, 0.08);
+  --shadow-hover: 0 12px 36px rgba(20, 30, 60, 0.14);
+
+  /* Soft state variants bumped 0.14 → 0.18 for visibility on white. */
+  --brand-soft: rgba(255, 140, 61, 0.18);
+  --success-soft: rgba(16, 185, 129, 0.16);
+  --warning-soft: rgba(245, 158, 11, 0.18);
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  --info-soft: rgba(96, 165, 250, 0.18);
+  --violet-soft: rgba(168, 85, 247, 0.15);
+  --brand-glow: rgba(255, 140, 61, 0.32);
+}
+
 /* ─── A11Y: prefers-reduced-motion ─────────────────────────────────────
    Users with vestibular sensitivity have OS-level preference for
    reduced motion. Disable transitions + animations entirely for them.
@@ -2226,6 +2265,33 @@ input {
   font-size: 14px;
   line-height: 1;
 }
+
+/* ─── Theme toggle ──────────────────────────────────────────────────────
+   One button in the nav cycles dark → light → dark. Icon updates to
+   show what the CLICK will produce (moon visible in dark mode = "click
+   to go light"; sun visible in light mode = "click to go dark"). */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-easing);
+  margin-left: 4px;
+}
+.theme-toggle:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.theme-toggle .theme-icon-light { display: none; }
+.theme-toggle .theme-icon-dark  { display: inline-block; }
+:root[data-theme="light"] .theme-toggle .theme-icon-light { display: inline-block; }
+:root[data-theme="light"] .theme-toggle .theme-icon-dark  { display: none; }
 
 /* ─── Icon system — Lucide SVGs replace emoji icons ────────────────────
    The .icon class is the base for all inline SVGs returned by the
