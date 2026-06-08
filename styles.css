@@ -18,18 +18,28 @@
   --text-muted: #9098b0;     /* timestamps, helper — 5.0:1 */
 
   /* ─── BRAND ───────────────────────────────────────────────────────────
-     Yellow is THE FORGE identity. Used ONLY for:
+     Warm amber identity (2026-06 shift from yellow #ffd633). Lands
+     FORGE next to Strava (premium athletic) instead of Beastmode (raw
+     gym-bro yellow). Amber reads as: energetic, premium, sport, warmth —
+     all aligned with the actual product (sophisticated programming).
+
+     Used ONLY for:
        • brand logo
        • primary CTAs (Generate, Save, primary action buttons)
        • selected chip state
        • accent strokes that reinforce branding
      NOT used for status — semantic colors below handle on-track / behind /
      achieved / warning / info. Keeping brand discipline preserves the
-     yellow's signal value (when you see it, it means "this is the action"). */
-  --brand: #ffd633;
-  --brand-hover: #ffe066;
-  --brand-soft: rgba(255, 214, 51, 0.14);
-  --brand-glow: rgba(255, 214, 51, 0.35);
+     amber's signal value (when you see it, it means "this is the action"). */
+  --brand: #ff8c3d;
+  --brand-hover: #ffa05c;
+  --brand-soft: rgba(255, 140, 61, 0.14);
+  --brand-glow: rgba(255, 140, 61, 0.45);
+  /* Text color for content rendered ON a brand-fill background (primary
+     CTA, selected chip). Dark warm to stay tonally with the amber and
+     hit WCAG AA contrast (~6:1 against the brand). Updated alongside
+     --brand whenever the brand color shifts. */
+  --brand-text: #261400;
   /* Backward-compat aliases — existing code uses --accent. */
   --accent: var(--brand);
   --accent-hover: var(--brand-hover);
@@ -284,7 +294,7 @@ input {
 
 .units-btn.active {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
 }
 
 /* Language quick-toggle — same shape as the units toggle.
@@ -315,7 +325,7 @@ input {
 .lang-btn:hover { color: var(--text); }
 .lang-btn.active {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
 }
 /* Auth-screen variant — top-right corner, floats above the card. */
 .auth-lang-toggle {
@@ -599,7 +609,7 @@ input {
 /* ─── BUTTONS ─────────────────────────────────────────────────────────── */
 .primary-btn {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   font-weight: 700;
   padding: 13px 22px;
   border-radius: 9px;
@@ -700,7 +710,7 @@ input {
 .chip.selected {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   box-shadow: 0 4px 14px var(--accent-glow);
 }
 
@@ -923,7 +933,7 @@ input {
   align-items: center;
   justify-content: center;
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   font-weight: 800;
   font-size: 12px;
   width: 22px;
@@ -1327,7 +1337,7 @@ input {
   align-items: center;
   gap: 5px;
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 11px;
@@ -1507,7 +1517,7 @@ input {
   display: inline-flex;
   align-items: center;
   background: linear-gradient(135deg, #ff6b35, #ffb84d);
-  color: #1a1500;
+  color: var(--brand-text);
   padding: 5px 12px;
   border-radius: 999px;
   font-size: 13px;
@@ -1683,7 +1693,7 @@ input {
 
 .start-set-btn:hover {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
 }
 
 .start-set-btn.inline {
@@ -1937,7 +1947,7 @@ input {
 .sleep-btn.selected {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 
@@ -1986,7 +1996,7 @@ input {
   box-shadow: 0 4px 14px var(--accent-glow);
 }
 
-.rpe-btn.selected .rpe-label { color: #1a1500; }
+.rpe-btn.selected .rpe-label { color: var(--brand-text); }
 
 /* ─── LEVEL RECOMMENDATION BANNER ────────────────────────────────────── */
 .level-banner {
@@ -2304,7 +2314,7 @@ input:focus, select:focus, textarea:focus {
 }
 .toast {
   background: var(--bg-card, #1a1f2e);
-  border: 1px solid var(--accent, #FFD633);
+  border: 1px solid var(--accent);
   color: var(--text, #fff);
   padding: 12px 18px;
   border-radius: 8px;
@@ -2540,7 +2550,7 @@ input:focus, select:focus, textarea:focus {
   margin-top: 14px;
   padding: 10px 12px;
   background: rgba(255, 214, 51, 0.08);
-  border-left: 3px solid var(--accent, #FFD633);
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
   font-size: 13px;
   line-height: 1.5;
@@ -3031,7 +3041,7 @@ input:focus, select:focus, textarea:focus {
 }
 .banner-more-count {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   font-weight: 800;
   font-size: 11px;
   padding: 2px 6px;
@@ -3691,7 +3701,7 @@ input:focus, select:focus, textarea:focus {
    and won't tap to reset it. */
 .guided-timer-row .timer-btn.running {
   background: transparent;
-  color: var(--accent, #FFD633);
+  color: var(--accent);
   border: 1.5px dashed rgba(255, 214, 51, 0.55);
   cursor: default;
   pointer-events: none;
@@ -3833,7 +3843,7 @@ input:focus, select:focus, textarea:focus {
   display: inline-flex;
   align-items: center;
   background: linear-gradient(90deg, var(--accent), #ff8c33);
-  color: #1a1500;
+  color: var(--brand-text);
   padding: 3px 9px;
   border-radius: 6px;
   font-size: 11px;
@@ -3974,7 +3984,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .rest-ctrl:hover { background: var(--bg-card-hover); border-color: var(--border-strong); }
-.rest-ctrl.primary { background: var(--accent); color: #1a1500; border-color: var(--accent); }
+.rest-ctrl.primary { background: var(--accent); color: var(--brand-text); border-color: var(--accent); }
 .rest-ctrl.primary:hover { background: var(--accent-hover); }
 .rest-ctrl.ghost { color: var(--text-dim); }
 .rest-ctrl.ghost:hover { color: var(--danger); }
@@ -4046,7 +4056,7 @@ input:focus, select:focus, textarea:focus {
 .swap-btn:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   transform: rotate(180deg);
 }
 
@@ -4320,7 +4330,7 @@ input:focus, select:focus, textarea:focus {
 
 .log-btn:hover {
   background: var(--accent);
-  color: #1a1500;
+  color: var(--brand-text);
   border-color: var(--accent);
 }
 
