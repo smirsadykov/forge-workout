@@ -145,6 +145,40 @@
       en: "Standard is hypertrophy programming — drives strength, muscle & work capacity simultaneously. Each exercise card shows how to adjust if you want a strength, endurance, or fat-loss bias.",
       ru: "«Стандарт» — гипертрофия. Развивает силу, массу и работоспособность одновременно. На каждой карточке упражнения есть подсказки, как сместить акцент на силу, выносливость или сжигание жира.",
     },
+    // Per-session-type hints — replace the static hint when user picks a chip
+    "gen.hint.mobility": {
+      en: "Pure stretching + joint prep. Lower intensity, longer holds, no loaded compound work. Use on rest days or after a hard session to maintain range.",
+      ru: "Чистая растяжка + подготовка суставов. Низкая интенсивность, длинные удержания, без силовой нагрузки. Используй в дни отдыха или после тяжёлой сессии.",
+    },
+    "gen.hint.recovery": {
+      en: "Active recovery day. Light compound + isolation work for blood flow, no ballistic or conditioning. Helps clear DOMS without adding fatigue.",
+      ru: "Активное восстановление. Лёгкие базовые + изолированные упражнения для кровотока, без баллистики и кардио. Помогает снять крепатуру, не накапливая усталость.",
+    },
+    "gen.hint.animal_flow": {
+      en: "Bodyweight ground-based locomotion. Activations (Beast/Crab/Ape holds) → Reaches → Travels → Flow sequences. Mike Fitch curriculum, scales by intensity.",
+      ru: "Наземные передвижения со своим весом. Активация (Beast/Crab/Ape) → растяжки → передвижения → потоки. Программа Майка Фитча, шкалируется интенсивностью.",
+    },
+    "gen.hint.kb_sport": {
+      en: "Girevoy sport (KB Sport) — 1-3 continuous time blocks of Jerk, Long Cycle, or Snatch at a target pace. Technical — start with a lighter bell than your max.",
+      ru: "Гиревой спорт — 1-3 непрерывных временных блока Толчка, Рывка или Длинного Цикла на заданном темпе. Технично — начинай с гири легче максимальной.",
+    },
+    "gen.hint.sport_prep": {
+      en: "Sport-specific prep + prehab. Pick a sport above — workout pulls drills + injury-prevention work tailored to that sport's load patterns.",
+      ru: "Подготовка под конкретный вид спорта + профилактика травм. Выбери вид спорта выше — тренировка возьмёт упражнения под него.",
+    },
+    // Equipment hints — show context based on what's selected
+    "eq.hint.empty": {
+      en: "Pick everything you have access to. Multi-select — the generator can mix implements within a session.",
+      ru: "Выбери всё, что есть в наличии. Можно несколько — генератор будет миксовать в рамках сессии.",
+    },
+    "eq.hint.kb_only": {
+      en: "KB-only mode. All KB programming families unlocked — strength, ballistics, sport. Full progression chains included.",
+      ru: "Только гиря. Все семьи КБ-программ открыты — сила, баллистика, спорт. Прогрессии включены.",
+    },
+    "eq.hint.bw_only": {
+      en: "Bodyweight only. Generator picks from BW-only exercises. Pair with a goal of mobility or recovery for best fit; strength sessions are limited to advanced BW moves.",
+      ru: "Только свой вес. Генератор берёт упражнения из BW-пула. Лучше работает в связке с мобильностью или восстановлением.",
+    },
     "goal.standard": { en: "Standard", ru: "Стандарт" },
     // Legacy goal labels — kept so old saved workouts render readable in history.
     "goal.strength": { en: "Strength", ru: "Сила" },

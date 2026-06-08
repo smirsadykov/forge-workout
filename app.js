@@ -2078,6 +2078,7 @@ function showApp(view = "generator") {
     coordinateBanners();
     refreshTemplatesPicker();
     refreshFormSummary();
+    refreshFormHints();
   }
   // Onboarding wizard — fires once per user on first-ever app load.
   // Runs BEFORE the sleep modal so a brand-new user sees onboarding first
@@ -3959,6 +3960,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshRecoveryBanner();
       refreshLevelBanner();
       refreshFormSummary();
+      refreshFormHints();
       // Sport sub-selector visibility: shown only when goal=sport_prep.
       // When switching away from sport_prep, also clear the sport selection
       // so the next sport_prep pick doesn't silently inherit an old value.
@@ -4044,6 +4046,47 @@ function refreshFormSummary() {
   }
   el2.classList.remove("empty");
   el2.innerHTML = pills.map(p => `<span class="form-summary-pill" data-pill="${p.k}">${escapeAttr(p.label)}</span>`).join("");
+}
+
+// ─── FORM HINTS ──────────────────────────────────────────────────────────
+// Dynamic descriptive text under chip rows. Updates on every selection
+// so users learn what each option does at the point of decision instead
+// of needing to remember a static blurb.
+function refreshFormHints() {
+  const sessionHint = document.getElementById("sessionTypeHint");
+  if (sessionHint) {
+    const goal = formState.goal;
+    const hintKey = goal && goal !== "standard"
+      ? `gen.hint.${goal}`
+      : "gen.sessionTypeHint";
+    const txt = t(hintKey);
+    // t() returns the key as-is if missing — guard against that by
+    // checking the result starts with "gen.". Falls back to default.
+    sessionHint.innerHTML = txt && !txt.startsWith("gen.")
+      ? txt
+      : t("gen.sessionTypeHint");
+  }
+
+  const equipHint = document.getElementById("equipmentHint");
+  if (equipHint) {
+    const eq = formState.equipment || [];
+    let key;
+    if (eq.length === 0) {
+      key = "eq.hint.empty";
+    } else if (eq.includes("floor_only")) {
+      key = "eq.floorOnlyHint";   // existing key — preserved
+    } else if (eq.length === 1 && eq[0] === "kettlebell") {
+      key = "eq.hint.kb_only";
+    } else if (eq.length === 1 && eq[0] === "bodyweight") {
+      key = "eq.hint.bw_only";
+    } else {
+      key = "eq.floorOnlyHint";   // generic fallback
+    }
+    const txt = t(key);
+    equipHint.innerHTML = txt && !txt.startsWith("eq.")
+      ? txt
+      : t("eq.floorOnlyHint");
+  }
 }
 
 // ─── LOAD WARNING ────────────────────────────────────────────────────────
