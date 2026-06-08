@@ -827,6 +827,10 @@ function detectPlateaus(userId) {
     // Only retain the HIGHEST-tier plateau per family. If a user has
     // plateaued both KB RDL (tier 2) and KB Suitcase Deadlift (tier 1)
     // in hinge_kb, we want to promote past tier 2, not tier 1.
+    // We also carry the plateau exercise's equipment list so
+    // getNextTierForFamily can reject "progressions" that would be
+    // a regression in load context (e.g., bodyweight SLRD from a
+    // loaded KB RDL plateau in a floor-only session).
     const existing = result[meta.family];
     if (!existing || meta.tier > existing.tier) {
       result[meta.family] = {
@@ -834,6 +838,7 @@ function detectPlateaus(userId) {
         tier: meta.tier,
         sessions: last3.length,
         reason: rirPlateau ? "rir" : "load_cap",
+        plateauEquipment: ex.equipment || [],
       };
     }
   }
@@ -841,21 +846,32 @@ function detectPlateaus(userId) {
 }
 
 // Given a family + the user's plateaued tier in that family, find the
-// next-tier exercise(s) the user has access to (equipment match). Returns
-// an array of candidate exercise names — scoring loop picks among them.
-function getNextTierForFamily(family, currentTier, availableEquipment) {
+// next-tier exercise(s) the user can actually progress toward. Two
+// constraints, both required:
+//   (1) candidate's equipment intersects the CURRENT session's available
+//       equipment (user can do it in this session)
+//   (2) candidate's equipment intersects the PLATEAU exercise's equipment
+//       (the progression preserves the load context — surfacing bodyweight
+//       SLRD from a loaded KB RDL plateau in a floor-only session would
+//       be a load regression, not a progression)
+// Without (2), users selecting floor-only equipment after plateauing a
+// KB lift would see misleading "Progression from KB RDL" badges on
+// bodyweight exercises that can't actually progress the loaded chain.
+function getNextTierForFamily(family, currentTier, availableEquipment, plateauEquipment) {
   if (typeof PROGRESSION_FAMILIES === "undefined") return [];
   const tiers = PROGRESSION_FAMILIES[family];
   if (!tiers) return [];
-  // Walk upward through tiers until we find one with at least one
-  // candidate the user can actually do (equipment-match).
   for (let t = currentTier + 1; t <= 5; t++) {
     const names = tiers[t];
     if (!names) continue;
     const reachable = names.filter(name => {
       const ex = EXERCISES.find(e => e.name === name);
       if (!ex) return false;
-      return ex.equipment.some(e => (availableEquipment || []).includes(e));
+      const matchesSession = ex.equipment.some(e => (availableEquipment || []).includes(e));
+      const matchesPlateau = !plateauEquipment || !plateauEquipment.length
+        ? true
+        : ex.equipment.some(e => plateauEquipment.includes(e));
+      return matchesSession && matchesPlateau;
     });
     if (reachable.length) return reachable;
   }
@@ -4557,7 +4573,18 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   const plateaus = session?.username ? detectPlateaus(session.username) : {};
   const nextTierBoost = {};  // exName → { tier, family, fromExName }
   for (const [family, p] of Object.entries(plateaus)) {
-    const candidates = getNextTierForFamily(family, p.tier, effectiveEquipment);
+    // Pre-check: does this SESSION have any equipment in common with
+    // the plateau exercise? If not, the user literally can't load the
+    // chain forward this session (e.g. plateau was on KB RDL but they
+    // picked floor-only today — they have nothing to load with). Skip
+    // the progression entirely; the bodyweight workout shouldn't carry
+    // a misleading "From your KB RDL plateau" badge.
+    const plateauEq = p.plateauEquipment || [];
+    const sessionHasPlateauImplement = plateauEq.length === 0
+      || plateauEq.some(e => effectiveEquipment.includes(e));
+    if (!sessionHasPlateauImplement) continue;
+
+    const candidates = getNextTierForFamily(family, p.tier, effectiveEquipment, p.plateauEquipment);
     for (const name of candidates) {
       nextTierBoost[name] = { family, tier: p.tier + 1, fromExName: p.exName, reason: p.reason };
     }
