@@ -2077,6 +2077,7 @@ function showApp(view = "generator") {
     refreshLevelBanner();
     coordinateBanners();
     refreshTemplatesPicker();
+    refreshFormSummary();
   }
   // Onboarding wizard — fires once per user on first-ever app load.
   // Runs BEFORE the sleep modal so a brand-new user sees onboarding first
@@ -3957,6 +3958,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshRecommendationBanner();
       refreshRecoveryBanner();
       refreshLevelBanner();
+      refreshFormSummary();
       // Sport sub-selector visibility: shown only when goal=sport_prep.
       // When switching away from sport_prep, also clear the sport selection
       // so the next sport_prep pick doesn't silently inherit an old value.
@@ -3991,6 +3993,57 @@ function resetForm() {
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
   refreshLoadWarning();
+}
+
+// ─── FORM SUMMARY ────────────────────────────────────────────────────────
+// Live pill row above the Generate button showing the current selections
+// in human-readable form. Updates on every chip click so the user can
+// sanity-check before generating. If a required field is missing, shows
+// a placeholder pill prompting them to pick it. Long-form summary fits
+// fully in mobile width because each pill is short.
+function refreshFormSummary() {
+  const el2 = document.getElementById("formSummary");
+  if (!el2) return;
+  const { goal, equipment, target, duration, intensity, style, sport } = formState;
+  const goalLabelMap = {
+    standard: t("goal.standard") || "Standard",
+    mobility: t("goal.mobility") || "Mobility",
+    recovery: t("goal.recovery") || "Recovery",
+    animal_flow: t("goal.animal_flow") || "Animal Flow",
+    kb_sport: t("goal.kb_sport") || "KB Sport",
+    sport_prep: t("goal.sport_prep") || "Sport Prep",
+  };
+  const equipLabelMap = {
+    bodyweight: t("equip.bodyweight") || "Bodyweight",
+    dumbbells: t("equip.dumbbells") || "Dumbbells",
+    barbell: t("equip.barbell") || "Barbell",
+    kettlebell: t("equip.kettlebell") || "Kettlebell",
+    bands: t("equip.bands") || "Bands",
+    machine: t("equip.machine") || "Machines",
+    cardio_machine: t("equip.cardio_machine") || "Cardio machine",
+    floor_only: t("equip.floor_only") || "Floor only",
+  };
+  const pills = [];
+  if (goal) pills.push({ k: "goal", label: goalLabelMap[goal] || goal });
+  if (equipment?.length) {
+    const equipText = equipment.length === 1
+      ? (equipLabelMap[equipment[0]] || equipment[0])
+      : `${equipLabelMap[equipment[0]] || equipment[0]} +${equipment.length - 1}`;
+    pills.push({ k: "equip", label: equipText });
+  }
+  if (target) pills.push({ k: "target", label: TARGET_LABELS[target] || target });
+  if (duration) pills.push({ k: "dur", label: `${duration} ${t("gen.min") || "min"}` });
+  if (intensity && intensity !== "normal") pills.push({ k: "int", label: (t(`intensity.${intensity}`) || intensity) });
+  if (style && style !== "standard") pills.push({ k: "style", label: (t(`style.${style}`) || style).replace(/[⚡]/g, "").trim() });
+  if (sport) pills.push({ k: "sport", label: t(`sport.${sport}`) || sport });
+
+  if (pills.length === 0) {
+    el2.innerHTML = `<span class="form-summary-placeholder">${t("gen.summaryPlaceholder") || "Pick your session type, equipment, target & duration"}</span>`;
+    el2.classList.add("empty");
+    return;
+  }
+  el2.classList.remove("empty");
+  el2.innerHTML = pills.map(p => `<span class="form-summary-pill" data-pill="${p.k}">${escapeAttr(p.label)}</span>`).join("");
 }
 
 // ─── LOAD WARNING ────────────────────────────────────────────────────────
@@ -5863,6 +5916,11 @@ let currentWorkout = null;
 
 el.generateBtn.addEventListener("click", () => {
   el.formError.textContent = "";
+  // Loading state — pulse spinner so the user sees feedback even on
+  // sub-100ms generation. CSS handles the spin via .generating class.
+  // We unset it in a microtask after generation (sync) returns.
+  el.generateBtn.classList.add("generating");
+  setTimeout(() => el.generateBtn.classList.remove("generating"), 600);
   let { goal, equipment, target, duration, intensity, sport } = formState;
   // 2026-06 collapse: "standard" is the user-facing chip that maps to
   // hypertrophy internally. All downstream logic still keys on the

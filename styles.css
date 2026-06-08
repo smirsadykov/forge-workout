@@ -2053,6 +2053,138 @@ input {
   }
 }
 
+/* ─── Generator page polish ────────────────────────────────────────────
+   Sticky CTA, summary pill row, loading state, collapsed advanced,
+   multi-select chip checkmark. Per UI/UX Pro Max checklist. */
+
+/* Sticky generate row — pinned to viewport bottom on mobile so the CTA
+   is always one tap away regardless of scroll position. On desktop
+   the form is short enough that natural position is fine. */
+.sticky-generate {
+  position: sticky;
+  bottom: 0;
+  margin-left: -20px;
+  margin-right: -20px;
+  padding: 14px 20px 18px;
+  background: linear-gradient(180deg, rgba(13,15,21,0) 0%, var(--bg) 30%);
+  z-index: 20;
+}
+@media (min-width: 768px) {
+  .sticky-generate {
+    position: relative;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0;
+    background: transparent;
+  }
+}
+
+/* Form summary — pill row showing current selections above Generate. */
+.form-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  min-height: 28px;
+  align-items: center;
+}
+.form-summary.empty {
+  opacity: 0.6;
+}
+.form-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(255, 214, 51, 0.3);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  animation: pillFadeIn var(--motion-base) var(--motion-easing);
+}
+@keyframes pillFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.form-summary-placeholder {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Generate button loading state — spinner replaces the chevron-style
+   indicator. Idle: hidden. .generating: spinner spins, label dims. */
+.generate-btn-spinner {
+  display: none;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.primary-btn.generating .generate-btn-spinner {
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+.primary-btn.generating .generate-btn-label {
+  opacity: 0.7;
+}
+.primary-btn.generating {
+  pointer-events: none;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Collapsed "advanced" form group (Style) — keeps the row out of the
+   default flow but accessible via a clear summary affordance. */
+.advanced-form-group {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  margin-top: 6px;
+}
+.advanced-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  user-select: none;
+  color: var(--accent);
+}
+.advanced-summary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 10px;
+  transition: transform var(--motion-fast) var(--motion-easing);
+  color: var(--text-dim);
+}
+.advanced-form-group[open] .advanced-summary::before {
+  transform: rotate(90deg);
+}
+.advanced-summary::-webkit-details-marker { display: none; }
+.advanced-hint {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  background: var(--bg-elevated);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Multi-select chip checkmark — when a chip in a data-multi="true" row
+   is selected, show a small inline check so users can clearly see which
+   equipment / muscles they've picked. */
+.chip-row[data-multi="true"] .chip.selected::before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 5px;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* ─── Icon system — Lucide SVGs replace emoji icons ────────────────────
    The .icon class is the base for all inline SVGs returned by the
    icon() helper. Inherits currentColor so it follows the parent's

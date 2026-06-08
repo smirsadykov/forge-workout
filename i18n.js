@@ -119,6 +119,21 @@
       ru: "«Темп» добавляет медленные эксцентрики и паузы для силового стимула на любом весе. Суперсеты — пара упражнений без отдыха. Круговые — 3 упражнения подряд, отдых после круга, больше калорий в минуту.",
     },
     "gen.generate": { en: "Generate Workout", ru: "Создать тренировку" },
+    "gen.summaryPlaceholder": {
+      en: "Pick your session type, equipment, target & duration",
+      ru: "Выбери тип сессии, инвентарь, зону и длительность",
+    },
+    "gen.advancedHint": { en: "advanced", ru: "расширенные" },
+
+    // Equipment labels (used by form summary pills)
+    "equip.bodyweight": { en: "Bodyweight", ru: "Свой вес" },
+    "equip.dumbbells": { en: "Dumbbells", ru: "Гантели" },
+    "equip.barbell": { en: "Barbell", ru: "Штанга" },
+    "equip.kettlebell": { en: "Kettlebell", ru: "Гиря" },
+    "equip.bands": { en: "Bands", ru: "Резинки" },
+    "equip.machine": { en: "Machines", ru: "Тренажёры" },
+    "equip.cardio_machine": { en: "Cardio machine", ru: "Кардио" },
+    "equip.floor_only": { en: "Floor only", ru: "Только пол" },
     "gen.min": { en: "min", ru: "мин" },
 
     // Session type — 2026-06: collapsed strength/hypertrophy/endurance/
