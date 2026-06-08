@@ -6467,12 +6467,14 @@ function renderHistory() {
       ${insightsHtml}
       ${heatmapHtml}
       ${volumeChartHtml}
-      <div class="empty-state">
-        <div class="empty-state-icon">${icon("dumbbell", { size: 48 })}</div>
+      <div class="empty-state empty-state-large">
+        <div class="empty-state-icon">${icon("dumbbell", { size: 56 })}</div>
         <div class="empty-state-title">${t("history.empty")}</div>
         <div class="empty-state-sub">${t("history.emptySub")}</div>
+        <button class="primary-btn empty-state-cta" id="emptyStateGotoGenBtn">${t("history.emptyCta") || "Generate your first workout"}</button>
       </div>
     `;
+    document.getElementById("emptyStateGotoGenBtn")?.addEventListener("click", () => showApp("generator"));
     return;
   }
 
@@ -6657,7 +6659,7 @@ function renderLibrary() {
       </div>
       ${renderFormCues(ex.name)}
     </div>
-  `).join("") || `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">${t("lib.empty")}</div><div class="empty-state-sub">${t("lib.emptySub")}</div></div>`;
+  `).join("") || `<div class="empty-state"><div class="empty-state-icon">${icon("info", { size: 48 })}</div><div class="empty-state-title">${t("lib.empty")}</div><div class="empty-state-sub">${t("lib.emptySub")}</div></div>`;
 
   // Wire form-cues toggles inside the library
   document.querySelectorAll(".library-card [data-action='toggle-cues']").forEach(btn => {
@@ -6714,7 +6716,12 @@ function renderGoalsSettingsCard() {
   const goals = getActiveGoals(session.username);
 
   if (!goals.length) {
-    list.innerHTML = `<div class="goals-empty">${t("goals.empty") || "No goals yet. Add one below."}</div>`;
+    list.innerHTML = `
+      <div class="goals-empty">
+        <div class="goals-empty-icon">${icon("target", { size: 32 })}</div>
+        <div class="goals-empty-title">${t("goals.emptyTitle") || "No goals yet"}</div>
+        <div class="goals-empty-sub">${t("goals.emptySub") || "Add a strength or skill target with a deadline. The generator will start biasing exercises that drive it, and you'll see trajectory on the History view."}</div>
+      </div>`;
   } else {
     list.innerHTML = goals.map(g => {
       const target = g.type === "strength"

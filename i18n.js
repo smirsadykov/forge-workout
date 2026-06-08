@@ -183,6 +183,11 @@
     "goals.errDeadline": { en: "Pick a deadline", ru: "Выбери дедлайн" },
     "goals.errPast": { en: "Deadline must be in the future", ru: "Дедлайн должен быть в будущем" },
     "goals.empty": { en: "No goals yet. Add one below.", ru: "Целей пока нет. Добавь ниже." },
+    "goals.emptyTitle": { en: "No goals yet", ru: "Целей пока нет" },
+    "goals.emptySub": {
+      en: "Add a strength or skill target with a deadline. The generator will start biasing exercises that drive it, and you'll see trajectory on the History view.",
+      ru: "Поставь цель по силе или навыку с дедлайном. Генератор начнёт усиливать упражнения, ведущие к ней, и на странице Истории появится траектория.",
+    },
     "settings.goalsTitle": { en: "Training goals", ru: "Тренировочные цели" },
     "settings.goalsHelp": {
       en: "Set 1-3 outcomes. The generator boosts exercises that drive each goal, and you see trajectory toward target on the History view.",
@@ -410,7 +415,8 @@
     "rest.skip": { en: "Skip", ru: "Пропустить" },
     "rest.label": { en: "Rest", ru: "Отдых" },
     "history.empty": { en: "No saved workouts yet", ru: "Тренировок пока нет" },
-    "history.emptySub": { en: "Generate one and hit Save to see it here.", ru: "Создай тренировку и нажми Сохранить — появится здесь." },
+    "history.emptySub": { en: "Generate one and hit Save to see it here. Each workout you log builds your training history — patterns, progressions, plateau detection all start working.", ru: "Создай тренировку и нажми Сохранить — появится здесь. Каждая записанная тренировка строит твою историю — паттерны, прогрессии, отслеживание плато." },
+    "history.emptyCta": { en: "Generate your first workout", ru: "Создать первую тренировку" },
     "history.bodyHeatmap": { en: "Body heatmap", ru: "Карта тела" },
     "history.bodyHeatmapSub": { en: "last 14 days · hover for details", ru: "за 14 дней · наведи для деталей" },
     "history.weeklyVolume": { en: "Weekly volume", ru: "Недельный объём" },

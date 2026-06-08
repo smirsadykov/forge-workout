@@ -4793,6 +4793,51 @@ input:focus, select:focus, textarea:focus {
 .empty-state-sub {
   font-size: 14px;
   color: var(--text-dim);
+  max-width: 36ch;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* Large empty state with CTA — for "no workouts" view */
+.empty-state-large {
+  padding: 60px 24px 48px;
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+}
+.empty-state-large .empty-state-icon {
+  color: var(--brand);
+  opacity: 1;
+}
+.empty-state-cta {
+  margin-top: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Goals empty state — softer card-within-card variant */
+.goals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 14px;
+  background: rgba(255,255,255,0.025);
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+}
+.goals-empty-icon {
+  color: var(--brand);
+  opacity: 0.7;
+}
+.goals-empty-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.goals-empty-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
 
 /* ─── MOBILE ──────────────────────────────────────────────────────────── */
