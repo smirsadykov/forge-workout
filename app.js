@@ -14,7 +14,106 @@ const STORAGE_KEYS = {
   volumeTargets: "forge:volumeTargets", // per-user weekly sets target per muscle
   sleep: "forge:sleep",   // per-user, per-date sleep quality rating (1-5)
   templates: "forge:templates", // per-user saved workout templates
+  goals: "forge:goals",         // per-user training goals (strength/skill targets)
 };
+
+// ─── GOAL DATA MODEL ─────────────────────────────────────────────────────
+// Strength + skill goals drive the generator. A goal carries:
+//   - type:        "strength" | "skill"
+//   - exerciseName: anchor exercise (Deadlift, Pull-Up, etc.)
+//   - targetReps + targetWeightKg: what "achieved" means
+//     - strength: targetWeightKg > 0, targetReps = 1-5 (e.g. 100kg × 1)
+//     - skill:    targetWeightKg = 0, targetReps = N (e.g. 10 pull-ups)
+//   - deadline (ms): when achievement is targeted
+//   - baseline (computed at creation): current value at goal-set time
+//
+// Multiple goals allowed. Scoring bias is summed across all active goals,
+// so a user with both "Deadlift 100kg" and "10 pull-ups" gets boost on
+// BOTH hinge AND pull patterns.
+function getGoals(userId) {
+  const all = load(STORAGE_KEYS.goals, {});
+  return all[userId] || [];
+}
+function setGoals(userId, goals) {
+  const all = load(STORAGE_KEYS.goals, {});
+  all[userId] = goals;
+  save(STORAGE_KEYS.goals, all);
+}
+function getActiveGoals(userId) {
+  return getGoals(userId).filter(g => !g.achieved && !g.archivedAt);
+}
+function addGoal(userId, goal) {
+  const goals = getGoals(userId);
+  const newGoal = {
+    id: `goal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    achieved: false,
+    archivedAt: null,
+    ...goal,
+  };
+  goals.push(newGoal);
+  setGoals(userId, goals);
+  return newGoal;
+}
+function removeGoal(userId, goalId) {
+  const goals = getGoals(userId).filter(g => g.id !== goalId);
+  setGoals(userId, goals);
+}
+
+// Compute the user's CURRENT best on the goal exercise (max estimated 1RM
+// for strength goals, max reps for skill goals), measured against the
+// goal's baseline + deadline. Returns:
+//   { current, target, baseline, percentToTarget, daysElapsed, daysTotal,
+//     onTrack, projected, ratePerDay }
+function getGoalProgress(userId, goal) {
+  if (!goal) return null;
+  const stats = getStats(userId);
+  const exStat = stats[goal.exerciseName];
+  const history = exStat?.history || [];
+
+  let current = goal.baseline;
+  if (goal.type === "strength") {
+    // Best e1RM across all history
+    for (const h of history) {
+      const n = normalizeHistoryEntry(h);
+      const best = sessionBestE1RM(n.sets);
+      if (best > current) current = best;
+    }
+  } else {
+    // Skill: best max reps
+    for (const h of history) {
+      const n = normalizeHistoryEntry(h);
+      const best = sessionBestReps(n.sets);
+      if (best > current) current = best;
+    }
+  }
+  const target = goal.type === "strength"
+    ? calculateE1RM(goal.targetWeightKg, goal.targetReps || 1)
+    : goal.targetReps;
+
+  const now = Date.now();
+  const daysElapsed = Math.max(1, (now - (goal.baselineDate || goal.createdAt)) / 86400000);
+  const daysTotal = Math.max(1, (goal.deadline - (goal.baselineDate || goal.createdAt)) / 86400000);
+  const gainSoFar = current - goal.baseline;
+  const gainNeeded = target - goal.baseline;
+  const percentToTarget = gainNeeded > 0 ? Math.max(0, Math.min(100, (gainSoFar / gainNeeded) * 100)) : 100;
+  const ratePerDay = daysElapsed > 0 ? gainSoFar / daysElapsed : 0;
+  const projected = current + ratePerDay * (daysTotal - daysElapsed);
+  const onTrack = projected >= target * 0.95;  // 5% slack
+
+  return {
+    current: Math.round(current * 10) / 10,
+    target: Math.round(target * 10) / 10,
+    baseline: goal.baseline,
+    percentToTarget: Math.round(percentToTarget),
+    daysElapsed: Math.round(daysElapsed),
+    daysTotal: Math.round(daysTotal),
+    daysRemaining: Math.max(0, Math.round(daysTotal - daysElapsed)),
+    onTrack,
+    projected: Math.round(projected * 10) / 10,
+    ratePerDay: Math.round(ratePerDay * 100) / 100,
+  };
+}
 
 // Muscle groups we expose in soreness + volume target UI.
 const MAJOR_MUSCLES = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "core"];
@@ -2776,6 +2875,64 @@ function renderInsightsPanel(userId) {
 
 // ─── THIS WEEK panel ─────────────────────────────────────────────────────
 // Shows per-pattern progress vs weekly target for the last 7 days, with a
+// ─── TOWARD YOUR GOAL panel ──────────────────────────────────────────────
+// Renders the user's active strength + skill goals with trajectory toward
+// each target. The keystone of the "real progress" upgrade — without this,
+// the user trains in a void; with this, every session has a visible outcome
+// to drive toward. Sits at the very top of History since it's the most
+// motivationally relevant info on the screen.
+function renderGoalsPanel(userId) {
+  if (!userId) return "";
+  const goals = getActiveGoals(userId);
+  if (!goals.length) return "";
+
+  const cards = goals.map(goal => {
+    const p = getGoalProgress(userId, goal);
+    if (!p) return "";
+    const exName = goal.exerciseName;
+    const unitLabel = goal.type === "strength" ? "kg" : t("goals.repsLabel") || "reps";
+    const statusClass = p.percentToTarget >= 100 ? "achieved"
+      : p.onTrack ? "ontrack"
+      : "behind";
+    const statusLabel = p.percentToTarget >= 100 ? (t("goals.achieved") || "Achieved")
+      : p.onTrack ? (t("goals.onTrack") || "On track")
+      : (t("goals.behind") || "Behind");
+    const dl = new Date(goal.deadline).toISOString().slice(0, 10);
+    return `
+      <div class="goal-card ${statusClass}" data-goal-id="${goal.id}">
+        <div class="goal-card-head">
+          <div class="goal-card-title">${escapeAttr(exName)}</div>
+          <span class="goal-status-badge ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="goal-progress-wrap">
+          <div class="goal-progress-bar" style="width:${Math.min(100, p.percentToTarget)}%"></div>
+        </div>
+        <div class="goal-card-stats">
+          <div><span class="goal-stat-label">${t("goals.current") || "Now"}</span><strong>${p.current}${unitLabel === "kg" ? "kg" : ""}</strong></div>
+          <div><span class="goal-stat-label">${t("goals.target") || "Target"}</span><strong>${p.target}${unitLabel === "kg" ? "kg" : ""}</strong></div>
+          <div><span class="goal-stat-label">${t("goals.deadline") || "By"}</span><strong>${dl}</strong></div>
+          <div><span class="goal-stat-label">${t("goals.daysLeft") || "Days left"}</span><strong>${p.daysRemaining}</strong></div>
+        </div>
+        <div class="goal-projection">
+          ${p.percentToTarget >= 100
+            ? (t("goals.achievedMsg") || "🎉 You've hit your target — set a new goal!")
+            : p.ratePerDay > 0
+              ? `${t("goals.projection") || "At current rate: projected"} <strong>${p.projected}${unitLabel === "kg" ? "kg" : ""}</strong> ${t("goals.byDeadline") || "by deadline"} ${p.onTrack ? "✓" : "⚠"}`
+              : (t("goals.noProgressYet") || "Log a session of this exercise to start tracking progress.")
+          }
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="goals-panel">
+      <h3 class="volume-chart-title">${t("goals.title") || "Toward your goal"} <span class="volume-chart-sub">${t("goals.sub") || "what you're training for"}</span></h3>
+      <div class="goal-cards">${cards}</div>
+    </div>
+  `;
+}
+
 // note about which patterns the next generated workout will favor. Reads
 // the user's most recent workout goal as the target proxy (or falls back
 // to hypertrophy targets when no prior session). Lives at the top of the
@@ -4761,6 +4918,29 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
     }
   }
 
+  // Goal-driven bias: for each active goal, identify the family the goal
+  // exercise belongs to (via PROGRESSION_INDEX) and prepare a per-family
+  // boost. The goal exercise itself gets a bigger boost (+12); other
+  // exercises in the same family get +6. This turns "session generator"
+  // into "training app that pulls the user toward a measurable outcome".
+  const activeGoals = session?.username ? getActiveGoals(session.username) : [];
+  const goalAnchorBoost = {};   // exName → boost magnitude
+  const goalFamilyBoost = {};   // family → boost magnitude
+  const goalBucketBoost = {};   // movement bucket → boost magnitude
+  for (const g of activeGoals) {
+    if (!g.exerciseName) continue;
+    goalAnchorBoost[g.exerciseName] = (goalAnchorBoost[g.exerciseName] || 0) + 12;
+    const meta = PROGRESSION_INDEX?.[g.exerciseName];
+    if (meta) {
+      goalFamilyBoost[meta.family] = (goalFamilyBoost[meta.family] || 0) + 6;
+    }
+    const anchorEx = EXERCISES.find(e => e.name === g.exerciseName);
+    if (anchorEx) {
+      const bucket = getMovementBucket(anchorEx);
+      if (bucket) goalBucketBoost[bucket] = (goalBucketBoost[bucket] || 0) + 4;
+    }
+  }
+
   // Score each candidate. Higher = preferred.
   const scored = candidates.map(ex => {
     let score = 0;
@@ -4834,6 +5014,15 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
     // mature pattern history, and clear over goal-pattern bias too.
     // The intent: surface the textbook next step, not a random sibling.
     if (nextTierBoost[ex.name]) score += 15;
+
+    // Goal-driven boost: the exercise itself if it IS the goal anchor (+12),
+    // exercises in the same progression family (+6), or just the same
+    // movement bucket (+4). Stacks across multiple active goals.
+    if (goalAnchorBoost[ex.name]) score += goalAnchorBoost[ex.name];
+    const exFamily = PROGRESSION_INDEX?.[ex.name]?.family;
+    if (exFamily && goalFamilyBoost[exFamily]) score += goalFamilyBoost[exFamily];
+    const exBucket = getMovementBucket(ex);
+    if (exBucket && goalBucketBoost[exBucket]) score += goalBucketBoost[exBucket];
 
     // Random jitter so equal-scored items shuffle naturally on each regen.
     score += Math.random() * 4;
@@ -6069,6 +6258,7 @@ function attachWorkoutActions() {
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
   const items = getWorkouts(session.username);
+  const goalsHtml = renderGoalsPanel(session.username);
   const thisWeekHtml = renderThisWeekPanel(session.username);
   const insightsHtml = renderInsightsPanel(session.username);
   const heatmapHtml = renderBodyHeatmap(session.username);
@@ -6076,6 +6266,7 @@ function renderHistory() {
 
   if (!items.length) {
     el.historyList.innerHTML = `
+      ${goalsHtml}
       ${thisWeekHtml}
       ${insightsHtml}
       ${heatmapHtml}
@@ -6089,7 +6280,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = thisWeekHtml + insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
+  el.historyList.innerHTML = goalsHtml + thisWeekHtml + insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
     const notes = (w.notes || "").trim();
     const notesPreview = notes
       ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`
@@ -6315,6 +6506,119 @@ function renderSettings() {
   renderCloudToggle();
   renderLanguageChips();
   renderProgramCard();
+  renderGoalsSettingsCard();
+}
+
+// Render the Goals settings card — list of active goals + the add-goal
+// form. Populates the exercise datalist with names from the user's
+// history (most-trained first) + a sane fallback of common compounds.
+function renderGoalsSettingsCard() {
+  const list = document.getElementById("goalsList");
+  if (!list || !session) return;
+  const goals = getActiveGoals(session.username);
+
+  if (!goals.length) {
+    list.innerHTML = `<div class="goals-empty">${t("goals.empty") || "No goals yet. Add one below."}</div>`;
+  } else {
+    list.innerHTML = goals.map(g => {
+      const target = g.type === "strength"
+        ? `${g.targetWeightKg}kg × ${g.targetReps || 1} ${t("goals.reps") || "reps"}`
+        : `${g.targetReps} ${t("goals.reps") || "reps"} bodyweight`;
+      const dl = new Date(g.deadline).toISOString().slice(0, 10);
+      return `
+        <div class="goal-settings-row" data-goal-id="${g.id}">
+          <div>
+            <div class="goal-settings-name">${escapeAttr(g.exerciseName)}</div>
+            <div class="goal-settings-target">${target} · ${t("goals.byShort") || "by"} ${dl}</div>
+          </div>
+          <button class="ghost-btn small" data-remove-goal="${g.id}">${t("goals.remove") || "Remove"}</button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // Populate exercise picker datalist — user's logged exercises first
+  const datalist = document.getElementById("goalExerciseList");
+  if (datalist) {
+    const stats = getStats(session.username);
+    const userExercises = Object.keys(stats)
+      .map(name => ({ name, count: (stats[name].history || []).length }))
+      .sort((a, b) => b.count - a.count)
+      .map(e => e.name);
+    // Add common compounds as fallback options
+    const fallbackCompounds = [
+      "Deadlift", "Back Squat", "Bench Press", "Overhead Press",
+      "Pull-Ups", "Chin-Ups", "Dips", "Push-Ups",
+      "Kettlebell Romanian Deadlift", "Kettlebell Front Squat",
+      "Kettlebell Overhead Press", "Kettlebell Bent-Over Row",
+    ];
+    const all = [...new Set([...userExercises, ...fallbackCompounds])];
+    datalist.innerHTML = all.map(n => `<option value="${escapeAttr(n)}">`).join("");
+  }
+
+  // Show/hide weight field based on goal type
+  const goalType = document.getElementById("goalType");
+  const weightWrap = document.getElementById("goalWeightWrap");
+  if (goalType && weightWrap) {
+    const sync = () => weightWrap.style.display = goalType.value === "strength" ? "" : "none";
+    goalType.onchange = sync;
+    sync();
+  }
+
+  // Wire add-goal button
+  const addBtn = document.getElementById("addGoalBtn");
+  if (addBtn) {
+    addBtn.onclick = (e) => {
+      e.preventDefault();
+      const type = document.getElementById("goalType").value;
+      const exerciseName = document.getElementById("goalExercise").value.trim();
+      const targetWeightDisplay = parseFloat(document.getElementById("goalTargetWeight").value) || 0;
+      const targetReps = parseInt(document.getElementById("goalTargetReps").value, 10) || 1;
+      const deadlineStr = document.getElementById("goalDeadline").value;
+      if (!exerciseName) return alert(t("goals.errExercise") || "Pick an exercise");
+      if (type === "strength" && !targetWeightDisplay) return alert(t("goals.errWeight") || "Set a target weight");
+      if (type === "skill" && !targetReps) return alert(t("goals.errReps") || "Set a target rep count");
+      if (!deadlineStr) return alert(t("goals.errDeadline") || "Pick a deadline");
+      const deadline = new Date(deadlineStr).getTime();
+      if (deadline <= Date.now()) return alert(t("goals.errPast") || "Deadline must be in the future");
+
+      // Compute baseline from history right now so trajectory measures
+      // progress from this point forward, not from zero.
+      const units = getPrefs(session.username).units;
+      const targetWeightKg = type === "strength" ? fromDisplay(targetWeightDisplay, units) : 0;
+      const stats = getStats(session.username);
+      let baseline = 0;
+      const hist = (stats[exerciseName]?.history) || [];
+      for (const h of hist) {
+        const n = normalizeHistoryEntry(h);
+        const best = type === "strength" ? sessionBestE1RM(n.sets) : sessionBestReps(n.sets);
+        if (best > baseline) baseline = best;
+      }
+
+      addGoal(session.username, {
+        type, exerciseName,
+        targetWeightKg, targetReps,
+        deadline,
+        baseline,
+        baselineDate: Date.now(),
+      });
+      // Clear form + re-render
+      document.getElementById("goalExercise").value = "";
+      document.getElementById("goalTargetWeight").value = "";
+      document.getElementById("goalTargetReps").value = "";
+      document.getElementById("goalDeadline").value = "";
+      renderGoalsSettingsCard();
+    };
+  }
+
+  // Wire remove buttons
+  list.querySelectorAll("[data-remove-goal]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      removeGoal(session.username, btn.dataset.removeGoal);
+      renderGoalsSettingsCard();
+    };
+  });
 }
 
 // Program settings card — toggles between setup form and active-status view.
