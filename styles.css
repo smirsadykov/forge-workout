@@ -17,15 +17,47 @@
   --text-dim: #a8aec0;       /* hints, meta        — 7.5:1 */
   --text-muted: #9098b0;     /* timestamps, helper — 5.0:1 */
 
-  /* Brand */
-  --accent: #ffd633;
-  --accent-hover: #ffe066;
-  --accent-soft: rgba(255, 214, 51, 0.14);
-  --accent-glow: rgba(255, 214, 51, 0.35);
+  /* ─── BRAND ───────────────────────────────────────────────────────────
+     Yellow is THE FORGE identity. Used ONLY for:
+       • brand logo
+       • primary CTAs (Generate, Save, primary action buttons)
+       • selected chip state
+       • accent strokes that reinforce branding
+     NOT used for status — semantic colors below handle on-track / behind /
+     achieved / warning / info. Keeping brand discipline preserves the
+     yellow's signal value (when you see it, it means "this is the action"). */
+  --brand: #ffd633;
+  --brand-hover: #ffe066;
+  --brand-soft: rgba(255, 214, 51, 0.14);
+  --brand-glow: rgba(255, 214, 51, 0.35);
+  /* Backward-compat aliases — existing code uses --accent. */
+  --accent: var(--brand);
+  --accent-hover: var(--brand-hover);
+  --accent-soft: var(--brand-soft);
+  --accent-glow: var(--brand-glow);
 
-  /* Status */
-  --danger: #ff6b85;
-  --success: #4ade80;
+  /* ─── SEMANTIC STATE COLORS ─────────────────────────────────────────
+     Role-based. Each color has ONE meaning across the whole app —
+     consistency builds trust. */
+  --success: #10b981;        /* emerald — progress, on-track, achieved */
+  --success-bright: #34d399; /* lighter hover/highlight variant */
+  --success-soft: rgba(16, 185, 129, 0.12);
+
+  --warning: #f59e0b;        /* amber — sub-optimal, behind, attention */
+  --warning-bright: #fbbf24;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+
+  --danger: #ef4444;         /* coral — error, over-trained, destructive */
+  --danger-bright: #ff6b85;  /* lighter for hover or text on dark */
+  --danger-soft: rgba(239, 68, 68, 0.12);
+
+  --info: #60a5fa;           /* sky — neutral metric, progression badge */
+  --info-bright: #93c5fd;
+  --info-soft: rgba(96, 165, 250, 0.12);
+
+  --violet: #a855f7;         /* purple — deload, recovery, over-trained pattern */
+  --violet-bright: #c4b5fd;
+  --violet-soft: rgba(168, 85, 247, 0.12);
 
   --radius: 10px;
   --radius-lg: 16px;
@@ -1227,7 +1259,7 @@ input {
   gap: 6px;
   background: rgba(96, 165, 250, 0.12);
   border: 1px solid rgba(96, 165, 250, 0.35);
-  color: #60a5fa;
+  color: var(--info);
   padding: 4px 9px;
   border-radius: 6px;
   font-size: 11px;
@@ -1972,13 +2004,13 @@ input {
 .level-banner-icon {
   font-size: 28px;
   font-weight: 900;
-  color: #c4b5fd;
+  color: var(--violet-bright);
 }
 
 .level-banner-title {
   font-size: 15px;
   font-weight: 800;
-  color: #c4b5fd;
+  color: var(--violet-bright);
   margin-bottom: 4px;
   text-transform: capitalize;
 }
@@ -2025,7 +2057,7 @@ input {
 .recovery-banner-title {
   font-size: 16px;
   font-weight: 800;
-  color: #93c5fd;
+  color: var(--info-bright);
   margin-bottom: 6px;
 }
 
@@ -2288,8 +2320,8 @@ input:focus, select:focus, textarea:focus {
 }
 .toast-in  { opacity: 1; transform: translateY(0); }
 .toast-out { opacity: 0; transform: translateY(-8px); }
-.toast-success { border-color: #10b981; }
-.toast-error   { border-color: #ef4444; }
+.toast-success { border-color: var(--success); }
+.toast-error   { border-color: var(--danger); }
 
 /* "Toward your goal" panel — strength/skill goal trajectory cards */
 .goals-panel {
@@ -2312,8 +2344,8 @@ input:focus, select:focus, textarea:focus {
   border-radius: 10px;
   padding: 14px 16px;
 }
-.goal-card.ontrack   { border-left-color: #10b981; }
-.goal-card.behind    { border-left-color: #f59e0b; }
+.goal-card.ontrack   { border-left-color: var(--success); }
+.goal-card.behind    { border-left-color: var(--warning); }
 .goal-card.achieved  { border-left-color: var(--accent); background: rgba(255, 214, 51, 0.05); }
 .goal-card-head {
   display: flex;
@@ -2334,8 +2366,8 @@ input:focus, select:focus, textarea:focus {
   padding: 3px 8px;
   border-radius: 5px;
 }
-.goal-status-badge.ontrack  { background: rgba(16,185,129,0.15); color: #10b981; }
-.goal-status-badge.behind   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.goal-status-badge.ontrack  { background: rgba(16,185,129,0.15); color: var(--success); }
+.goal-status-badge.behind   { background: rgba(245,158,11,0.15); color: var(--warning); }
 .goal-status-badge.achieved { background: rgba(255,214,51,0.15); color: var(--accent); }
 .goal-progress-wrap {
   height: 8px;
@@ -2349,8 +2381,8 @@ input:focus, select:focus, textarea:focus {
   background: linear-gradient(90deg, var(--accent), #fde047);
   transition: width 0.3s ease;
 }
-.goal-card.behind .goal-progress-bar { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-.goal-card.ontrack .goal-progress-bar { background: linear-gradient(90deg, #10b981, #34d399); }
+.goal-card.behind .goal-progress-bar { background: linear-gradient(90deg, var(--warning), var(--warning-bright)); }
+.goal-card.ontrack .goal-progress-bar { background: linear-gradient(90deg, var(--success), var(--success-bright)); }
 .goal-card-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2481,10 +2513,10 @@ input:focus, select:focus, textarea:focus {
   border-radius: 7px;
   transition: width 0.3s ease;
 }
-.week-bar.deficit { background: linear-gradient(90deg, #ef4444, #f87171); }
-.week-bar.under   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-.week-bar.ok      { background: linear-gradient(90deg, #10b981, #34d399); }
-.week-bar.over    { background: linear-gradient(90deg, #a855f7, #c084fc); }
+.week-bar.deficit { background: linear-gradient(90deg, var(--danger), #f87171); }
+.week-bar.under   { background: linear-gradient(90deg, var(--warning), var(--warning-bright)); }
+.week-bar.ok      { background: linear-gradient(90deg, var(--success), var(--success-bright)); }
+.week-bar.over    { background: linear-gradient(90deg, var(--violet), #c084fc); }
 .week-target-tick {
   position: absolute;
   top: -2px;
@@ -2515,7 +2547,7 @@ input:focus, select:focus, textarea:focus {
 }
 .week-note.balanced {
   background: rgba(16, 185, 129, 0.08);
-  border-left-color: #10b981;
+  border-left-color: var(--success);
   color: var(--text-muted);
 }
 
@@ -2968,7 +3000,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 15px;
   color: var(--text-secondary);
 }
-.workout-section-warmup .workout-section-title { color: #93c5fd; }
+.workout-section-warmup .workout-section-title { color: var(--info-bright); }
 .workout-section-cooldown .workout-section-title { color: #a78bfa; }
 .workout-section-cardio .workout-section-title { color: #ff9e3d; }
 .workout-section-main .workout-section-title { color: var(--accent); }
@@ -4075,12 +4107,12 @@ input:focus, select:focus, textarea:focus {
 .last-pill.first {
   background: rgba(96, 165, 250, 0.08);
   border-color: rgba(96, 165, 250, 0.35);
-  color: #93c5fd;
+  color: var(--info-bright);
 }
 .last-pill.first::before { content: "💡"; }
 .guided-last.first {
   border-color: rgba(96, 165, 250, 0.3);
-  color: #93c5fd;
+  color: var(--info-bright);
 }
 .guided-last.first strong { color: #cfe0ff; }
 .guided-first-note {
@@ -4132,7 +4164,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .side-tag.side-r { color: var(--accent); border-color: rgba(255, 214, 51, 0.4); }
-.side-tag.side-l { color: #93c5fd; border-color: rgba(96, 165, 250, 0.4); }
+.side-tag.side-l { color: var(--info-bright); border-color: rgba(96, 165, 250, 0.4); }
 
 /* ─── RIR (Reps In Reserve) picker ──────────────────────────────────── */
 .rir-wrap {
