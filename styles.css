@@ -2053,6 +2053,34 @@ input {
   }
 }
 
+/* ─── Icon system — Lucide SVGs replace emoji icons ────────────────────
+   The .icon class is the base for all inline SVGs returned by the
+   icon() helper. Inherits currentColor so it follows the parent's
+   text color cleanly. Sized via width/height attrs on the SVG itself
+   so it scales with the surrounding font when set to 1em. */
+.icon {
+  display: inline-block;
+  vertical-align: -0.125em;  /* aligns with text baseline like an em-glyph */
+  flex-shrink: 0;
+}
+/* Chips that include an icon use flex layout with a small gap so the
+   SVG sits cleanly next to the label text. */
+.chip-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Settings section headers that pair an icon with the title text. */
+.settings-section-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-section-with-icon .icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 /* ─── Micro-interactions polish — added per UI/UX Pro Max checklist ─────
    Subtle hover-lift on cards, smooth view transitions, refined focus
    rings for chips. All respect prefers-reduced-motion (rule above). */

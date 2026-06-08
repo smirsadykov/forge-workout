@@ -18,12 +18,12 @@
   <meta name="apple-mobile-web-app-title" content="FORGE" />
 
   <title>FORGE — Workout Generator</title>
-  <link rel="stylesheet" href="styles.css?v=104" />
+  <link rel="stylesheet" href="styles.css?v=105" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">⚡</span>
+      <span class="logo"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
       <span class="brand-name">FORGE</span>
     </div>
     <nav id="nav" class="nav hidden">
@@ -91,7 +91,7 @@
 
         <!-- Confirmation pending panel — shown after signup when email confirmation is enabled -->
         <div id="confirmPanel" class="confirm-panel hidden" role="status" aria-live="polite">
-          <div class="confirm-panel-icon">📬</div>
+          <div class="confirm-panel-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>
           <h2 class="confirm-panel-title" data-i18n="confirm.title">Check your email</h2>
           <p class="confirm-panel-body">
             <span data-i18n="confirm.bodyPre">We sent a confirmation link to</span>
@@ -134,9 +134,18 @@
               <button class="chip selected" data-value="standard" data-i18n="goal.standard">Standard</button>
               <button class="chip" data-value="mobility" data-i18n="goal.mobility">Mobility</button>
               <button class="chip" data-value="recovery" data-i18n="goal.recovery">Recovery</button>
-              <button class="chip" data-value="animal_flow" data-i18n="goal.animal_flow">🐒 Animal Flow</button>
-              <button class="chip" data-value="kb_sport" data-i18n="goal.kb_sport">🔔 KB Sport</button>
-              <button class="chip" data-value="sport_prep" data-i18n="goal.sport_prep">🏃 Sport Prep</button>
+              <button class="chip chip-with-icon" data-value="animal_flow">
+                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <span data-i18n="goal.animal_flow">Animal Flow</span>
+              </button>
+              <button class="chip chip-with-icon" data-value="kb_sport">
+                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
+                <span data-i18n="goal.kb_sport">KB Sport</span>
+              </button>
+              <button class="chip chip-with-icon" data-value="sport_prep">
+                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v-2.38c0-.85-.32-1.65-.91-2.27a3.3 3.3 0 0 1 0-4.7c.59-.62.91-1.42.91-2.27V2"/><path d="M14 20V8h6v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-1.5"/><path d="M14 8h-4l-2-2H4"/><path d="M11 20H7"/></svg>
+                <span data-i18n="goal.sport_prep">Sport Prep</span>
+              </button>
             </div>
             <p class="form-hint" data-i18n="gen.sessionTypeHint">Standard is hypertrophy programming — drives strength, muscle & work capacity simultaneously. Each exercise card shows how to adjust sets/reps/rest if you want a strength, endurance, or fat-loss bias for that session.</p>
           </div>
@@ -305,7 +314,10 @@
 
         <!-- ─── GOALS ──────────────────────────────────────────────── -->
         <div class="settings-card" id="goalsCard">
-          <h2 class="settings-section" data-i18n="settings.goalsTitle">🎯 Training goals</h2>
+          <h2 class="settings-section settings-section-with-icon">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            <span data-i18n="settings.goalsTitle">Training goals</span>
+          </h2>
           <p class="settings-help" data-i18n="settings.goalsHelp">Set 1-3 outcomes. The generator boosts exercises that drive each goal, and you see trajectory toward target on the History view.</p>
           <div id="goalsList"></div>
           <details class="goals-add-form-wrap">
@@ -648,7 +660,7 @@
 
       <!-- Step 3: done -->
       <div class="onboard-step hidden" data-onboard-step="3">
-        <div class="onboard-celebrate">🎯</div>
+        <div class="onboard-celebrate"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
         <h2 class="modal-title" data-i18n="onboard.step3Title">You're set.</h2>
         <p class="modal-sub" data-i18n="onboard.step3Sub">Build your first session: pick a goal, equipment, target, and duration. The app handles the rest — exercise selection, weight suggestions, rest timing, progression.</p>
         <div class="onboard-actions">
@@ -756,20 +768,20 @@
     </div>
   </div>
 
-  <script src="config.js?v=104"></script>
-  <script src="supabase.min.js?v=104"></script>
-  <script src="i18n.js?v=104"></script>
-  <script src="exercises.js?v=104"></script>
+  <script src="config.js?v=105"></script>
+  <script src="supabase.min.js?v=105"></script>
+  <script src="i18n.js?v=105"></script>
+  <script src="exercises.js?v=105"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=104"></script>
-  <script src="app.js?v=104"></script>
+  <script src="lib/utils.js?v=105"></script>
+  <script src="app.js?v=105"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
     if (new URLSearchParams(location.search).has("test")) {
       const s = document.createElement("script");
-      s.src = "tests/run.js?v=104";
+      s.src = "tests/run.js?v=105";
       document.body.appendChild(s);
     }
   </script>

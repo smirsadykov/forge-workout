@@ -138,9 +138,9 @@
     "goal.endurance": { en: "Endurance", ru: "Выносливость" },
     "goal.mobility": { en: "Mobility", ru: "Мобильность" },
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
-    "goal.kb_sport": { en: "🔔 KB Sport", ru: "🔔 Гиревой спорт" },
-    "goal.sport_prep": { en: "🏃 Sport Prep", ru: "🏃 Подготовка к спорту" },
-    "goal.animal_flow": { en: "🐒 Animal Flow", ru: "🐒 Animal Flow" },
+    "goal.kb_sport": { en: "KB Sport", ru: "Гиревой спорт" },
+    "goal.sport_prep": { en: "Sport Prep", ru: "Подготовка к спорту" },
+    "goal.animal_flow": { en: "Animal Flow", ru: "Animal Flow" },
 
     // Goals — strength/skill target tracking
     "goals.title": { en: "Toward your goal", ru: "К твоей цели" },
@@ -168,7 +168,7 @@
     "goals.errDeadline": { en: "Pick a deadline", ru: "Выбери дедлайн" },
     "goals.errPast": { en: "Deadline must be in the future", ru: "Дедлайн должен быть в будущем" },
     "goals.empty": { en: "No goals yet. Add one below.", ru: "Целей пока нет. Добавь ниже." },
-    "settings.goalsTitle": { en: "🎯 Training goals", ru: "🎯 Тренировочные цели" },
+    "settings.goalsTitle": { en: "Training goals", ru: "Тренировочные цели" },
     "settings.goalsHelp": {
       en: "Set 1-3 outcomes. The generator boosts exercises that drive each goal, and you see trajectory toward target on the History view.",
       ru: "Поставь 1-3 цели. Генератор усиливает упражнения, которые ведут к каждой цели, а на странице Истории видна траектория к цели.",

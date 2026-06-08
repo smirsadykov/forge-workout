@@ -3102,7 +3102,7 @@ function refreshProgramBanner() {
   if (program.paused) {
     banner.classList.remove("hidden");
     banner.innerHTML = `
-      <div class="program-banner-icon">⏸</div>
+      <div class="program-banner-icon">${icon("pause", { size: 28 })}</div>
       <div class="program-banner-content">
         <div class="program-banner-title">${t("program.bannerTitle")}</div>
         <div class="program-banner-body">${t("program.bannerPaused")}</div>
@@ -3114,7 +3114,7 @@ function refreshProgramBanner() {
   if (next.complete) {
     banner.classList.remove("hidden");
     banner.innerHTML = `
-      <div class="program-banner-icon">🎉</div>
+      <div class="program-banner-icon">${icon("trophy", { size: 28 })}</div>
       <div class="program-banner-content">
         <div class="program-banner-title">${t("program.bannerComplete")}</div>
       </div>
@@ -3142,7 +3142,7 @@ function refreshProgramBanner() {
 
   banner.classList.remove("hidden");
   banner.innerHTML = `
-    <div class="program-banner-icon">📅</div>
+    <div class="program-banner-icon">${icon("calendar", { size: 28 })}</div>
     <div class="program-banner-content">
       <div class="program-banner-title">${t("program.bannerTitle")} · ${goalLabel}</div>
       <div class="program-banner-body">${todayLine} · <span class="program-banner-meta">${meta}</span></div>
@@ -5355,6 +5355,42 @@ function escapeAttr(s) {
   return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
+// ─── ICON SYSTEM ─────────────────────────────────────────────────────────
+// Lucide-style stroke SVGs replacing emojis used as identifying icons
+// (chip prefixes, banner glyphs, brand logo). Emojis are kept where they
+// function as text annotations (✓ in toasts, ▶ inside button text). Per
+// the UI/UX Pro Max checklist: "no emoji icons (use SVG: Heroicons/
+// Lucide)" — emojis render inconsistently across OS + zoom + dark mode,
+// SVGs scale + inherit currentColor cleanly.
+const ICONS = {
+  zap:        '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+  dumbbell:   '<path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>',
+  footprints: '<path d="M4 16v-2.38c0-.85-.32-1.65-.91-2.27a3.3 3.3 0 0 1 0-4.7c.59-.62.91-1.42.91-2.27V2"/><path d="M14 20V8h6v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-1.5"/><path d="M14 8h-4l-2-2H4"/><path d="M11 20H7"/>',
+  activity:   '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  target:     '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  calendar:   '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  pause:      '<circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>',
+  trophy:     '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  mail:       '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  trendingUp: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  fileText:   '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  info:       '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  play:       '<polygon points="6 3 20 12 6 21 6 3"/>',
+  timer:      '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
+  refresh:    '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+};
+
+// Render an SVG icon. Inherits color via currentColor on stroke; size
+// defaults to 1em so it scales with surrounding text. Use opts.size for
+// fixed pixels (banner icons). opts.class adds an extra CSS class.
+function icon(name, opts = {}) {
+  const body = ICONS[name];
+  if (!body) return '';
+  const sz = opts.size != null ? `width="${opts.size}" height="${opts.size}"` : 'width="1em" height="1em"';
+  const cls = opts.class ? ` ${opts.class}` : '';
+  return `<svg class="icon${cls}" ${sz} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
 // Lightweight toast — ephemeral confirmation that an action completed.
 // Stacks if called multiple times; auto-dismisses after 3 seconds.
 // Used for "Program session loaded", "Goal saved", etc. — anywhere the
@@ -6315,7 +6351,7 @@ function renderHistory() {
       ${heatmapHtml}
       ${volumeChartHtml}
       <div class="empty-state">
-        <div class="empty-state-icon">🏋️</div>
+        <div class="empty-state-icon">${icon("dumbbell", { size: 48 })}</div>
         <div class="empty-state-title">${t("history.empty")}</div>
         <div class="empty-state-sub">${t("history.emptySub")}</div>
       </div>
@@ -7257,7 +7293,7 @@ function renderExerciseExtras(name, opts = {}) {
     <span class="ex-icon-row">
       <a class="ex-icon-btn" href="${url}" target="_blank" rel="noopener noreferrer" title="Watch demo on YouTube" aria-label="Watch demo">▶</a>
       <button class="ex-icon-btn" data-action="toggle-cues" title="Form cues" aria-label="Toggle form cues">ⓘ</button>
-      <button class="ex-icon-btn" data-action="toggle-progress" title="Progress chart" aria-label="Toggle progress chart">📈</button>
+      <button class="ex-icon-btn" data-action="toggle-progress" title="Progress chart" aria-label="Toggle progress chart">${icon("trendingUp", { size: 14 })}</button>
     </span>
   `;
 }
