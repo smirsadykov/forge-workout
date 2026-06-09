@@ -140,6 +140,74 @@
   --brand-glow: rgba(255, 140, 61, 0.32);
 }
 
+/* ─── SESSION TYPE GRID ────────────────────────────────────────────────
+   Stitch pattern: bigger icon-on-top cards instead of text chips for
+   the primary "what kind of session" choice. More tap area, faster
+   visual scanning, more memorable per-type identity. The buttons keep
+   the .chip class so the existing chip-handler picks them up; the
+   .session-type-card overrides apply the card layout. */
+.session-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 480px) {
+  .session-type-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 768px) {
+  .session-type-grid { grid-template-columns: repeat(6, 1fr); }
+}
+.session-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-easing);
+  /* Override .chip's rounded-pill shape and inline-flex layout. */
+  height: auto;
+  min-height: 84px;
+}
+.session-type-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card-hover);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.session-type-card.selected {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  box-shadow: 0 2px 12px var(--brand-glow);
+}
+.session-type-card.selected .session-type-icon {
+  color: var(--brand);
+}
+.session-type-icon {
+  width: 24px;
+  height: 24px;
+  transition: transform var(--motion-fast) var(--motion-easing);
+}
+.session-type-card:hover .session-type-icon {
+  transform: scale(1.1);
+}
+.session-type-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  text-align: center;
+}
+
 /* ─── MOBILE BOTTOM NAV ────────────────────────────────────────────────
    Stitch design pattern: 4 primary destinations as a fixed bottom bar
    on mobile. Reuses [data-view] click handlers from the top nav, so view

@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=121" />
+  <link rel="stylesheet" href="styles.css?v=122" />
 </head>
 <body>
   <header class="topbar">
@@ -141,21 +141,30 @@
         <div class="form-grid">
           <div class="form-group">
             <label class="group-label" data-i18n="gen.sessionType">Session type</label>
-            <div class="chip-row" data-field="goal" data-multi="false">
-              <button class="chip selected" data-value="standard" data-i18n="goal.standard">Standard</button>
-              <button class="chip" data-value="mobility" data-i18n="goal.mobility">Mobility</button>
-              <button class="chip" data-value="recovery" data-i18n="goal.recovery">Recovery</button>
-              <button class="chip chip-with-icon" data-value="animal_flow">
-                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                <span data-i18n="goal.animal_flow">Animal Flow</span>
+            <div class="chip-row session-type-grid" data-field="goal" data-multi="false">
+              <button class="chip session-type-card selected" data-value="standard">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
+                <span class="session-type-label" data-i18n="goal.standard">Standard</span>
               </button>
-              <button class="chip chip-with-icon" data-value="kb_sport">
-                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
-                <span data-i18n="goal.kb_sport">KB Sport</span>
+              <button class="chip session-type-card" data-value="mobility">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>
+                <span class="session-type-label" data-i18n="goal.mobility">Mobility</span>
               </button>
-              <button class="chip chip-with-icon" data-value="sport_prep">
-                <svg class="icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v-2.38c0-.85-.32-1.65-.91-2.27a3.3 3.3 0 0 1 0-4.7c.59-.62.91-1.42.91-2.27V2"/><path d="M14 20V8h6v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-1.5"/><path d="M14 8h-4l-2-2H4"/><path d="M11 20H7"/></svg>
-                <span data-i18n="goal.sport_prep">Sport Prep</span>
+              <button class="chip session-type-card" data-value="recovery">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                <span class="session-type-label" data-i18n="goal.recovery">Recovery</span>
+              </button>
+              <button class="chip session-type-card" data-value="animal_flow">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v-2.38c0-.85-.32-1.65-.91-2.27a3.3 3.3 0 0 1 0-4.7c.59-.62.91-1.42.91-2.27V2"/><path d="M14 20V8h6v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-1.5"/><path d="M14 8h-4l-2-2H4"/><path d="M11 20H7"/></svg>
+                <span class="session-type-label" data-i18n="goal.animal_flow">Animal Flow</span>
+              </button>
+              <button class="chip session-type-card" data-value="kb_sport">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M9 8h6"/><path d="M10 6h4v2h-4z"/></svg>
+                <span class="session-type-label" data-i18n="goal.kb_sport">KB Sport</span>
+              </button>
+              <button class="chip session-type-card" data-value="sport_prep">
+                <svg class="icon session-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <span class="session-type-label" data-i18n="goal.sport_prep">Sport Prep</span>
               </button>
             </div>
             <p class="form-hint" id="sessionTypeHint" data-i18n="gen.sessionTypeHint">Standard is hypertrophy programming — drives strength, muscle & work capacity simultaneously. Each exercise card shows how to adjust sets/reps/rest if you want a strength, endurance, or fat-loss bias for that session.</p>
@@ -787,20 +796,20 @@
     </div>
   </div>
 
-  <script src="config.js?v=121"></script>
-  <script src="supabase.min.js?v=121"></script>
-  <script src="i18n.js?v=121"></script>
-  <script src="exercises.js?v=121"></script>
+  <script src="config.js?v=122"></script>
+  <script src="supabase.min.js?v=122"></script>
+  <script src="i18n.js?v=122"></script>
+  <script src="exercises.js?v=122"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=121"></script>
-  <script src="app.js?v=121"></script>
+  <script src="lib/utils.js?v=122"></script>
+  <script src="app.js?v=122"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
     if (new URLSearchParams(location.search).has("test")) {
       const s = document.createElement("script");
-      s.src = "tests/run.js?v=121";
+      s.src = "tests/run.js?v=122";
       document.body.appendChild(s);
     }
   </script>
