@@ -285,6 +285,11 @@
     "program.activeDay": { en: "Day", ru: "День" },
     "program.activeDone": { en: "Sessions done", ru: "Тренировок сделано" },
     "program.deloadFlag": { en: "⚠ Deload week — volume cut 30%, rest extended", ru: "⚠ Разгрузочная неделя — объём -30%, отдых дольше" },
+    // Block periodization phase names — shown as badge on Program banner
+    "program.phase.accumulation":    { en: "Accumulation · volume build", ru: "Накопление · набор объёма" },
+    "program.phase.intensification": { en: "Intensification · push intensity", ru: "Интенсификация · повышение интенсивности" },
+    "program.phase.realization":     { en: "Realization · peak weeks", ru: "Реализация · пиковые недели" },
+    "program.phase.deload":          { en: "Deload · recovery week", ru: "Разгрузка · восстановление" },
     "program.pause": { en: "Pause", ru: "Поставить на паузу" },
     "program.resume": { en: "Resume", ru: "Продолжить" },
     "program.end": { en: "End program", ru: "Завершить программу" },

@@ -1430,13 +1430,47 @@ function getProgramWeekNum(p) {
   return Math.min(p.weeksTotal, Math.max(1, week));
 }
 
-// Penultimate week is the deload (textbook 4-week mesocycle ends with a
-// deload at week 4 of 4; for 6-week it's week 5; for 8-week it's week 7).
-// Last week resets to normal load to test the block's gains.
-function isProgramDeloadWeek(p) {
+// ─── BLOCK PERIODIZATION ─────────────────────────────────────────────────
+// Real block periodization (Verkhoshansky / Issurin) structures stress
+// across a mesocycle into phases. Each phase has distinct goals:
+//   • Accumulation:    high volume, moderate RIR — build work capacity
+//   • Intensification: drop volume, raise RIR    — push for strength
+//   • Realization:     lowest volume, max RIR    — peak / test phase
+//   • Deload:          50% volume, easy          — recovery / supercompensation
+//
+// Block length determines phase distribution. Shorter blocks compress
+// or skip realization; deload is always the final week.
+const BLOCK_PHASES = {
+  4: [
+    { name: "accumulation",    weeks: [1, 2], setMod: 1,  intensity: "easy" },
+    { name: "intensification", weeks: [3],    setMod: 0,  intensity: "hard" },
+    { name: "deload",          weeks: [4],    setMod: -1, intensity: "easy" },
+  ],
+  6: [
+    { name: "accumulation",    weeks: [1, 2, 3], setMod: 1,  intensity: "easy" },
+    { name: "intensification", weeks: [4, 5],    setMod: 0,  intensity: "hard" },
+    { name: "deload",          weeks: [6],       setMod: -1, intensity: "easy" },
+  ],
+  8: [
+    { name: "accumulation",    weeks: [1, 2, 3], setMod: 1,  intensity: "easy" },
+    { name: "intensification", weeks: [4, 5],    setMod: 0,  intensity: "normal" },
+    { name: "realization",     weeks: [6, 7],    setMod: -1, intensity: "hard" },
+    { name: "deload",          weeks: [8],       setMod: -1, intensity: "easy" },
+  ],
+};
+
+function getProgramPhase(p) {
+  if (!p) return null;
   const week = getProgramWeekNum(p);
-  if (p.weeksTotal === 4) return week === 4;
-  return week === p.weeksTotal - 1;
+  const phases = BLOCK_PHASES[p.weeksTotal] || BLOCK_PHASES[8];
+  return phases.find(ph => ph.weeks.includes(week)) || phases[0];
+}
+
+// Deload check now reads from the phase config — keeps the legacy
+// behavior (deload = final week) but routed through the block templates
+// so updating the phase config in one place updates everything.
+function isProgramDeloadWeek(p) {
+  return getProgramPhase(p)?.name === "deload";
 }
 
 function isProgramComplete(p) {
@@ -1450,6 +1484,7 @@ function getNextProgramSession(userId) {
   const split = PROGRAM_SPLITS[p.goal]?.[p.sessionsPerWeek];
   if (!split) return null;
   const session = split[p.sessionIdx % split.length];
+  const phase = getProgramPhase(p);
   return {
     goal: p.goal,
     target: session.target,
@@ -1460,6 +1495,11 @@ function getNextProgramSession(userId) {
     totalDays: split.length,
     deload: isProgramDeloadWeek(p),
     complete: isProgramComplete(p),
+    // Periodization data — generator reads phase + setMod to scale
+    // the prescription for the user's current week in the block.
+    phase: phase?.name,
+    phaseSetMod: phase?.setMod ?? 0,
+    phaseIntensity: phase?.intensity,
   };
 }
 
@@ -3147,6 +3187,12 @@ function refreshProgramBanner() {
     day: next.dayInRotation, days: next.totalDays,
   });
   const todayLine = t("program.bannerSessionToday", { label: next.label });
+  const phaseLabel = next.phase
+    ? (t(`program.phase.${next.phase}`) || next.phase[0].toUpperCase() + next.phase.slice(1))
+    : null;
+  const phaseHtml = phaseLabel
+    ? `<div class="program-banner-phase phase-${next.phase}">${phaseLabel}</div>`
+    : "";
   const deloadHtml = next.deload
     ? `<div class="program-banner-deload">${t("program.deloadFlag")}</div>` : "";
 
@@ -3156,6 +3202,7 @@ function refreshProgramBanner() {
     <div class="program-banner-content">
       <div class="program-banner-title">${t("program.bannerTitle")} · ${goalLabel}</div>
       <div class="program-banner-body">${todayLine} · <span class="program-banner-meta">${meta}</span></div>
+      ${phaseHtml}
       ${deloadHtml}
     </div>
     <div class="program-banner-actions">
@@ -3179,6 +3226,14 @@ function refreshProgramBanner() {
     formState.goal = next.goal;
     formState.target = next.target;
     formState.deload = !!next.deload;
+    // Periodization phase data — applied to the generation so this
+    // session reflects where the user IS in the block, not a generic
+    // prescription. Intensity comes from the phase template; setMod is
+    // stored on formState so pickPrescription can scale the final set
+    // count for realization (-1) or accumulation (+1) phases.
+    if (next.phaseIntensity) formState.intensity = next.phaseIntensity;
+    formState.phaseSetMod = next.phaseSetMod || 0;
+    formState.phase = next.phase || null;
     const LEGACY_TO_STANDARD = new Set(["strength", "hypertrophy", "endurance", "fat_loss"]);
     const chipValue = LEGACY_TO_STANDARD.has(next.goal) ? "standard" : next.goal;
     document.querySelectorAll('.chip-row[data-field="goal"] .chip').forEach(c => {
@@ -4249,7 +4304,7 @@ function exercise_pattern_allows_alternates(exercise) {
   return true;
 }
 
-function pickPrescription(goal, intensity, exercise, style = "standard", deload = false, duration = 45) {
+function pickPrescription(goal, intensity, exercise, style = "standard", deload = false, duration = 45, phaseSetMod = 0) {
   // Mobility exercises always use the mobility prescription regardless of
   // the workout's main goal — they're brief warm-ups, not the main work.
   const effectiveGoal = exercise.pattern === "mobility" ? "mobility" : goal;
@@ -4421,6 +4476,14 @@ function pickPrescription(goal, intensity, exercise, style = "standard", deload 
     sets = Math.max(2, Math.round(sets * 0.7));
     rest = roundRest(rest * 1.1);
     finisher = null;
+  }
+
+  // Block periodization phase modifier: accumulation phase adds +1 set
+  // (volume push), realization phase trims -1 set (lower volume, max
+  // intensity). Applied AFTER all other adjustments so the phase
+  // shape is preserved relative to the goal's base prescription.
+  if (phaseSetMod) {
+    sets = Math.max(2, sets + phaseSetMod);
   }
 
   // Final guard: cap sets by requested duration so the time budget holds.
@@ -4990,7 +5053,7 @@ function pickWarmupExercises(target, count) {
   return scored.slice(0, count).map(s => s.ex);
 }
 
-function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, sport = null }) {
+function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, phaseSetMod = 0, phase = null, sport = null }) {
   // Legacy alias: old workouts saved style="intensity" before the rename
   // to style="tempo" — treat them as the same for any read paths that
   // re-enter here. New writes always use "tempo".
@@ -5317,7 +5380,7 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
 
   const exercises = picked.map(ex => {
     const boost = nextTierBoost[ex.name];
-    const main = pickPrescription(goal, intensity, ex, style, deload, duration);
+    const main = pickPrescription(goal, intensity, ex, style, deload, duration, phaseSetMod);
     // Per-card advice: compute strength/endurance/fat_loss alternates for
     // the SAME exercise. Only attach when the session is the user-facing
     // "Standard" default (goal=hypertrophy + style=standard) — for Recovery
@@ -5372,7 +5435,7 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     createdAt: Date.now(),
-    inputs: { goal, equipment, target, duration, intensity, style, deload },
+    inputs: { goal, equipment, target, duration, intensity, style, deload, phase, phaseSetMod },
     exercises,
   };
 }
@@ -6066,6 +6129,8 @@ el.generateBtn.addEventListener("click", () => {
     intensity: intensity || "normal",
     style: formState.style || "standard",
     deload: !!formState.deload,
+    phaseSetMod: formState.phaseSetMod || 0,
+    phase: formState.phase || null,
     sport,
   });
   // Defensive: if a goal-specific generator returns null (pool empty after

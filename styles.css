@@ -3179,6 +3179,20 @@ input:focus, select:focus, textarea:focus {
   color: #ff9e3d;
   letter-spacing: 0.3px;
 }
+.program-banner-phase {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-radius: 4px;
+}
+.program-banner-phase.phase-accumulation    { background: var(--success-soft); color: var(--success); }
+.program-banner-phase.phase-intensification { background: var(--warning-soft); color: var(--warning); }
+.program-banner-phase.phase-realization     { background: var(--danger-soft);  color: var(--danger);  }
+.program-banner-phase.phase-deload          { background: var(--violet-soft);  color: var(--violet);  }
 .program-banner-actions {
   display: flex;
   gap: 8px;
