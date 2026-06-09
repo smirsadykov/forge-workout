@@ -1110,9 +1110,11 @@ function renderBodyHeatmap(userId) {
               ["quads",     26, 68], ["quads",     36, 68],
               ["calves",    24, 80], ["calves",    38, 80],
               // BACK figure (body center ~x=71%, baked dots on right side):
-              ["shoulders", 65, 32], ["shoulders", 77, 32],
-              ["back",      71, 35],
-              ["triceps",   57, 43], ["triceps",   82, 43],
+              // Back-left shoulder baked dot is at ~60% (not 65 — that's traps).
+              // Triceps shifted right 1pp to sit on the leader-line dot.
+              ["shoulders", 60, 32], ["shoulders", 78, 32],
+              ["back",      71, 36],
+              ["triceps",   58, 43], ["triceps",   83, 43],
               ["glutes",    67, 55], ["glutes",    76, 55],
               ["hamstrings",66, 70], ["hamstrings",76, 70],
               ["calves",    64, 80], ["calves",    78, 80],
