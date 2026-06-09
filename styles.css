@@ -495,7 +495,12 @@
 .duration-ticks {
   display: flex;
   justify-content: space-between;
-  padding: 0 8px;
+  /* Native range thumbs travel only across (track_width − thumb_width),
+     so the thumb's left edge at min-value still sits one thumb-radius
+     inward from the track's left edge. Pad the tick container by the
+     thumb radius (11px = 22px/2) so the tick label positions match
+     where the thumb actually stops. */
+  padding: 0 11px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
