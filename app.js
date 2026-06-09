@@ -1015,18 +1015,21 @@ function renderBodyHeatmap(userId) {
   const status = (m) => classifyVolumeStatus(m, weeklySets(m));
   const fill = (m) => status(m).color;
   const units = getPrefs(userId).units;
+  const setsPerWk = t("vol.setsPerWeek") || "sets/wk";
+  const noWorkLabel = t("vol.noWork") || "no work";
   const tooltip = (m) => {
     const d = data[m];
     const ws = weeklySets(m);
     const st = status(m);
+    const muscleLabel = t("muscle." + m) || m;
     if (!d || d.sets < 0.5) {
       const lm = VOLUME_LANDMARKS[m];
-      return lm ? `${m}: 0 sets/wk (MEV ${lm.mev})` : `${m}: no work`;
+      return lm ? `${muscleLabel}: 0 ${setsPerWk} (MEV ${lm.mev})` : `${muscleLabel}: ${noWorkLabel}`;
     }
     const volDisplay = d.vol > 0
-      ? ` · ${Math.round(toDisplay(d.vol, units)).toLocaleString()} ${units}/2wk`
+      ? ` · ${Math.round(toDisplay(d.vol, units)).toLocaleString()} ${units}/2${t("vol.weekShort") || "wk"}`
       : "";
-    return `${m}: ${ws.toFixed(1)} sets/wk · ${st.message}${volDisplay}`;
+    return `${muscleLabel}: ${ws.toFixed(1)} ${setsPerWk} · ${st.message}${volDisplay}`;
   };
 
   // Region helper: emit a muscle shape with a <title> tooltip child.
@@ -1066,7 +1069,6 @@ function renderBodyHeatmap(userId) {
       </div>
       <div class="body-map-grid">
         <div class="body-map-figure">
-          <h3 class="volume-chart-title volume-chart-title-compact">${t("history.bodyHeatmap")} <span class="volume-chart-sub">${t("history.bodyHeatmapSub")}</span></h3>
       <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
         <!-- FRONT -->
         <g class="figure-front">

@@ -657,6 +657,8 @@
     "vol.highMsg": { en: "high volume — approaching MRV", ru: "высокий объём — близко к MRV" },
     "vol.overMsg": { en: "over MRV · recovery at risk", ru: "выше MRV · восстановление под угрозой" },
     "vol.setsPerWeek": { en: "sets/wk", ru: "подх./нед" },
+    "vol.weekShort": { en: "wk", ru: "нед" },
+    "vol.noWork": { en: "no work", ru: "нет работы" },
 
     // ─── Sleep ratings ───────────────────────────────────────────────
     "sleep.promptTitle": { en: "How did you sleep last night?", ru: "Как ты спал прошлой ночью?" },
