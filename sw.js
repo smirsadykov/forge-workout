@@ -3,7 +3,7 @@
 // cache-busting; cache-first for the icon and manifest. Falls back to cached
 // app shell entirely when offline.
 
-const CACHE_NAME = "forge-cache-v88";
+const CACHE_NAME = "forge-cache-v89";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const APP_SHELL = [
   "./supabase.min.js",
   "./manifest.json",
   "./icon.svg",
+  "./assets/body-map.jpg",
 ];
 
 self.addEventListener("install", (event) => {

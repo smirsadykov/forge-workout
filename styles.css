@@ -351,7 +351,7 @@
 }
 @media (min-width: 768px) {
   .body-map-grid {
-    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
     align-items: start;
   }
 }
@@ -3892,74 +3892,78 @@ input:focus, select:focus, textarea:focus {
   text-anchor: middle;
 }
 
-/* ──────────────── Body Map Stitch HUD chrome ──────────────── */
-/* Sci-fi HUD frame around the body-svg: glass card with inset shadow,
-   brand-color corner brackets emit from the SVG itself, subtle grid lines
-   inside via repeating linear-gradient. */
+/* ──────────────── Body Map: Stitch asset + glow hotspots ──────────────── */
+/* The body-map.jpg asset has all the HUD chrome (corners, callouts, labels)
+   baked in. We layer status-colored glow blobs on top at the muscle anchor
+   positions to drive the heatmap signal. */
 .body-map-figure {
   position: relative;
-  padding: 18px 14px 8px;
-  background:
-    linear-gradient(180deg, rgba(13,15,21,0.6) 0%, rgba(13,15,21,0.3) 100%),
-    radial-gradient(ellipse at 50% 60%, rgba(249,115,22,0.06) 0%, transparent 70%);
-  border: 1px solid var(--border);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.body-map-image-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
   border-radius: var(--radius);
   overflow: hidden;
 }
-.body-map-figure::before {
-  /* Subtle scanline overlay for sci-fi HUD feel */
+.body-map-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+/* Per-muscle clickable glow hotspot. Position is percentage-based so the
+   overlay scales with the image. The status color drives the radial glow. */
+.muscle-hotspot {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--hotspot-color) 0%, transparent 65%);
+  cursor: pointer;
+  transition: transform 0.18s ease, filter 0.18s ease;
+  filter: brightness(1.1);
+  -webkit-tap-highlight-color: transparent;
+}
+.muscle-hotspot::after {
+  /* Solid dot core — small, on top of the soft glow */
   content: "";
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    180deg,
-    transparent 0,
-    transparent 3px,
-    rgba(255,255,255,0.012) 3px,
-    rgba(255,255,255,0.012) 4px
-  );
-  pointer-events: none;
-  z-index: 1;
+  margin: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hotspot-color);
+  box-shadow: 0 0 6px var(--hotspot-color);
 }
-.body-map-figure .body-svg {
-  position: relative;
-  z-index: 2;
+.muscle-hotspot:hover,
+.muscle-hotspot:focus-visible {
+  transform: scale(1.4);
+  filter: brightness(1.5);
+  outline: none;
 }
-
-/* Callout labels — leader-line + label text matching Stitch HUD style */
-.body-callout .callout-line {
-  stroke: var(--text-dim);
-  stroke-width: 0.8;
-  stroke-dasharray: 2 2;
-  opacity: 0.7;
+.muscle-hotspot:focus-visible {
+  box-shadow: 0 0 0 2px var(--brand);
 }
-.body-callout .callout-text {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  fill: var(--text-secondary);
-  text-transform: uppercase;
-  pointer-events: none;
+/* Subtle ambient pulse so the dots breathe even when not interacted with */
+@keyframes hotspot-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
 }
-.body-callout .callout-dot {
-  stroke: var(--bg);
-  stroke-width: 0.5;
-}
-.body-callout .callout-dot-glow {
-  opacity: 0.25;
-  filter: blur(2px);
-  animation: callout-pulse 2.4s ease-in-out infinite;
-}
-@keyframes callout-pulse {
-  0%, 100% { opacity: 0.18; transform: scale(1); transform-origin: center; }
-  50% { opacity: 0.45; }
-}
-
-/* HUD corner brackets */
-.hud-corners {
-  opacity: 0.55;
-}
+.muscle-hotspot { animation: hotspot-breathe 3.2s ease-in-out infinite; }
 
 .muscle-region {
   cursor: pointer;
