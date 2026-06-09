@@ -4066,6 +4066,31 @@ function resetForm() {
 // sanity-check before generating. If a required field is missing, shows
 // a placeholder pill prompting them to pick it. Long-form summary fits
 // fully in mobile width because each pill is short.
+// Duration slider — replaces the chip row from the Stitch redesign.
+// Wired once at boot; updates formState + the large data-point display
+// + triggers the same downstream refreshers that chip clicks fire.
+(function wireDurationSlider() {
+  if (typeof document === "undefined") return;
+  document.addEventListener("DOMContentLoaded", () => {
+    const slider = document.getElementById("durationSlider");
+    const display = document.getElementById("durationDisplay");
+    if (!slider) return;
+    const apply = () => {
+      const val = String(slider.value);
+      formState.duration = val;
+      if (display) {
+        const unitLabel = (typeof t === "function" ? (t("gen.min") || "MIN") : "MIN").toUpperCase();
+        display.innerHTML = `${val} <span class="duration-unit">${unitLabel}</span>`;
+      }
+      if (typeof refreshLoadWarning === "function") refreshLoadWarning();
+      if (typeof refreshFormSummary === "function") refreshFormSummary();
+      if (typeof refreshFormHints === "function") refreshFormHints();
+    };
+    slider.addEventListener("input", apply);
+    apply();  // initial render — sets formState.duration to 45
+  });
+})();
+
 function refreshFormSummary() {
   const el2 = document.getElementById("formSummary");
   if (!el2) return;
