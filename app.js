@@ -1037,9 +1037,36 @@ function renderBodyHeatmap(userId) {
   const poly = (m, d) =>
     `<path d="${d}" fill="${fill(m)}" class="muscle-region" data-muscle="${m}"><title>${tooltip(m)}</title></path>`;
 
+  // Upper / lower volume rollup for the side stats panel. Sport-science
+  // grouping — core kept separate since it sits cross-functionally.
+  const upperGroup = ["chest", "back", "shoulders", "biceps", "triceps"];
+  const lowerGroup = ["quads", "hamstrings", "glutes", "calves"];
+  const upperSets = upperGroup.reduce((s, m) => s + weeklySets(m), 0);
+  const lowerSets = lowerGroup.reduce((s, m) => s + weeklySets(m), 0);
+  const upperPct = Math.min(100, Math.round((upperSets / 20) * 100));  // /20 = generous upper MAV cap
+  const lowerPct = Math.min(100, Math.round((lowerSets / 16) * 100));  // /16 = lower MAV cap
+  const upperBarClass = upperPct >= 70 ? "ok" : upperPct >= 40 ? "warn" : "low";
+  const lowerBarClass = lowerPct >= 70 ? "ok" : lowerPct >= 40 ? "warn" : "low";
+  // Recent session intensity readout — last logged workout's intensity,
+  // defaults to "—" with no data.
+  const lastWorkout = getWorkouts(userId)[0];
+  const lastIntensity = lastWorkout?.inputs?.intensity || lastWorkout?.inputs?.difficulty || "—";
+  const lastIntensityLabel = lastIntensity === "—"
+    ? "—"
+    : (t(`intensity.${lastIntensity}`) || lastIntensity).toUpperCase();
+
   return `
-    <div class="body-heatmap">
-      <h3 class="volume-chart-title">${t("history.bodyHeatmap")} <span class="volume-chart-sub">${t("history.bodyHeatmapSub")}</span></h3>
+    <div class="body-heatmap body-map-stitch">
+      <div class="body-map-header">
+        <h2 class="body-map-title">${t("history.bodyMap") || "BODY MAP"}</h2>
+        <div class="body-map-subtitle-row">
+          <span class="body-map-divider"></span>
+          <span class="body-map-subtitle">${t("history.bodyMapSub") || "OVER 14 DAYS · TAP MUSCLE FOR DETAILS"}</span>
+        </div>
+      </div>
+      <div class="body-map-grid">
+        <div class="body-map-figure">
+          <h3 class="volume-chart-title volume-chart-title-compact">${t("history.bodyHeatmap")} <span class="volume-chart-sub">${t("history.bodyHeatmapSub")}</span></h3>
       <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
         <!-- FRONT -->
         <g class="figure-front">
@@ -1086,10 +1113,47 @@ function renderBodyHeatmap(userId) {
           <ellipse cx="120" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
         </g>
       </svg>
+        </div>
+        <div class="body-map-stats">
+          <div class="body-map-stats-card">
+            <h4 class="label-caps body-map-stats-title">${t("history.trainingVolume") || "Training Volume"}</h4>
+            <div class="body-map-vol-row">
+              <div class="body-map-vol-head">
+                <span class="label-caps">${t("history.upperBody") || "UPPER BODY"}</span>
+                <span class="label-caps body-map-vol-pct">${upperPct}%</span>
+              </div>
+              <div class="body-map-vol-track">
+                <div class="body-map-vol-fill ${upperBarClass}" style="width:${upperPct}%"></div>
+              </div>
+            </div>
+            <div class="body-map-vol-row">
+              <div class="body-map-vol-head">
+                <span class="label-caps">${t("history.lowerBody") || "LOWER BODY"}</span>
+                <span class="label-caps body-map-vol-pct">${lowerPct}%</span>
+              </div>
+              <div class="body-map-vol-track">
+                <div class="body-map-vol-fill ${lowerBarClass}" style="width:${lowerPct}%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="body-map-bento">
+            <div class="body-map-bento-card">
+              <div class="body-map-bento-icon">${icon("calendar", { size: 20 })}</div>
+              <div class="data-point body-map-bento-value">14 ${t("gen.days") || "d"}</div>
+              <div class="label-caps body-map-bento-label">${t("history.periodAnalyzed") || "PERIOD ANALYZED"}</div>
+            </div>
+            <div class="body-map-bento-card">
+              <div class="body-map-bento-icon">${icon("zap", { size: 20 })}</div>
+              <div class="data-point body-map-bento-value">${lastIntensityLabel}</div>
+              <div class="label-caps body-map-bento-label">${t("history.lastIntensity") || "LAST SESSION"}</div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="heatmap-legend landmarks">
         <span class="lm-swatch" style="background:#1e2230"></span><span>${t("vol.underMev")}</span>
         <span class="lm-swatch" style="background:#9a8c2b"></span><span>${t("vol.approaching")}</span>
-        <span class="lm-swatch" style="background:#3da35d"></span><span>${t("vol.optimal")}</span>
+        <span class="lm-swatch" style="background:var(--success)"></span><span>${t("vol.optimal")}</span>
         <span class="lm-swatch" style="background:#d68f2c"></span><span>${t("vol.high")}</span>
         <span class="lm-swatch" style="background:#c0392b"></span><span>${t("vol.overMrv")}</span>
       </div>
