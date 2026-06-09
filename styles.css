@@ -140,6 +140,162 @@
   --brand-glow: rgba(255, 140, 61, 0.32);
 }
 
+/* ─── MUSCLE DETAIL BOTTOM SHEET (Stitch design) ───────────────────────
+   Slides up from viewport bottom when user taps a muscle region. Modal
+   pattern: full-viewport overlay with a dark backdrop + slide-up panel.
+   Dismissed via backdrop click, X button, or ESC key. */
+.muscle-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+}
+.muscle-sheet.hidden { display: none; }
+.muscle-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 21, 0.7);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity var(--motion-base) var(--motion-easing);
+}
+.muscle-sheet-open .muscle-sheet-backdrop { opacity: 1; }
+.muscle-sheet-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--brand);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform var(--motion-base) var(--motion-easing);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+@media (min-width: 768px) {
+  .muscle-sheet-panel {
+    max-width: 480px;
+    left: 50%;
+    transform: translate(-50%, 100%);
+    border-radius: var(--radius-lg);
+    bottom: 32px;
+  }
+  .muscle-sheet-open .muscle-sheet-panel {
+    transform: translate(-50%, 0);
+  }
+}
+.muscle-sheet-open .muscle-sheet-panel { transform: translateY(0); }
+.muscle-sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+.muscle-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.muscle-sheet-name {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--brand);
+  line-height: 1;
+  margin: 0;
+}
+.muscle-sheet-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.muscle-sheet-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.muscle-sheet-status-row[data-status="under_mev"] .muscle-sheet-status-dot,
+.muscle-sheet-status-row[data-status="approaching"] .muscle-sheet-status-dot {
+  background: var(--text-dim);
+}
+.muscle-sheet-status-row[data-status="over_mrv"] .muscle-sheet-status-dot,
+.muscle-sheet-status-row[data-status="high"] .muscle-sheet-status-dot {
+  background: var(--warning);
+}
+.muscle-sheet-status {
+  color: var(--text-dim);
+}
+.muscle-sheet-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  padding: 6px;
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-easing);
+  flex-shrink: 0;
+}
+.muscle-sheet-close:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.muscle-sheet-section-title {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+.muscle-sheet-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.muscle-sheet-exercise-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.muscle-sheet-exercise-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.muscle-sheet-exercise-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.muscle-sheet-sets {
+  color: var(--brand);
+}
+.muscle-sheet-daysago {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.muscle-sheet-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-style: italic;
+}
+
 /* ─── BODY MAP (Stitch design) ─────────────────────────────────────────
    2-col layout: anatomical figure left, stats panel right. Title gets
    the italic uppercase Archivo Narrow treatment + orange divider line

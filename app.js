@@ -4225,6 +4225,111 @@ function refreshFormSummary() {
   el2.innerHTML = pills.map(p => `<span class="form-summary-pill" data-pill="${p.k}">${escapeAttr(p.label)}</span>`).join("");
 }
 
+// ─── MUSCLE DETAIL SHEET ─────────────────────────────────────────────────
+// Bottom sheet that slides up when the user taps a muscle region in
+// the Body Map. Shows muscle name, current MEV/MAV/MRV status, and
+// the top recent exercises that contributed to that muscle's volume.
+// Stitch-style modal — backdrop click + X button + ESC all dismiss.
+function openMuscleSheet(muscleName) {
+  if (!session) return;
+  const sheet = document.getElementById("muscleSheet");
+  if (!sheet) return;
+
+  // Resolve display name (i18n if available, else the raw key)
+  const nameKey = `muscleSheet.name.${muscleName}`;
+  const displayName = (t(nameKey) || muscleName).toUpperCase();
+  document.getElementById("sheetMuscleName").textContent = displayName;
+
+  // Compute status from the same volume data the heatmap uses
+  const data = getRecentMuscleVolume(session.username, 14);
+  const weeklySets = (data[muscleName]?.sets || 0) / 2;
+  const st = classifyVolumeStatus(muscleName, weeklySets);
+  const statusEl = document.getElementById("sheetMuscleStatus");
+  statusEl.textContent = `${st.message.toUpperCase()} · ${weeklySets.toFixed(1)} ${t("muscleSheet.setsPerWeek") || "sets/wk"}`;
+  // Color the status dot via data attribute → CSS rule
+  statusEl.parentElement.setAttribute("data-status", st.key || "ok");
+
+  // Find recent exercises that targeted this muscle. Walk getStats →
+  // history (last 14 days) → sets that contributed ≥0.3 muscle share.
+  // Sort by total contributed sets desc, take top 4.
+  const stats = getStats(session.username);
+  const cutoff = Date.now() - 14 * 86400000;
+  const tally = {};  // exName → { sets, lastDate }
+  for (const [exName, stat] of Object.entries(stats)) {
+    const ex = EXERCISES.find(e => e.name === exName);
+    if (!ex) continue;
+    const contributions = getMuscleContributions(ex);
+    const share = contributions[muscleName] || 0;
+    if (share < 0.3) continue;  // only count meaningful contributors
+    for (const entry of (stat.history || [])) {
+      const n = normalizeHistoryEntry(entry);
+      if (n.date < cutoff) continue;
+      const setCount = n.sets.reduce((c, s) => c + (s.side ? 0.5 : 1), 0);
+      if (!tally[exName]) tally[exName] = { sets: 0, lastDate: 0, share };
+      tally[exName].sets += setCount * share;
+      tally[exName].lastDate = Math.max(tally[exName].lastDate, n.date);
+    }
+  }
+  const top = Object.entries(tally)
+    .sort((a, b) => b[1].sets - a[1].sets)
+    .slice(0, 4);
+
+  const listEl = document.getElementById("sheetExerciseList");
+  if (top.length === 0) {
+    listEl.innerHTML = `<div class="muscle-sheet-empty">${t("muscleSheet.empty") || "No recent work on this muscle in the last 14 days."}</div>`;
+  } else {
+    listEl.innerHTML = top.map(([name, info]) => {
+      const setsRounded = Math.round(info.sets * 10) / 10;
+      const daysAgo = Math.round((Date.now() - info.lastDate) / 86400000);
+      const daysLabel = daysAgo === 0
+        ? (t("muscleSheet.today") || "TODAY")
+        : `${daysAgo}${t("muscleSheet.daysAgo") || "D AGO"}`;
+      return `
+        <div class="muscle-sheet-exercise-row">
+          <div class="muscle-sheet-exercise-name">${escapeAttr(name)}</div>
+          <div class="muscle-sheet-exercise-meta">
+            <span class="label-caps muscle-sheet-sets">${setsRounded} ${t("muscleSheet.sets") || "SETS"}</span>
+            <span class="muscle-sheet-daysago">${daysLabel}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  sheet.classList.remove("hidden");
+  requestAnimationFrame(() => sheet.classList.add("muscle-sheet-open"));
+}
+
+function closeMuscleSheet() {
+  const sheet = document.getElementById("muscleSheet");
+  if (!sheet) return;
+  sheet.classList.remove("muscle-sheet-open");
+  // Wait for slide-down animation then hide
+  setTimeout(() => sheet.classList.add("hidden"), 250);
+}
+
+// Wire global handlers — fires once at boot
+(function wireMuscleSheet() {
+  if (typeof document === "undefined") return;
+  document.addEventListener("click", (e) => {
+    // Open on muscle-region click (SVG element in body map)
+    const region = e.target.closest(".muscle-region");
+    if (region && region.dataset.muscle) {
+      e.preventDefault();
+      openMuscleSheet(region.dataset.muscle);
+      return;
+    }
+    // Close on backdrop / X click
+    if (e.target.closest("[data-sheet-action='close']")) {
+      closeMuscleSheet();
+    }
+  });
+  // ESC closes
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMuscleSheet();
+  });
+})();
+
 // ─── FORM HINTS ──────────────────────────────────────────────────────────
 // Dynamic descriptive text under chip rows. Updates on every selection
 // so users learn what each option does at the point of decision instead
