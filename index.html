@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=120" />
+  <link rel="stylesheet" href="styles.css?v=121" />
 </head>
 <body>
   <header class="topbar">
@@ -787,22 +787,45 @@
     </div>
   </div>
 
-  <script src="config.js?v=120"></script>
-  <script src="supabase.min.js?v=120"></script>
-  <script src="i18n.js?v=120"></script>
-  <script src="exercises.js?v=120"></script>
+  <script src="config.js?v=121"></script>
+  <script src="supabase.min.js?v=121"></script>
+  <script src="i18n.js?v=121"></script>
+  <script src="exercises.js?v=121"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=120"></script>
-  <script src="app.js?v=120"></script>
+  <script src="lib/utils.js?v=121"></script>
+  <script src="app.js?v=121"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
     if (new URLSearchParams(location.search).has("test")) {
       const s = document.createElement("script");
-      s.src = "tests/run.js?v=120";
+      s.src = "tests/run.js?v=121";
       document.body.appendChild(s);
     }
   </script>
+
+  <!-- Mobile bottom nav (Stitch design) — fixed bar with the 4 primary
+       views. Hidden on desktop (>= 768px) via CSS. Click handlers reuse
+       the same `[data-view]` infrastructure as the top nav, so view
+       state stays in sync between both. -->
+  <nav id="bottomNav" class="bottom-nav hidden" aria-label="Primary navigation">
+    <button class="bottom-nav-btn active" data-view="generator" aria-label="Generator">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
+      <span class="bottom-nav-label" data-i18n="nav.generator">Generator</span>
+    </button>
+    <button class="bottom-nav-btn" data-view="history" aria-label="History">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+      <span class="bottom-nav-label" data-i18n="nav.history">History</span>
+    </button>
+    <button class="bottom-nav-btn" data-view="library" aria-label="Library">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span class="bottom-nav-label" data-i18n="nav.library">Library</span>
+    </button>
+    <button class="bottom-nav-btn" data-view="settings" aria-label="Settings">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="bottom-nav-label" data-i18n="nav.settings">Settings</span>
+    </button>
+  </nav>
 </body>
 </html>

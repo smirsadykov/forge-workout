@@ -140,6 +140,77 @@
   --brand-glow: rgba(255, 140, 61, 0.32);
 }
 
+/* ─── MOBILE BOTTOM NAV ────────────────────────────────────────────────
+   Stitch design pattern: 4 primary destinations as a fixed bottom bar
+   on mobile. Reuses [data-view] click handlers from the top nav, so view
+   state stays in sync. Hidden on desktop (>= 768px) — there the top nav
+   buttons remain visible. */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  justify-content: space-around;
+  align-items: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(13, 15, 21, 0.92);
+}
+:root[data-theme="light"] .bottom-nav {
+  background: rgba(246, 247, 250, 0.95);
+}
+@media (max-width: 767px) {
+  .bottom-nav { display: flex; }
+  /* Push the page content above the bottom nav so nothing gets covered. */
+  main { padding-bottom: 80px; }
+  /* Sticky generate sits ABOVE the bottom nav (offset by nav height). */
+  .sticky-generate { bottom: 64px; }
+  /* Hide the top-nav primary buttons on mobile — bottom nav takes over.
+     Keep secondary controls (units, lang, theme, logout) accessible via
+     the hamburger menu. */
+  .nav-items .nav-btn[data-view] { display: none; }
+}
+.bottom-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-easing);
+  font-family: inherit;
+}
+.bottom-nav-btn:hover,
+.bottom-nav-btn:focus-visible {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.bottom-nav-btn.active {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.bottom-nav-btn:active {
+  transform: scale(0.92);
+}
+.bottom-nav-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 /* ─── DURATION SLIDER ──────────────────────────────────────────────────
    Replaces the 5-chip row with a range input + Archivo Narrow data-point
    readout. Same 5 stop values (15/30/45/60/90 min) via step=15. */

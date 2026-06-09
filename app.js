@@ -2099,6 +2099,16 @@ function showApp(view = "generator") {
   document.querySelectorAll(".nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.view === view);
   });
+  // Mobile bottom nav: show once user is past auth; hide during a
+  // guided session (the session has its own bottom controls). Active
+  // state synced to the visible view.
+  const bottomNav = document.getElementById("bottomNav");
+  if (bottomNav) {
+    bottomNav.classList.toggle("hidden", view === "guided");
+    bottomNav.querySelectorAll(".bottom-nav-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.view === view);
+    });
+  }
   el.generatorView.classList.toggle("hidden", view !== "generator");
   el.historyView.classList.toggle("hidden", view !== "history");
   el.settingsView.classList.toggle("hidden", view !== "settings");
@@ -3391,6 +3401,21 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
   });
 });
+
+// Bottom nav (mobile only) — mirror clicks into the same showApp() flow.
+// CSS handles visibility (display: flex below 768px). Active state on
+// the bottom buttons is synced via syncBottomNavActive() called from
+// showApp.
+document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    showApp(btn.dataset.view);
+  });
+});
+function syncBottomNavActive(viewName) {
+  document.querySelectorAll(".bottom-nav-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.view === viewName);
+  });
+}
 
 // Hamburger toggle (mobile)
 const navMenuBtn = document.getElementById("navMenuBtn");
