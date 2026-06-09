@@ -140,6 +140,25 @@
   --brand-glow: rgba(255, 140, 61, 0.32);
 }
 
+/* ─── GLOW-PULSE CTA ───────────────────────────────────────────────────
+   Stitch primary-CTA accent: an expanding ring of brand color pulses
+   outward from the button, communicating "this is THE action". Respects
+   prefers-reduced-motion (the global rule disables animation entirely).
+   Applied to the Generate button via the existing .primary-btn.big
+   class scoped to the generator's sticky-generate row. */
+@keyframes glowPulse {
+  0%   { box-shadow: 0 0 0 0 var(--brand-glow); }
+  70%  { box-shadow: 0 0 0 12px rgba(249, 115, 22, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+}
+.sticky-generate .primary-btn.big {
+  animation: glowPulse 2s ease-out infinite;
+}
+.sticky-generate .primary-btn.big:hover,
+.sticky-generate .primary-btn.big.generating {
+  animation: none;  /* user is engaging — no need to draw attention */
+}
+
 /* ─── SESSION TYPE GRID ────────────────────────────────────────────────
    Stitch pattern: bigger icon-on-top cards instead of text chips for
    the primary "what kind of session" choice. More tap area, faster
