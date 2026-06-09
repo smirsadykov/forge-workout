@@ -18,10 +18,9 @@
   --text-muted: #9098b0;     /* timestamps, helper — 5.0:1 */
 
   /* ─── BRAND ───────────────────────────────────────────────────────────
-     Warm amber identity (2026-06 shift from yellow #ffd633). Lands
-     FORGE next to Strava (premium athletic) instead of Beastmode (raw
-     gym-bro yellow). Amber reads as: energetic, premium, sport, warmth —
-     all aligned with the actual product (sophisticated programming).
+     Stitch orange #f97316 (2026-06 design refresh from amber #ff8c3d).
+     Slightly more saturated than amber, lands FORGE next to Strava
+     (premium athletic) with a touch more engineering/industrial edge.
 
      Used ONLY for:
        • brand logo
@@ -30,16 +29,21 @@
        • accent strokes that reinforce branding
      NOT used for status — semantic colors below handle on-track / behind /
      achieved / warning / info. Keeping brand discipline preserves the
-     amber's signal value (when you see it, it means "this is the action"). */
-  --brand: #ff8c3d;
-  --brand-hover: #ffa05c;
-  --brand-soft: rgba(255, 140, 61, 0.14);
-  --brand-glow: rgba(255, 140, 61, 0.45);
+     orange's signal value (when you see it, it means "this is the action"). */
+  --brand: #f97316;
+  --brand-hover: #fb8a3c;
+  --brand-soft: rgba(249, 115, 22, 0.14);
+  --brand-glow: rgba(249, 115, 22, 0.45);
   /* Text color for content rendered ON a brand-fill background (primary
-     CTA, selected chip). Dark warm to stay tonally with the amber and
-     hit WCAG AA contrast (~6:1 against the brand). Updated alongside
-     --brand whenever the brand color shifts. */
-  --brand-text: #261400;
+     CTA, selected chip). Dark warm to stay tonally with the orange and
+     hit WCAG AA contrast (~6:1 against the brand). */
+  --brand-text: #2a0e00;
+  /* Secondary accent — lime green for status badges ("OPTIMIZED",
+     "READY", complexity index bars). Distinct from --success (emerald
+     used for trajectory / on-track status) so the two don't collide. */
+  --secondary: #94de2d;
+  --secondary-bright: #acf847;
+  --secondary-text: #1f3700;
   /* Backward-compat aliases — existing code uses --accent. */
   --accent: var(--brand);
   --accent-hover: var(--brand-hover);
@@ -69,11 +73,22 @@
   --violet-bright: #c4b5fd;
   --violet-soft: rgba(168, 85, 247, 0.12);
 
-  --radius: 10px;
-  --radius-lg: 16px;
+  /* Tighter radii per Stitch direction — industrial/engineering edge.
+     Was 10px / 16px; now 6px / 10px for a sharper feel without going
+     fully rectangular. Pills (chips) still get 999px. */
+  --radius: 6px;
+  --radius-lg: 10px;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   --shadow-hover: 0 12px 36px rgba(0, 0, 0, 0.55);
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+
+  /* Typography stack from the Stitch design system:
+       --font-display  Archivo Narrow — italic uppercase headlines, brand
+       --font-body     Inter — body text, form inputs
+       --font-mono     JetBrains Mono — label-caps, data points */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Archivo Narrow", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 
   /* Motion tokens — every transition uses one of these for consistent
      feel. 150-250ms hits the perceptual sweet spot per Material/Apple
@@ -125,6 +140,73 @@
   --brand-glow: rgba(255, 140, 61, 0.32);
 }
 
+/* ─── STITCH DESIGN UTILITIES ──────────────────────────────────────────
+   Reusable classes matching the Stitch design system idioms. Use these
+   for new components or to retrofit existing surfaces. */
+
+/* .label-caps — mono uppercase letter-spaced label (section headers,
+   metric labels, button micro-labels). Applies the JetBrains Mono font
+   stack from --font-mono. */
+.label-caps {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+/* .data-point — large numerical readout (durations, weights, set counts
+   in summary positions). Uses Archivo Narrow for the compressed feel
+   that makes 4-digit kg numbers fit cleanly into chip-sized slots. */
+.data-point {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+/* .display-italic — italic uppercase Archivo Narrow for hero text,
+   section titles, brand moments. */
+.display-italic {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* .glass-card — semi-transparent card with backdrop blur for the
+   layered Stitch aesthetic. Pair with --bg-card if you want the
+   non-glass fallback. */
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+:root[data-theme="light"] .glass-card {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* .badge-secondary — small status pill in lime green ("OPTIMIZED",
+   "READY", "ON TRACK" non-trajectory contexts). */
+.badge-secondary {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--secondary);
+  color: var(--secondary-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 3px;
+}
+
 /* ─── A11Y: prefers-reduced-motion ─────────────────────────────────────
    Users with vestibular sensitivity have OS-level preference for
    reduced motion. Disable transitions + animations entirely for them.
@@ -169,11 +251,12 @@ html {
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font);
+  font-family: var(--font-body);
+  font-size: 16px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 body {
@@ -227,8 +310,14 @@ input {
 }
 
 .brand-name {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
   color: var(--accent);
+  line-height: 1;
 }
 
 .nav {
@@ -402,9 +491,13 @@ input {
 }
 
 .view-title {
-  font-size: 36px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   margin-bottom: 10px;
   color: var(--text);
 }
@@ -435,9 +528,13 @@ input {
 }
 
 .auth-title {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   margin-bottom: 10px;
   color: var(--text);
 }
@@ -707,11 +804,12 @@ input {
 }
 
 .group-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.1em;
 }
 
 .chip-row {
@@ -4512,8 +4610,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .settings-section {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 22px;
   font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
   color: var(--text);
   margin-bottom: 8px;
 }
