@@ -1098,29 +1098,30 @@ function renderBodyHeatmap(userId) {
           <div class="body-map-image-wrap">
             <img src="assets/body-map.jpg" alt="Body map" class="body-map-image" loading="lazy" />
             ${[
-              // FRONT figure (left half of the image) — % coordinates calibrated
-              // to the baked-in cyan dot positions in the Stitch render.
-              ["shoulders", 21, 26],
-              ["shoulders", 33, 26],
-              ["chest",     32, 31],
-              ["biceps",    19, 33],
-              ["biceps",    35, 33],
-              ["core",      27, 41],
-              ["quads",     22, 58],
-              ["quads",     30, 58],
-              ["calves",    22, 74],
-              ["calves",    30, 74],
-              // BACK figure (right half) — same y-bands, x shifted into right half.
-              ["shoulders", 59, 26],
-              ["shoulders", 73, 26],
-              ["back",      65, 30],
-              ["triceps",   57, 33],
-              ["triceps",   75, 33],
-              ["glutes",    65, 50],
-              ["hamstrings",60, 60],
-              ["hamstrings",70, 60],
-              ["calves",    61, 76],
-              ["calves",    69, 76],
+              // FRONT figure — % coords calibrated to muscle centers in the
+              // Stitch render (512×512 image with HUD frame; body spans
+              // roughly x=85..225, y=105..480).
+              ["shoulders", 26, 30],
+              ["shoulders", 36, 30],
+              ["chest",     31, 35],
+              ["biceps",    21, 41],
+              ["biceps",    42, 41],
+              ["core",      31, 47],
+              ["quads",     27, 65],
+              ["quads",     35, 65],
+              ["calves",    28, 80],
+              ["calves",    34, 80],
+              // BACK figure — body spans roughly x=295..435.
+              ["shoulders", 65, 30],
+              ["shoulders", 77, 30],
+              ["back",      71, 35],
+              ["triceps",   59, 41],
+              ["triceps",   83, 41],
+              ["glutes",    71, 53],
+              ["hamstrings",68, 65],
+              ["hamstrings",74, 65],
+              ["calves",    68, 80],
+              ["calves",    74, 80],
             ].map(([m, x, y]) => `
               <button class="muscle-hotspot" data-muscle="${m}"
                       style="left:${x}%; top:${y}%; --hotspot-color:${fill(m)}"
