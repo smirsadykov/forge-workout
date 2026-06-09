@@ -1098,30 +1098,24 @@ function renderBodyHeatmap(userId) {
           <div class="body-map-image-wrap">
             <img src="assets/body-map.jpg" alt="Body map" class="body-map-image" loading="lazy" />
             ${[
-              // FRONT figure — % coords calibrated to muscle centers in the
-              // Stitch render (512×512 image with HUD frame; body spans
-              // roughly x=85..225, y=105..480).
-              ["shoulders", 26, 30],
-              ["shoulders", 36, 30],
-              ["chest",     31, 35],
-              ["biceps",    21, 41],
-              ["biceps",    42, 41],
-              ["core",      31, 47],
-              ["quads",     27, 65],
-              ["quads",     35, 65],
-              ["calves",    28, 80],
-              ["calves",    34, 80],
-              // BACK figure — body spans roughly x=295..435.
-              ["shoulders", 65, 30],
-              ["shoulders", 77, 30],
+              // Hotspot coords aligned to the baked-in cyan dots in the
+              // Stitch render. Where the image labels point with a leader
+              // line, that's the primary hotspot; mirror position added
+              // for bilateral muscles so left or right tap both work.
+              // FRONT figure (body center ~x=31%, baked dots on right side):
+              ["shoulders", 27, 32], ["shoulders", 35, 32],
+              ["chest",     31, 38],
+              ["biceps",    19, 43], ["biceps",    43, 43],
+              ["core",      31, 48],
+              ["quads",     26, 68], ["quads",     36, 68],
+              ["calves",    24, 80], ["calves",    38, 80],
+              // BACK figure (body center ~x=71%, baked dots on right side):
+              ["shoulders", 65, 32], ["shoulders", 77, 32],
               ["back",      71, 35],
-              ["triceps",   59, 41],
-              ["triceps",   83, 41],
-              ["glutes",    71, 53],
-              ["hamstrings",68, 65],
-              ["hamstrings",74, 65],
-              ["calves",    68, 80],
-              ["calves",    74, 80],
+              ["triceps",   57, 43], ["triceps",   82, 43],
+              ["glutes",    67, 55], ["glutes",    76, 55],
+              ["hamstrings",66, 70], ["hamstrings",76, 70],
+              ["calves",    64, 80], ["calves",    78, 80],
             ].map(([m, x, y]) => `
               <button class="muscle-hotspot" data-muscle="${m}"
                       style="left:${x}%; top:${y}%; --hotspot-color:${fill(m)}"
