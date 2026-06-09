@@ -1040,6 +1040,27 @@ function renderBodyHeatmap(userId) {
   const poly = (m, d) =>
     `<path d="${d}" fill="${fill(m)}" class="muscle-region" data-muscle="${m}"><title>${tooltip(m)}</title></path>`;
 
+  // Callout label helper — leader line from anchor (on body) to label (on margin).
+  // anchorPos: { x, y } on body; labelPos: { x, y } at margin edge; align: 'start' or 'end'.
+  // The dot at the anchor + glowing accent matches the Stitch HUD aesthetic.
+  const calloutLabels = {
+    chest: "muscle.chest", back: "muscle.back", shoulders: "muscle.shoulders",
+    biceps: "muscle.biceps", triceps: "muscle.triceps", core: "muscle.core",
+    quads: "muscle.quads", hamstrings: "muscle.hamstrings",
+    glutes: "muscle.glutes", calves: "muscle.calves",
+  };
+  const callout = (m, ax, ay, lx, ly, align) => {
+    const label = (t(calloutLabels[m]) || m).toUpperCase();
+    return `
+      <g class="body-callout" data-muscle="${m}">
+        <circle cx="${ax}" cy="${ay}" r="3" class="callout-dot" fill="${fill(m)}"/>
+        <circle cx="${ax}" cy="${ay}" r="6" class="callout-dot-glow" fill="${fill(m)}"/>
+        <line x1="${ax}" y1="${ay}" x2="${lx}" y2="${ly}" class="callout-line"/>
+        <text x="${lx + (align === 'start' ? 6 : -6)}" y="${ly}" class="callout-text" text-anchor="${align}" dy="0.35em">${label}</text>
+      </g>
+    `;
+  };
+
   // Upper / lower volume rollup for the side stats panel. Sport-science
   // grouping — core kept separate since it sits cross-functionally.
   const upperGroup = ["chest", "back", "shoulders", "biceps", "triceps"];
@@ -1069,13 +1090,30 @@ function renderBodyHeatmap(userId) {
       </div>
       <div class="body-map-grid">
         <div class="body-map-figure">
-      <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
+      <svg viewBox="0 0 700 420" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
+        <!-- Sci-fi HUD frame: corner brackets + scan line -->
+        <defs>
+          <radialGradient id="bodyMapGlow" cx="50%" cy="55%" r="55%">
+            <stop offset="0%" stop-color="rgba(249,115,22,0.12)"/>
+            <stop offset="60%" stop-color="rgba(148,222,45,0.05)"/>
+            <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+          </radialGradient>
+        </defs>
+        <rect x="0" y="0" width="700" height="420" fill="url(#bodyMapGlow)"/>
+        <!-- HUD corner brackets -->
+        <g class="hud-corners" stroke="var(--brand)" stroke-width="1.5" fill="none">
+          <path d="M 8 28 L 8 8 L 32 8"/>
+          <path d="M 692 28 L 692 8 L 668 8"/>
+          <path d="M 8 392 L 8 412 L 32 412"/>
+          <path d="M 692 392 L 692 412 L 668 412"/>
+        </g>
         <!-- ──────────────── FRONT FIGURE ──────────────── -->
         <!-- Anatomical silhouette: V-taper torso (broad shoulders → narrow
              waist → flared hips), tapered limbs, defined head/neck.
-             Background body uses muted slate; muscle regions overlay with
-             status-driven heatmap colors. -->
-        <g class="figure-front">
+             Body background uses muted slate; muscle regions overlay with
+             status-driven heatmap colors. Positioned at translate(100, 0)
+             leaving 100px left margin for callout labels. -->
+        <g class="figure-front" transform="translate(100, 0)">
           <text x="100" y="14" class="figure-label">FRONT</text>
           <!-- Head -->
           <ellipse cx="100" cy="40" rx="15" ry="18" fill="#1e2230" stroke="#3a3f55" />
@@ -1118,7 +1156,9 @@ function renderBodyHeatmap(userId) {
         </g>
 
         <!-- ──────────────── BACK FIGURE ──────────────── -->
-        <g transform="translate(210, 0)">
+        <!-- Positioned at translate(400, 0), separated by 100px middle
+             gap from front for callout labels. -->
+        <g transform="translate(400, 0)">
           <text x="100" y="14" class="figure-label">BACK</text>
           <!-- Head -->
           <ellipse cx="100" cy="40" rx="15" ry="18" fill="#1e2230" stroke="#3a3f55" />
@@ -1158,6 +1198,29 @@ function renderBodyHeatmap(userId) {
           <!-- Calves -->
           ${poly("calves", "M 76 342 C 75 362 78 376 82 380 L 88 380 C 90 362 90 344 90 342 Z")}
           ${poly("calves", "M 110 342 C 110 344 110 362 112 380 L 118 380 C 122 376 125 362 124 342 Z")}
+        </g>
+
+        <!-- ──────────────── CALLOUT LAYER ──────────────── -->
+        <!-- Leader-line + label callouts matching the Stitch HUD aesthetic.
+             Each callout: dot at muscle anchor + line to margin + label text.
+             Front figure muscles at translate(100,0), back at translate(400,0).
+             Absolute SVG coords below = (figure_offset + internal_x). -->
+        <g class="body-map-callouts">
+          <!-- FRONT — left margin labels (x=20..90) -->
+          ${callout("shoulders", 145, 92, 90, 92, "end")}
+          ${callout("biceps", 142, 130, 90, 138, "end")}
+          ${callout("calves", 178, 360, 90, 360, "end")}
+          <!-- FRONT — middle-margin labels (x=310..390) -->
+          ${callout("chest", 200, 100, 310, 88, "start")}
+          ${callout("core", 220, 150, 310, 162, "start")}
+          ${callout("quads", 222, 280, 310, 288, "start")}
+          <!-- BACK — middle-margin labels (x=310..390) -->
+          ${callout("triceps", 444, 132, 390, 132, "end")}
+          ${callout("glutes", 500, 212, 390, 220, "end")}
+          ${callout("hamstrings", 478, 285, 390, 295, "end")}
+          <!-- BACK — right margin labels (x=610..680) -->
+          ${callout("back", 500, 130, 610, 110, "start")}
+          ${callout("calves", 522, 360, 610, 360, "start")}
         </g>
       </svg>
         </div>
