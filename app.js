@@ -1070,49 +1070,94 @@ function renderBodyHeatmap(userId) {
       <div class="body-map-grid">
         <div class="body-map-figure">
       <svg viewBox="0 0 420 410" class="body-svg" preserveAspectRatio="xMidYMid meet" aria-label="Body heatmap">
-        <!-- FRONT -->
+        <!-- ──────────────── FRONT FIGURE ──────────────── -->
+        <!-- Anatomical silhouette: V-taper torso (broad shoulders → narrow
+             waist → flared hips), tapered limbs, defined head/neck.
+             Background body uses muted slate; muscle regions overlay with
+             status-driven heatmap colors. -->
         <g class="figure-front">
           <text x="100" y="14" class="figure-label">FRONT</text>
-          <circle cx="100" cy="40" r="16" fill="#1e2230" stroke="#3a3f55" />
-          <rect x="94" y="54" width="12" height="9" fill="#1e2230" stroke="#3a3f55" />
-          <path d="M 56 72 L 144 72 L 138 165 L 62 165 Z" fill="#1e2230" stroke="#3a3f55" />
-          ${rect("chest", 72, 80, 56, 32, 8)}
-          ${ell("shoulders", 58, 84, 14, 11)}
-          ${ell("shoulders", 142, 84, 14, 11)}
-          ${ell("biceps", 44, 123, 10, 22)}
-          ${ell("biceps", 156, 123, 10, 22)}
-          <rect x="36" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
-          <rect x="148" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
-          ${rect("core", 76, 118, 48, 44, 6)}
-          <path d="M 62 165 L 138 165 L 134 195 L 66 195 Z" fill="#1e2230" stroke="#3a3f55" />
-          ${ell("quads", 80, 235, 16, 38)}
-          ${ell("quads", 120, 235, 16, 38)}
-          ${ell("calves", 80, 318, 12, 30)}
-          ${ell("calves", 120, 318, 12, 30)}
-          <ellipse cx="80" cy="365" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
-          <ellipse cx="120" cy="365" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Head -->
+          <ellipse cx="100" cy="40" rx="15" ry="18" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Neck (trapezoid widening into shoulders) -->
+          <path d="M 92 57 L 108 57 L 112 71 L 88 71 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Torso silhouette: V-shape -->
+          <path d="M 88 71 L 112 71 C 132 73 150 82 154 96 L 150 130 C 148 158 140 182 132 196 L 68 196 C 60 182 52 158 50 130 L 46 96 C 50 82 68 73 88 71 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Upper arms (background under bicep) -->
+          <path d="M 46 92 C 38 102 34 132 36 162 L 50 168 C 54 142 56 116 54 92 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 154 92 C 162 102 166 132 164 162 L 150 168 C 146 142 144 116 146 92 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Forearms -->
+          <path d="M 36 162 C 32 175 32 195 36 210 L 50 210 C 52 195 52 175 50 168 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 164 162 C 168 175 168 195 164 210 L 150 210 C 148 195 148 175 150 168 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Hips/groin -->
+          <path d="M 68 196 L 132 196 L 132 218 L 100 226 L 68 218 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Legs -->
+          <path d="M 68 220 C 65 250 66 300 72 348 C 74 365 78 378 84 378 C 88 360 90 318 90 282 C 90 250 88 232 86 222 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 132 220 C 135 250 134 300 128 348 C 126 365 122 378 116 378 C 112 360 110 318 110 282 C 110 250 112 232 114 222 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Feet -->
+          <ellipse cx="80" cy="388" rx="12" ry="6" fill="#1e2230" stroke="#3a3f55" />
+          <ellipse cx="120" cy="388" rx="12" ry="6" fill="#1e2230" stroke="#3a3f55" />
+
+          <!-- ── MUSCLE REGIONS (status-colored, clickable) ── -->
+          <!-- Chest: two pec swells joined at sternum -->
+          ${poly("chest", "M 72 84 C 70 80 78 78 90 80 L 100 90 L 110 80 C 122 78 130 80 128 84 L 130 112 C 126 120 116 122 106 118 L 100 114 L 94 118 C 84 122 74 120 70 112 Z")}
+          <!-- Shoulders: deltoid caps on outer torso top -->
+          ${poly("shoulders", "M 46 88 C 40 90 38 100 42 110 C 52 108 60 100 64 90 C 62 84 54 84 50 86 Z")}
+          ${poly("shoulders", "M 154 88 C 160 90 162 100 158 110 C 148 108 140 100 136 90 C 138 84 146 84 150 86 Z")}
+          <!-- Biceps -->
+          ${poly("biceps", "M 40 112 C 36 122 36 148 42 162 C 48 160 52 140 52 116 C 50 110 44 108 40 112 Z")}
+          ${poly("biceps", "M 160 112 C 164 122 164 148 158 162 C 152 160 148 140 148 116 C 150 110 156 108 160 112 Z")}
+          <!-- Core: rectus abdominis column with slight taper -->
+          ${poly("core", "M 80 120 L 120 120 L 122 175 C 122 188 110 192 100 190 C 90 192 78 188 78 175 Z")}
+          <!-- Quads: teardrop -->
+          ${poly("quads", "M 70 226 C 68 254 70 296 76 332 L 88 334 C 92 296 92 254 88 226 Z")}
+          ${poly("quads", "M 112 226 C 108 254 108 296 112 334 L 124 332 C 130 296 132 254 130 226 Z")}
+          <!-- Calves -->
+          ${poly("calves", "M 76 338 C 75 358 78 372 82 378 L 88 378 C 90 360 90 342 90 338 Z")}
+          ${poly("calves", "M 110 338 C 110 342 110 360 112 378 L 118 378 C 122 372 125 358 124 338 Z")}
         </g>
 
-        <!-- BACK -->
+        <!-- ──────────────── BACK FIGURE ──────────────── -->
         <g transform="translate(210, 0)">
           <text x="100" y="14" class="figure-label">BACK</text>
-          <circle cx="100" cy="40" r="16" fill="#1e2230" stroke="#3a3f55" />
-          <rect x="94" y="54" width="12" height="9" fill="#1e2230" stroke="#3a3f55" />
-          <path d="M 56 72 L 144 72 L 138 165 L 62 165 Z" fill="#1e2230" stroke="#3a3f55" />
-          ${poly("back", "M 70 82 L 130 82 L 134 160 L 66 160 Z")}
-          ${ell("shoulders", 58, 84, 14, 11)}
-          ${ell("shoulders", 142, 84, 14, 11)}
-          ${ell("triceps", 44, 123, 10, 22)}
-          ${ell("triceps", 156, 123, 10, 22)}
-          <rect x="36" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
-          <rect x="148" y="148" width="16" height="32" rx="4" fill="#1e2230" stroke="#3a3f55" />
-          ${poly("glutes", "M 62 165 L 138 165 L 135 208 L 65 208 Z")}
-          ${ell("hamstrings", 80, 250, 16, 38)}
-          ${ell("hamstrings", 120, 250, 16, 38)}
-          ${ell("calves", 80, 328, 12, 30)}
-          ${ell("calves", 120, 328, 12, 30)}
-          <ellipse cx="80" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
-          <ellipse cx="120" cy="375" rx="14" ry="7" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Head -->
+          <ellipse cx="100" cy="40" rx="15" ry="18" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Neck (back of) -->
+          <path d="M 92 57 L 108 57 L 110 71 L 90 71 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Torso silhouette (same V) -->
+          <path d="M 88 71 L 112 71 C 132 73 150 82 154 96 L 150 130 C 148 158 140 182 132 196 L 68 196 C 60 182 52 158 50 130 L 46 96 C 50 82 68 73 88 71 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Arms -->
+          <path d="M 46 92 C 38 102 34 132 36 162 L 50 168 C 54 142 56 116 54 92 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 154 92 C 162 102 166 132 164 162 L 150 168 C 146 142 144 116 146 92 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Forearms -->
+          <path d="M 36 162 C 32 175 32 195 36 210 L 50 210 C 52 195 52 175 50 168 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 164 162 C 168 175 168 195 164 210 L 150 210 C 148 195 148 175 150 168 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Glutes area silhouette -->
+          <path d="M 66 196 L 134 196 L 134 226 L 100 232 L 66 226 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Legs -->
+          <path d="M 68 228 C 65 258 66 306 72 352 C 74 368 78 380 84 380 C 88 362 90 320 90 286 C 90 254 88 238 86 230 Z" fill="#1e2230" stroke="#3a3f55" />
+          <path d="M 132 228 C 135 258 134 306 128 352 C 126 368 122 380 116 380 C 112 362 110 320 110 286 C 110 254 112 238 114 230 Z" fill="#1e2230" stroke="#3a3f55" />
+          <!-- Feet -->
+          <ellipse cx="80" cy="390" rx="12" ry="6" fill="#1e2230" stroke="#3a3f55" />
+          <ellipse cx="120" cy="390" rx="12" ry="6" fill="#1e2230" stroke="#3a3f55" />
+
+          <!-- ── MUSCLE REGIONS ── -->
+          <!-- Back: traps + lats V-shape -->
+          ${poly("back", "M 68 84 L 132 84 C 138 84 138 92 136 100 L 134 118 C 132 145 126 172 120 188 L 80 188 C 74 172 68 145 66 118 L 64 100 C 62 92 62 84 68 84 Z")}
+          <!-- Shoulders (rear delts) -->
+          ${poly("shoulders", "M 46 88 C 40 90 38 100 42 110 C 52 108 60 100 64 90 C 62 84 54 84 50 86 Z")}
+          ${poly("shoulders", "M 154 88 C 160 90 162 100 158 110 C 148 108 140 100 136 90 C 138 84 146 84 150 86 Z")}
+          <!-- Triceps -->
+          ${poly("triceps", "M 40 112 C 36 122 36 148 42 162 C 48 160 52 140 52 116 C 50 110 44 108 40 112 Z")}
+          ${poly("triceps", "M 160 112 C 164 122 164 148 158 162 C 152 160 148 140 148 116 C 150 110 156 108 160 112 Z")}
+          <!-- Glutes: rounded dome, two halves -->
+          ${poly("glutes", "M 68 198 C 66 215 72 226 84 226 C 92 224 96 220 100 218 C 104 220 108 224 116 226 C 128 226 134 215 132 198 Z")}
+          <!-- Hamstrings: long ovals -->
+          ${poly("hamstrings", "M 70 232 C 68 262 70 304 78 338 L 90 338 C 92 304 92 262 90 232 Z")}
+          ${poly("hamstrings", "M 110 232 C 108 262 108 304 110 338 L 122 338 C 130 304 132 262 130 232 Z")}
+          <!-- Calves -->
+          ${poly("calves", "M 76 342 C 75 362 78 376 82 380 L 88 380 C 90 362 90 344 90 342 Z")}
+          ${poly("calves", "M 110 342 C 110 344 110 362 112 380 L 118 380 C 122 376 125 362 124 342 Z")}
         </g>
       </svg>
         </div>
