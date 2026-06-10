@@ -1098,26 +1098,26 @@ function renderBodyHeatmap(userId) {
           <div class="body-map-image-wrap">
             <img src="assets/body-map.jpg" alt="Body map" class="body-map-image" loading="lazy" />
             ${[
-              // Hotspot coords aligned to the baked-in cyan dots in the
-              // Stitch render. Where the image labels point with a leader
-              // line, that's the primary hotspot; mirror position added
-              // for bilateral muscles so left or right tap both work.
-              // FRONT figure (body center ~x=31%, baked dots on right side):
-              ["shoulders", 27, 32], ["shoulders", 35, 32],
-              ["chest",     31, 38],
-              ["biceps",    19, 43], ["biceps",    43, 43],
-              ["core",      31, 48],
-              ["quads",     26, 68], ["quads",     36, 68],
-              ["calves",    24, 80], ["calves",    38, 80],
-              // BACK figure (body center ~x=71%, baked dots on right side):
-              // Back-left shoulder baked dot is at ~60% (not 65 — that's traps).
-              // Triceps shifted right 1pp to sit on the leader-line dot.
-              ["shoulders", 60, 32], ["shoulders", 78, 32],
-              ["back",      71, 36],
-              ["triceps",   58, 43], ["triceps",   83, 43],
-              ["glutes",    67, 55], ["glutes",    76, 55],
-              ["hamstrings",66, 70], ["hamstrings",76, 70],
-              ["calves",    64, 80], ["calves",    78, 80],
+              // One hotspot per labeled cyan dot in the Stitch render.
+              // Coords calibrated visually in bodymap-test.html — each
+              // entry below lands directly on a leader-line termination
+              // dot in body-map.jpg. Previous bilateral "mirror"
+              // positions had no baked anchor and visually floated.
+              // FRONT — 6 labeled callouts in image:
+              ["shoulders", 27, 27],   // SHOULDERS → subject's right delt
+              ["chest",     30, 32],   // CHEST     → upper-left pec
+              ["biceps",    45, 38],   // BICEPS    → right bicep
+              ["core",      32, 46],   // ABS       → mid abdomen
+              ["quads",     37, 60],   // QUADS     → right thigh
+              ["calves",    38, 76],   // CALVES    → right calf
+              // BACK — 5 labeled callouts + rear-delt + 2nd tricep dot:
+              ["shoulders", 76, 27],   // rear delt (visible dot, no label)
+              ["back",      76, 32],   // BACK (LATS)
+              ["triceps",   56, 37],   // TRICEPS   → left tricep (labeled)
+              ["triceps",   81, 38],   // (symmetric right tricep dot)
+              ["glutes",    74, 53],   // GLUTES
+              ["hamstrings",75, 67],   // HAMSTRINGS
+              ["calves",    75, 80],   // CALVES
             ].map(([m, x, y]) => `
               <button class="muscle-hotspot" data-muscle="${m}"
                       style="left:${x}%; top:${y}%; --hotspot-color:${fill(m)}"
