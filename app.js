@@ -5284,13 +5284,23 @@ function pickWarmupExercises(target, count) {
   // Family de-dup: "Crab Reach" + "Crab Hold" + "Crab Switch" are the same
   // Animal Flow position with minor variations — picking 2 of them as the
   // entire warmup gives no movement diversity. Same goes for World's
-  // Greatest / Cossack / Inchworm series. Use the first word as a coarse
-  // family proxy and skip duplicates.
+  // Greatest / Cossack / Inchworm series. Use the first non-qualifier word
+  // as a coarse family proxy and skip duplicates. Qualifiers like "Loaded"
+  // shift the head word but the underlying movement is the same — strip
+  // them first so "Loaded Beast Rock" maps to family "beast" like
+  // "Beast Reach" does.
+  const QUALIFIERS = new Set(["loaded", "half", "quarter", "single-arm", "double", "reverse", "pause", "tempo", "slow", "heavy", "wide", "deep"]);
+  const familyOf = (name) => {
+    const words = name.split(/\s+/);
+    let i = 0;
+    while (i < words.length && QUALIFIERS.has(words[i].toLowerCase())) i++;
+    return (words[i] || words[0]).toLowerCase();
+  };
   const picked = [];
   const usedFamilies = new Set();
   for (const { ex } of scored) {
     if (picked.length >= count) break;
-    const family = ex.name.split(" ")[0].toLowerCase();
+    const family = familyOf(ex.name);
     if (usedFamilies.has(family)) continue;
     usedFamilies.add(family);
     picked.push(ex);
