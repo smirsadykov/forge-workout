@@ -3482,10 +3482,17 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
 // CSS handles visibility (display: flex below 768px). Active state on
 // the bottom buttons is synced via syncBottomNavActive() called from
 // showApp.
-document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    showApp(btn.dataset.view);
-  });
+//
+// Uses event delegation because <nav id="bottomNav"> lives further down
+// in index.html than the <script src="app.js"> tag — direct attach via
+// querySelectorAll at script-eval time returned an empty NodeList, so
+// no listeners landed and the buttons looked dead. Delegating on
+// document handles whatever's in the DOM at click time.
+document.addEventListener("click", (e) => {
+  const navBtn = e.target.closest(".bottom-nav-btn");
+  if (navBtn && navBtn.dataset.view) {
+    showApp(navBtn.dataset.view);
+  }
 });
 function syncBottomNavActive(viewName) {
   document.querySelectorAll(".bottom-nav-btn").forEach(b => {
