@@ -5553,8 +5553,17 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   // Fix: for each relevant bucket, reserve a slot for its highest-scored
   // exercise that fits the muscle cap. Pattern-debt still ranks within a
   // bucket — the over-trained bucket gets its weakest candidate, not none.
-  if (relevantBuckets.length > 0 && relevantBuckets.length <= mainCount) {
+  //
+  // 15min edge case: mainCount (3) can be smaller than relevantBuckets (4
+  // for full_body). The old gate `relevantBuckets.length <= mainCount`
+  // skipped Pass 0 entirely there, producing workouts with no pull at all.
+  // Run partial coverage instead — fill what we can in bucket-order. For
+  // full_body that means push → pull → squat → hinge; hinge is the one
+  // that gets dropped at 15min, which is the least bad outcome (better
+  // than randomly missing pull).
+  if (relevantBuckets.length > 0) {
     for (const bucket of relevantBuckets) {
+      if (picked.length >= mainCount) break;
       const bestInBucket = scored.find(({ ex }) => {
         if (pickedSet.has(ex.name)) return false;
         if (getMovementBucket(ex) !== bucket) return false;
