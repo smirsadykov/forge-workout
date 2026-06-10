@@ -5281,7 +5281,30 @@ function pickWarmupExercises(target, count) {
       Math.random() * 2,
   }));
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, count).map(s => s.ex);
+  // Family de-dup: "Crab Reach" + "Crab Hold" + "Crab Switch" are the same
+  // Animal Flow position with minor variations — picking 2 of them as the
+  // entire warmup gives no movement diversity. Same goes for World's
+  // Greatest / Cossack / Inchworm series. Use the first word as a coarse
+  // family proxy and skip duplicates.
+  const picked = [];
+  const usedFamilies = new Set();
+  for (const { ex } of scored) {
+    if (picked.length >= count) break;
+    const family = ex.name.split(" ")[0].toLowerCase();
+    if (usedFamilies.has(family)) continue;
+    usedFamilies.add(family);
+    picked.push(ex);
+  }
+  // Relax family rule if pool is thin and we couldn't fill `count`.
+  if (picked.length < count) {
+    const pickedNames = new Set(picked.map(p => p.name));
+    for (const { ex } of scored) {
+      if (picked.length >= count) break;
+      if (pickedNames.has(ex.name)) continue;
+      picked.push(ex);
+    }
+  }
+  return picked;
 }
 
 function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, phaseSetMod = 0, phase = null, sport = null }) {
@@ -5661,7 +5684,13 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   // Bodyweight fallback exercises are already in the scored candidates list
   // (added in the candidate filter above with a score penalty). They flow
   // through to leftoverCandidates naturally for fillTimeBudget.
-  fillTimeBudget(exercises, duration, pickPrescription, goal, intensity, style, deload, leftoverCandidates);
+  // Pass the same diversity caps the main selection used — otherwise the
+  // time-fill happily smuggles in a 3rd row from leftovers.
+  fillTimeBudget(exercises, duration, pickPrescription, goal, intensity, style, deload, leftoverCandidates, [], {
+    maxPerMuscle,
+    perBucketCap,
+    relevantBuckets,
+  });
 
   return {
     id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -5732,12 +5761,42 @@ function enforceTimeBudget(exercises, durationMin) {
 //   1. Adding a set to under-set exercises (cheaper, keeps variety low)
 //   2. Pulling more exercises from the candidate pool
 // Aims to land in the 85-110% band of the requested duration.
-function fillTimeBudget(exercises, durationMin, pickPrescription, goal, intensity, style, deload, extraCandidates = [], bodyweightFallback = []) {
+function fillTimeBudget(exercises, durationMin, pickPrescription, goal, intensity, style, deload, extraCandidates = [], bodyweightFallback = [], diversityCaps = null) {
   if (!durationMin) return;
   const budgetSec = durationMin * 60;
   const floor = budgetSec * 0.85;
   let attempts = 0;
   const maxExercises = Math.min(14, exercises.length + 8);
+  // Diversity caps from the main selection pass. When provided, the
+  // time-fill respects the same muscle + bucket limits used by Pass 1 so
+  // we don't smuggle a 3rd row into a "full_body" session just because
+  // the candidate pool had one left. Without caps (callers that don't
+  // pass them), behaves like before.
+  const maxPerMuscle = diversityCaps?.maxPerMuscle ?? Infinity;
+  const perBucketCap = diversityCaps?.perBucketCap ?? Infinity;
+  const relevantBuckets = diversityCaps?.relevantBuckets || [];
+
+  // Live tally of what we've already picked — recomputed each iteration so
+  // it includes anything fillTimeBudget itself added this pass.
+  const tallyCaps = () => {
+    const muscleCount = {};
+    const bucketCount = {};
+    for (const ex of exercises) {
+      const primary = ex.muscle?.[0];
+      if (primary) muscleCount[primary] = (muscleCount[primary] || 0) + 1;
+      const bucket = getMovementBucket(ex);
+      if (bucket) bucketCount[bucket] = (bucketCount[bucket] || 0) + 1;
+    }
+    return { muscleCount, bucketCount };
+  };
+  const fitsDiversity = (candidate, caps) => {
+    const primary = candidate.muscle?.[0];
+    if (primary && (caps.muscleCount[primary] || 0) >= maxPerMuscle) return false;
+    const bucket = getMovementBucket(candidate);
+    if (bucket && relevantBuckets.includes(bucket)
+        && (caps.bucketCount[bucket] || 0) >= perBucketCap) return false;
+    return true;
+  };
 
   while (estimateWorkoutSeconds(exercises) < floor && attempts < 20) {
     attempts++;
@@ -5746,8 +5805,7 @@ function fillTimeBudget(exercises, durationMin, pickPrescription, goal, intensit
 
     // Strategy A: if gap is small (<3 min), bump a set on an existing exercise
     // (less disruptive than a new movement).
-    if (gap < 180) {
-      // Pick an exercise with room to grow — not mobility, not already at 5 sets
+    const bumpExisting = () => {
       let bumpIdx = -1, bumpSec = Infinity;
       for (let i = 0; i < exercises.length; i++) {
         const ex = exercises[i];
@@ -5758,21 +5816,27 @@ function fillTimeBudget(exercises, durationMin, pickPrescription, goal, intensit
       }
       if (bumpIdx >= 0) {
         exercises[bumpIdx].sets = (exercises[bumpIdx].sets || 1) + 1;
-        continue;
+        return true;
       }
-    }
+      return false;
+    };
+    if (gap < 180 && bumpExisting()) continue;
 
-    // Strategy B: pull another exercise from the primary candidate pool.
-    // When that's exhausted, fall through to the bodyweight fallback pool
-    // (push-ups, squats, planks etc. — always available unless user picked
-    // Floor only, which already routes through bodyweight). This rescues
-    // scenarios like KB+push+beginner where only 1 KB exercise matches and
-    // the user gets stranded with a 10-min workout from a 45-min request.
+    // Strategy B: pull another exercise from the primary candidate pool —
+    // but only one that doesn't violate the muscle/bucket caps from the
+    // main selection. When the diverse pool is exhausted, bump sets on an
+    // existing exercise instead of stuffing in a 3rd row.
     if (exercises.length >= maxExercises) break;
     const usedNames = new Set(exercises.map(e => e.name));
-    let next = extraCandidates.find(c => !usedNames.has(c.name));
-    if (!next) next = bodyweightFallback.find(c => !usedNames.has(c.name));
-    if (!next) break;
+    const caps = tallyCaps();
+    let next = extraCandidates.find(c => !usedNames.has(c.name) && fitsDiversity(c, caps));
+    if (!next) next = bodyweightFallback.find(c => !usedNames.has(c.name) && fitsDiversity(c, caps));
+    if (!next) {
+      // No diverse candidate left — fall back to set bumps. If that also
+      // can't run (everything at 5-set ceiling), exit cleanly.
+      if (!bumpExisting()) break;
+      continue;
+    }
     const p = pickPrescription(goal, intensity, next, style, deload, durationMin);
     exercises.push({
       name: next.name,
