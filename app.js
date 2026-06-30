@@ -918,7 +918,20 @@ function detectPlateaus(userId) {
       loadCapped = at90;
     }
 
-    if (!rirPlateau && !loadCapped) continue;
+    // (C) Outgrown the load — at/near max on the recent two sessions AND
+    // already repping into double digits (top of the usual range). The load
+    // can't go up, so pure rep-chasing is endurance drift: promote the harder
+    // variation. Looser than (B) on purpose — it fires from the recent two
+    // sessions even if an older one was a lighter work-up.
+    let outgrown = false;
+    if (userMax > 0 && last3.length >= 2) {
+      const recent2 = last3.slice(0, 2);
+      const atMaxRecent = recent2.every(h => Math.max(0, ...(h.sets || []).map(s => s.weightKg || 0)) >= userMax * 0.9);
+      const topReps = Math.max(0, ...(last3[0].sets || []).map(s => s.reps || 0));
+      outgrown = atMaxRecent && topReps >= 12;
+    }
+
+    if (!rirPlateau && !loadCapped && !outgrown) continue;
 
     // Only retain the HIGHEST-tier plateau per family. If a user has
     // plateaued both KB RDL (tier 2) and KB Suitcase Deadlift (tier 1)
@@ -933,7 +946,7 @@ function detectPlateaus(userId) {
         exName,
         tier: meta.tier,
         sessions: last3.length,
-        reason: rirPlateau ? "rir" : "load_cap",
+        reason: rirPlateau ? "rir" : (loadCapped ? "load_cap" : "outgrown"),
         plateauEquipment: ex.equipment || [],
       };
     }
@@ -5362,6 +5375,7 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
   // following their training history rather than rotating to a sibling.
   const plateaus = session?.username ? detectPlateaus(session.username) : {};
   const nextTierBoost = {};  // exName → { tier, family, fromExName }
+  const plateauDemote = new Set();  // plateaued tier (& below) → penalised so the harder variation actually replaces it
   for (const [family, p] of Object.entries(plateaus)) {
     // Pre-check: does this SESSION have any equipment in common with
     // the plateau exercise? If not, the user literally can't load the
@@ -5375,8 +5389,15 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
     if (!sessionHasPlateauImplement) continue;
 
     const candidates = getNextTierForFamily(family, p.tier, effectiveEquipment, p.plateauEquipment);
+    if (candidates.length === 0) continue;  // already at the top of the chain — nothing harder to swap to; the card's stimulus tip covers it
     for (const name of candidates) {
       nextTierBoost[name] = { family, tier: p.tier + 1, fromExName: p.exName, reason: p.reason };
+    }
+    // Demote the plateaued tier and everything below it so the harder variation
+    // reliably wins the pick instead of merely competing with it.
+    const famTiers = (typeof PROGRESSION_FAMILIES !== "undefined" && PROGRESSION_FAMILIES[family]) || {};
+    for (let tier = 1; tier <= p.tier; tier++) {
+      (famTiers[tier] || []).forEach(n => plateauDemote.add(n));
     }
   }
 
@@ -5476,6 +5497,10 @@ function generateWorkout({ goal, equipment, target, duration, intensity = "norma
     // mature pattern history, and clear over goal-pattern bias too.
     // The intent: surface the textbook next step, not a random sibling.
     if (nextTierBoost[ex.name]) score += 15;
+    // ...and push the outgrown variation down so the harder one actually
+    // replaces it (a +15 boost alone could still lose to a high-scoring
+    // plateaued lift). Net ≈29-point swing toward the progression.
+    if (plateauDemote.has(ex.name)) score -= 14;
 
     // Goal-driven boost: the exercise itself if it IS the goal anchor (+12),
     // exercises in the same progression family (+6), or just the same
