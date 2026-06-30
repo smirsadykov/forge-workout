@@ -131,6 +131,13 @@
     "intsug.afterHard": { en: "you went hard last session", ru: "прошлая тренировка была тяжёлой" },
     "intsug.fresh": { en: "rested and recovered", ru: "отдохнул и восстановился" },
     "intsug.loadCap": { en: "your weights are light for a true hard session", ru: "твои веса легковаты для по-настоящему тяжёлой сессии" },
+    "intsug.goalRecovery": { en: "recovery session — keep it light", ru: "восстановление — держим легко" },
+    "intsug.goalMobility": { en: "mobility session — low intensity by design", ru: "мобильность — низкая интенсивность по сути" },
+    "intsug.program": { en: "{phase} week of your program", ru: "{phase}: неделя твоей программы" },
+    "intsug.ph.accumulation": { en: "base-building", ru: "набор базы" },
+    "intsug.ph.intensification": { en: "intensity", ru: "интенсивность" },
+    "intsug.ph.realization": { en: "peak", ru: "пик" },
+    "intsug.ph.deload": { en: "deload", ru: "разгрузка" },
     "progression.label": { en: "Progression", ru: "Прогрессия" },
     "progression.note": {
       en: "From your plateau at {from}. Next step in the chain.",

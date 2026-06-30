@@ -473,6 +473,44 @@
       formState.equipment = [];
       eq(suggestIntensity(U).intensity, "normal");
     });
+    // ── goal-aware branches ──
+    const setProgram = (prog) => {
+      const pr = load(STORAGE_KEYS.prefs, {});
+      pr[U] = prog ? { units: "kg", program: prog } : { units: "kg" };
+      save(STORAGE_KEYS.prefs, pr);
+    };
+    test("recovery session type → easy (even when rested)", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("normal", 2) });
+      formState.goal = "recovery"; formState.equipment = [];
+      eq(suggestIntensity(U).intensity, "easy");
+      formState.goal = "standard";
+    });
+    test("mobility session type → easy", () => {
+      formState.goal = "mobility";
+      eq(suggestIntensity(U).intensity, "easy");
+      formState.goal = "standard";
+    });
+    test("program intensification week → hard", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("normal", 2) });
+      formState.goal = "standard"; formState.equipment = [];
+      setProgram({ goal: "hypertrophy", weeksTotal: 4, sessionsPerWeek: 3, sessionIdx: 0, completedSessions: 0, paused: false, startedAt: now - Math.round(2.2 * 7 * day) });
+      eq(suggestIntensity(U).intensity, "hard");
+      setProgram(null);
+    });
+    test("program deload week → easy", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("normal", 2) });
+      formState.goal = "standard"; formState.equipment = [];
+      setProgram({ goal: "hypertrophy", weeksTotal: 4, sessionsPerWeek: 3, sessionIdx: 0, completedSessions: 0, paused: false, startedAt: now - Math.round(3.2 * 7 * day) });
+      eq(suggestIntensity(U).intensity, "easy");
+      setProgram(null);
+    });
+    test("acute fatigue overrides a hard program week", () => {
+      seed({ sleep: { quality: 2, skipped: false }, workouts: threeWorkouts("normal", 2) }); // poor sleep
+      formState.goal = "standard"; formState.equipment = [];
+      setProgram({ goal: "hypertrophy", weeksTotal: 4, sessionsPerWeek: 3, sessionIdx: 0, completedSessions: 0, paused: false, startedAt: now - Math.round(2.2 * 7 * day) });
+      eq(suggestIntensity(U).intensity, "easy"); // recovery wins over the program's "hard"
+      setProgram(null);
+    });
   });
 
   // ─── RENDER + REPORT ─────────────────────────────────────────────────

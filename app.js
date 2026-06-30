@@ -4187,7 +4187,9 @@ document.querySelectorAll(".chip-row").forEach(row => {
       // Smart intensity: a manual intensity pick locks the user's choice;
       // changing equipment re-derives the suggestion (load cap depends on it).
       if (field === "intensity") _intensityUserSet = true;
-      if (field === "equipmentHave") applyIntensitySuggestion();
+      // Goal and equipment both feed the suggestion (goal sets the character;
+      // equipment sets the load cap), so re-derive it when either changes.
+      if (field === "goal" || field === "equipmentHave") applyIntensitySuggestion();
     });
   });
 });
@@ -4479,31 +4481,46 @@ function loadsSupportHard(userId, equipment) {
 // Returns { intensity, reasonKey, params } — the recommended session intensity.
 function suggestIntensity(userId) {
   if (!userId) return { intensity: "normal", reasonKey: null };
+  const goal = formState.goal;
 
-  // 1) Under-recovery is the strongest signal — ease off.
+  // ── GOAL ── Session types that are low-intensity by definition.
+  if (goal === "recovery") return { intensity: "easy", reasonKey: "intsug.goalRecovery" };
+  if (goal === "mobility") return { intensity: "easy", reasonKey: "intsug.goalMobility" };
+
+  // ── RECOVERY / FATIGUE ── Acute under-recovery overrides the plan: even a
+  // hard program week gets autoregulated down when you're beat up.
   const rec = getUnderRecoveryStatus(userId);
   if (rec) {
     if (rec.badSleep && rec.highSore >= 3) return { intensity: "easy", reasonKey: "intsug.soreSleep", params: { n: rec.highSore } };
     if (rec.badSleep) return { intensity: "easy", reasonKey: "intsug.sleep" };
     return { intensity: "easy", reasonKey: "intsug.sore", params: { n: rec.highSore } };
   }
-  // 2) Planned/earned deload — back off.
   if (shouldSuggestDeload(userId)) return { intensity: "easy", reasonKey: "intsug.deload" };
 
+  // ── GOAL ── On a program, follow its periodized intensity (the program's
+  // goal + which week of the block you're in already encode this). Only for the
+  // standard training type; crossfit/etc. picked over a program are one-offs.
+  if (goal === "standard") {
+    const prog = getNextProgramSession(userId);
+    if (prog && prog.phaseIntensity) {
+      if (prog.phaseIntensity === "hard" && !loadsSupportHard(userId, formState.equipment || [])) {
+        return { intensity: "normal", reasonKey: "intsug.loadCap" };
+      }
+      return { intensity: prog.phaseIntensity, reasonKey: "intsug.program", params: { phase: t(`intsug.ph.${prog.phase}`) || prog.phase } };
+    }
+  }
+
+  // ── HISTORY ── Freestyle autoregulation from recent training.
   const workouts = getWorkouts(userId);
-  // 3) Newcomer — hold at Normal while a base is built.
   if (workouts.length < 3) return { intensity: "normal", reasonKey: "intsug.newcomer" };
 
   const last = workouts[0];
   const daysSince = last ? (Date.now() - last.createdAt) / 86400000 : 99;
   const lastIntensity = last?.inputs?.intensity || last?.inputs?.difficulty;
 
-  // 4) Second session in a day — keep it light.
   if (daysSince < 0.5) return { intensity: "easy", reasonKey: "intsug.sameDay" };
-  // 5) Don't stack two hard days back to back.
   if (lastIntensity === "hard" && daysSince < 2) return { intensity: "normal", reasonKey: "intsug.afterHard" };
 
-  // 6) Rested + recovered → push hard, but only if loads can deliver it.
   const sleep = getSleepRating(userId);
   const wellRested = !hasRealSleepRating(sleep) || sleep.quality >= 4;
   if (wellRested && daysSince >= 1) {
