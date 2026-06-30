@@ -433,6 +433,48 @@
     test("All four formats are reachable", () => eq(formatsSeen.size, 4, `saw: ${[...formatsSeen].join(",")}`));
   });
 
+  // ─── SMART INTENSITY ─────────────────────────────────────────────────
+  suite("suggestIntensity", () => {
+    const U = "__si__";
+    const day = 86400000, now = Date.now();
+    const seed = ({ sleep, workouts, loads }) => {
+      const s = load(STORAGE_KEYS.sleep, {}); s[U] = sleep ? { [dateKey(new Date())]: sleep } : {}; save(STORAGE_KEYS.sleep, s);
+      const w = load(STORAGE_KEYS.workouts, {}); w[U] = workouts || []; save(STORAGE_KEYS.workouts, w);
+      const l = load(STORAGE_KEYS.loads, {}); l[U] = loads || {}; save(STORAGE_KEYS.loads, l);
+      const so = load(STORAGE_KEYS.soreness, {}); so[U] = {}; save(STORAGE_KEYS.soreness, so); // no soreness
+    };
+    const threeWorkouts = (lastIntensity, daysAgo) => [
+      { createdAt: now - daysAgo * day, inputs: { intensity: lastIntensity, target: "full_body" } },
+      { createdAt: now - (daysAgo + 2) * day, inputs: { intensity: "normal", target: "full_body" } },
+      { createdAt: now - (daysAgo + 4) * day, inputs: { intensity: "normal", target: "full_body" } },
+    ];
+
+    test("poor sleep → easy", () => {
+      seed({ sleep: { quality: 2, skipped: false }, workouts: threeWorkouts("normal", 2) });
+      eq(suggestIntensity(U).intensity, "easy");
+    });
+    test("newcomer (<3 workouts) → normal", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: [{ createdAt: now - 2 * day, inputs: { intensity: "normal", target: "full_body" } }] });
+      eq(suggestIntensity(U).intensity, "normal");
+    });
+    test("rested + history + bodyweight → hard", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("normal", 2) });
+      formState.equipment = [];
+      eq(suggestIntensity(U).intensity, "hard");
+    });
+    test("light free weights cap hard → normal", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("normal", 2), loads: { maxDumbbellKg: 10 } });
+      formState.equipment = ["dumbbells"];
+      eq(suggestIntensity(U).intensity, "normal");
+      formState.equipment = [];
+    });
+    test("don't stack hard days", () => {
+      seed({ sleep: { quality: 5, skipped: false }, workouts: threeWorkouts("hard", 1) });
+      formState.equipment = [];
+      eq(suggestIntensity(U).intensity, "normal");
+    });
+  });
+
   // ─── RENDER + REPORT ─────────────────────────────────────────────────
   const panel = document.createElement("div");
   panel.id = "testPanel";

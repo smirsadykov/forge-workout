@@ -6031,3 +6031,18 @@ input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
+/* Smart-intensity suggestion line — sits between the chips and the static
+   hint, calling out the auto-picked intensity and why. */
+.intensity-suggestion {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1px solid rgba(255, 214, 51, 0.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.intensity-suggestion strong {
+  color: var(--accent);
+}

@@ -219,6 +219,9 @@
               <button class="chip selected" data-value="normal" data-i18n="intensity.normal">Normal</button>
               <button class="chip" data-value="hard" data-i18n="intensity.hard">Hard</button>
             </div>
+            <!-- Smart suggestion: auto-set from recovery + history + loads,
+                 shown with a reason. Hidden until a suggestion is computed. -->
+            <p id="intensitySuggestion" class="intensity-suggestion hidden" aria-live="polite"></p>
             <p class="form-hint" data-i18n="gen.intensityHint"><strong>Easy</strong>: fewer sets, longer rest, RIR 3+ (recovery / light day). <strong>Normal</strong>: standard prescription. <strong>Hard</strong>: more sets, shorter rest, RIR 0–1 (push day).</p>
           </div>
 

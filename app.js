@@ -2205,6 +2205,7 @@ function showApp(view = "generator") {
     refreshTemplatesPicker();
     refreshFormSummary();
     refreshFormHints();
+    applyIntensitySuggestion();
   }
   // Onboarding wizard — fires once per user on first-ever app load.
   // Runs BEFORE the sleep modal so a brand-new user sees onboarding first
@@ -4177,6 +4178,10 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshLevelBanner();
       refreshFormSummary();
       refreshFormHints();
+      // Smart intensity: a manual intensity pick locks the user's choice;
+      // changing equipment re-derives the suggestion (load cap depends on it).
+      if (field === "intensity") _intensityUserSet = true;
+      if (field === "equipmentMissing") applyIntensitySuggestion();
     });
   });
 });
@@ -4212,6 +4217,8 @@ function resetForm() {
   const ft = document.getElementById("floorOnlyToggle");
   if (ft) ft.checked = false;
   syncFloorOnlyUI();
+  _intensityUserSet = false; // next user/session gets a fresh suggestion
+  document.getElementById("intensitySuggestion")?.classList.add("hidden");
   refreshLoadWarning();
 }
 
@@ -4435,6 +4442,85 @@ function refreshFormHints() {
     equipHint.innerHTML = txt && !txt.startsWith("eq.")
       ? txt
       : t("eq.bodyweightAlways");
+  }
+}
+
+// ─── SMART INTENSITY ──────────────────────────────────────────────────────
+// Intensity is the one form input that *should* change day to day, so instead
+// of always defaulting to "Normal" we auto-suggest it from signals the app
+// already tracks — recovery (sleep + soreness), deload window, recent training
+// history, and whether the user's loads can actually deliver a hard session.
+// The suggestion pre-selects a chip and shows its reason; the user can override.
+
+// Set true once the user manually picks an intensity chip this session — after
+// that we stop auto-overriding their choice.
+let _intensityUserSet = false;
+
+// Can the user's available loads support a genuinely "hard" session? Heavy
+// barbell or a machine always can; free-weight-reliant setups need a non-trivial
+// dumbbell/kettlebell; bodyweight/bands/cardio go hard via density + low RIR.
+function loadsSupportHard(userId, equipment) {
+  const loads = getLoads(userId) || {};
+  if (equipment.includes("machine")) return true;
+  if (equipment.includes("barbell") && loads.hasHeavyBarbell) return true;
+  const reliesOnFreeWeights = equipment.includes("dumbbells") || equipment.includes("kettlebell") || equipment.includes("barbell");
+  if (!reliesOnFreeWeights) return true; // BW / bands / cardio — hard is achievable without heavy load
+  const maxDB = equipment.includes("dumbbells") ? (loads.maxDumbbellKg || 0) : 0;
+  const maxKB = equipment.includes("kettlebell") ? (loads.maxKettlebellKg || 0) : 0;
+  return maxDB >= 24 || maxKB >= 24; // light/unset free weights → a "hard" load stimulus isn't real
+}
+
+// Returns { intensity, reasonKey, params } — the recommended session intensity.
+function suggestIntensity(userId) {
+  if (!userId) return { intensity: "normal", reasonKey: null };
+
+  // 1) Under-recovery is the strongest signal — ease off.
+  const rec = getUnderRecoveryStatus(userId);
+  if (rec) {
+    if (rec.badSleep && rec.highSore >= 3) return { intensity: "easy", reasonKey: "intsug.soreSleep", params: { n: rec.highSore } };
+    if (rec.badSleep) return { intensity: "easy", reasonKey: "intsug.sleep" };
+    return { intensity: "easy", reasonKey: "intsug.sore", params: { n: rec.highSore } };
+  }
+  // 2) Planned/earned deload — back off.
+  if (shouldSuggestDeload(userId)) return { intensity: "easy", reasonKey: "intsug.deload" };
+
+  const workouts = getWorkouts(userId);
+  // 3) Newcomer — hold at Normal while a base is built.
+  if (workouts.length < 3) return { intensity: "normal", reasonKey: "intsug.newcomer" };
+
+  const last = workouts[0];
+  const daysSince = last ? (Date.now() - last.createdAt) / 86400000 : 99;
+  const lastIntensity = last?.inputs?.intensity || last?.inputs?.difficulty;
+
+  // 4) Second session in a day — keep it light.
+  if (daysSince < 0.5) return { intensity: "easy", reasonKey: "intsug.sameDay" };
+  // 5) Don't stack two hard days back to back.
+  if (lastIntensity === "hard" && daysSince < 2) return { intensity: "normal", reasonKey: "intsug.afterHard" };
+
+  // 6) Rested + recovered → push hard, but only if loads can deliver it.
+  const sleep = getSleepRating(userId);
+  const wellRested = !hasRealSleepRating(sleep) || sleep.quality >= 4;
+  if (wellRested && daysSince >= 1) {
+    if (!loadsSupportHard(userId, formState.equipment || [])) return { intensity: "normal", reasonKey: "intsug.loadCap" };
+    return { intensity: "hard", reasonKey: "intsug.fresh" };
+  }
+  return { intensity: "normal", reasonKey: null };
+}
+
+// Apply the suggestion to the chips + reason line, unless the user has already
+// picked an intensity manually this session.
+function applyIntensitySuggestion() {
+  const elSug = document.getElementById("intensitySuggestion");
+  if (elSug) elSug.classList.add("hidden");
+  if (!session || _intensityUserSet) return;
+  const s = suggestIntensity(session.username);
+  formState.intensity = s.intensity;
+  document.querySelectorAll('.chip-row[data-field="intensity"] .chip').forEach(c =>
+    c.classList.toggle("selected", c.dataset.value === s.intensity));
+  if (elSug && s.reasonKey) {
+    const label = t(`intensity.${s.intensity}`) || s.intensity;
+    elSug.innerHTML = `${t("intsug.prefix") || "Suggested"}: <strong>${label}</strong> — ${t(s.reasonKey, s.params || {})}`;
+    elSug.classList.remove("hidden");
   }
 }
 
