@@ -9030,9 +9030,12 @@ async function bootstrap() {
 bootstrap();
 
 // ─── SERVICE WORKER REGISTRATION ────────────────────────────────────────
-// Enables PWA install + offline support. SW won't register on file:// — only
-// http(s) — so local double-click of index.html silently skips this.
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+// Enables PWA install + offline support on the WEB build only. SW won't
+// register on file:// — only http(s). It's also skipped inside the native
+// (Capacitor) WebView: there the app is already local, and the SW's
+// network-first/cache logic just causes stale-load churn after an app update.
+const _isNative = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !_isNative) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {
       // Registration may fail in unsupported environments — ignore.

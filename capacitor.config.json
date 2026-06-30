@@ -1,0 +1,19 @@
+{
+  "appId": "app.forge.workout",
+  "appName": "FORGE",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "backgroundColor": "#0d0f15",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0d0f15"
+    }
+  }
+}

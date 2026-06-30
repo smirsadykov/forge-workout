@@ -2,3 +2,11 @@
 .claude/
 node_modules/
 *.log
+
+# Capacitor build output (generated from the web files by scripts/build-web.js)
+dist/
+# Generated app icons/splash (from `npx capacitor-assets generate`)
+resources/
+# Native project is generated on the build machine via `npx cap add android`.
+# Capacitor writes its own android/.gitignore for build artifacts; commit the
+# android/ folder itself only if you want the native project version-controlled.

@@ -1,0 +1,23 @@
+{
+  "name": "forge-workout",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FORGE — Workout Generator. Static web app, wrapped for Android with Capacitor.",
+  "scripts": {
+    "build:web": "node scripts/build-web.js",
+    "sync": "npm run build:web && npx cap sync android",
+    "open:android": "npm run sync && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.4",
+    "@capacitor/cli": "^6.1.0"
+  }
+}

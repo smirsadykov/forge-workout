@@ -808,6 +808,9 @@
        functions are globally available when app.js parses. -->
   <script src="lib/utils.js?v=139"></script>
   <script src="app.js?v=139"></script>
+  <!-- Capacitor native integration (status bar, back button, external links).
+       No-ops on the web build — window.Capacitor only exists in the app. -->
+  <script src="lib/native.js?v=139"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
