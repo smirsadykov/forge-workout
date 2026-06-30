@@ -1,0 +1,10 @@
+<!-- Android adaptive icon foreground. Bolt is scaled down to ~60% so it
+     sits inside Android's safe zone (system can crop the outer ~33% on
+     round / squircle / teardrop masks). No background — adaptive icon
+     composites this on top of icon-background. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <g transform="translate(512, 512) scale(1.6) translate(-256, -256)">
+    <path d="M 296 60 L 152 296 L 232 296 L 200 452 L 360 216 L 280 216 L 320 60 Z"
+          fill="#f97316" stroke="#f97316" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>

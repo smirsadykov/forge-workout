@@ -1,0 +1,10 @@
+<!-- iOS / Android splash screen. 2732×2732 (iPad Pro 12.9" portrait
+     long edge) — Capacitor crops to platform-specific sizes. Icon
+     centred at ~30% of canvas so it reads on all devices. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#0d0f15"/>
+  <g transform="translate(1366, 1366) scale(1.5) translate(-256, -256)">
+    <path d="M 296 60 L 152 296 L 232 296 L 200 452 L 360 216 L 280 216 L 320 60 Z"
+          fill="#f97316" stroke="#f97316" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>
