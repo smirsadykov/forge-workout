@@ -6991,7 +6991,9 @@ function renderHistory() {
           <div class="history-title">${TARGET_LABELS[w.inputs.target]} · ${GOAL_LABELS[w.inputs.goal]}</div>
           <div class="workout-meta">
             <span class="tag">${w.inputs.duration} min</span>
-            <span class="tag">${w.exercises.length} exercises</span>
+            ${w.wod
+              ? `<span class="tag">${wodFormatShort(w.wod.format)}</span><span class="tag">${(w.wod.movements || []).length} movements</span>`
+              : `<span class="tag">${w.exercises.length} exercises</span>`}
             ${w.inputs.intensity ? `<span class="tag">${t(`intensity.${w.inputs.intensity}`) || w.inputs.intensity}</span>` : (w.inputs.difficulty ? `<span class="tag">${w.inputs.difficulty}</span>` : "")}
             ${(w.inputs.style === "tempo" || w.inputs.style === "intensity") ? `<span class="tag">Tempo ⚡</span>` : ""}
             ${w.inputs.deload ? `<span class="tag">Deload</span>` : ""}
