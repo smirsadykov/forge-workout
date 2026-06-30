@@ -1341,7 +1341,7 @@ const PROGRAM_SPLITS = {
     3: [
       { target: "push",  label: "Push" },
       { target: "pull",  label: "Pull" },
-      { target: "legs",  label: "Legs" },
+      { target: "lower",  label: "Legs" },
     ],
     4: [
       { target: "upper", label: "Upper" },
@@ -1352,29 +1352,29 @@ const PROGRAM_SPLITS = {
     5: [
       { target: "push",  label: "Push" },
       { target: "pull",  label: "Pull" },
-      { target: "legs",  label: "Legs" },
+      { target: "lower",  label: "Legs" },
       { target: "upper", label: "Upper" },
       { target: "lower", label: "Lower" },
     ],
   },
   strength: {
     2: [
-      { target: "legs",  label: "Squat / Deadlift" },
+      { target: "lower",  label: "Squat / Deadlift" },
       { target: "upper", label: "Bench / OHP" },
     ],
     3: [
-      { target: "legs",  label: "Squat focus" },
+      { target: "lower",  label: "Squat focus" },
       { target: "push",  label: "Bench focus" },
       { target: "pull",  label: "Deadlift focus" },
     ],
     4: [
-      { target: "legs",  label: "Squat focus" },
+      { target: "lower",  label: "Squat focus" },
       { target: "push",  label: "Bench focus" },
       { target: "pull",  label: "Deadlift focus" },
       { target: "push",  label: "OHP focus" },
     ],
     5: [
-      { target: "legs",       label: "Squat focus" },
+      { target: "lower",       label: "Squat focus" },
       { target: "push",       label: "Bench focus" },
       { target: "pull",       label: "Deadlift focus" },
       { target: "push",       label: "OHP focus" },
