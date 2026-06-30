@@ -107,6 +107,17 @@
     "intensity.easy": { en: "Easy", ru: "Легко" },
     "intensity.normal": { en: "Normal", ru: "Норма" },
     "intensity.hard": { en: "Hard", ru: "Тяжело" },
+    // Smart intensity suggestion — prefix + reasons
+    "intsug.prefix": { en: "Suggested", ru: "Рекомендуем" },
+    "intsug.soreSleep": { en: "poor sleep + {n} muscles still sore", ru: "плохой сон + {n} мышц ещё болят" },
+    "intsug.sleep": { en: "you logged poor sleep", ru: "ты отметил плохой сон" },
+    "intsug.sore": { en: "{n} muscles still sore", ru: "{n} мышц ещё болят" },
+    "intsug.deload": { en: "deload week — time to back off", ru: "разгрузочная неделя — пора сбавить" },
+    "intsug.newcomer": { en: "building your base — keep it steady", ru: "нарабатываешь базу — без рывков" },
+    "intsug.sameDay": { en: "second session today", ru: "вторая тренировка сегодня" },
+    "intsug.afterHard": { en: "you went hard last session", ru: "прошлая тренировка была тяжёлой" },
+    "intsug.fresh": { en: "rested and recovered", ru: "отдохнул и восстановился" },
+    "intsug.loadCap": { en: "your weights are light for a true hard session", ru: "твои веса легковаты для по-настоящему тяжёлой сессии" },
     "progression.label": { en: "Progression", ru: "Прогрессия" },
     "progression.note": {
       en: "From your plateau at {from}. Next step in the chain.",
