@@ -99,19 +99,36 @@ function closePaywall() {
 // Mock purchase — Phase 1 only. In Phase 2 this calls
 // Purchases.purchasePackage() from @revenuecat/purchases-capacitor and
 // the webhook updates Supabase, which in turn lights up isPro() here.
+// Mock fallback — only used when the RevenueCat SDK isn't live (web build
+// or unconfigured native build). Flips state to TRIAL for 7 days.
 function mockSubscribe(plan) {
   if (!session?.username) return;
-  // 7-day trial regardless of plan in Phase 1 — real flow respects each
-  // store's intro-offer policy.
   const trialMs = 7 * 86400 * 1000;
   setSubState(session.username, {
     status: SUB_STATUS.TRIAL,
     expiresAt: Date.now() + trialMs,
     productId: plan === "annual" ? "forge.pro.yearly" : "forge.pro.monthly",
   });
+  afterSubChange();
+}
+// Map RC parsed entitlement → our SubState shape and persist.
+function applyEntitlement(parsed) {
+  if (!session?.username || !parsed) return;
+  const status = parsed.status === "trial" ? SUB_STATUS.TRIAL
+               : parsed.status === "pro"   ? SUB_STATUS.PRO
+               : SUB_STATUS.FREE;
+  setSubState(session.username, {
+    status,
+    expiresAt: parsed.expiresAt || null,
+    productId: parsed.productId || null,
+  });
+  afterSubChange();
+}
+// Common post-change UI refresh — Save button, Settings card, workout
+// card. Called from both mockSubscribe + applyEntitlement so the path
+// is identical regardless of source.
+function afterSubChange() {
   closePaywall();
-  // Refresh the workout card so the Save button re-enables, and the
-  // settings view if open.
   if (currentWorkout && el?.workoutResult) {
     renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
   }
@@ -119,26 +136,55 @@ function mockSubscribe(plan) {
     renderSettings?.();
   }
 }
+
 // Document-level delegation for paywall actions. Survives any re-render
 // of the modal body.
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   const action = e.target.closest("[data-paywall-action]")?.dataset.paywallAction;
   if (action === "close") { closePaywall(); return; }
   if (action === "subscribe") {
-    // Plan is whatever's selected — defaulting to annual since it's
-    // recommended.
     const selected = document.querySelector(".paywall-plan.selected")?.dataset.paywallPlan || "annual";
-    mockSubscribe(selected);
+    const planKey = selected === "annual" ? "yearly" : "monthly";
+    // Real purchase on native + configured; otherwise the mock keeps the
+    // dev flow working in localhost and web preview.
+    if (window.rcIsAvailable?.()) {
+      try {
+        const parsed = await window.rcPurchase(planKey);
+        applyEntitlement(parsed);
+      } catch (err) {
+        // User cancelled or store rejected — keep paywall open. Don't toast
+        // on user-cancel (noisy). Other errors warrant a toast.
+        const code = String(err?.message || err);
+        if (!/cancel/i.test(code)) {
+          if (typeof showToast === "function") showToast(t("paywall.error") || "Purchase failed. Please try again.");
+          else console.error("[FORGE/RC] purchase failed:", err);
+        }
+      }
+    } else {
+      mockSubscribe(selected);
+    }
     return;
   }
   if (action === "restore") {
-    // Phase 2: call Purchases.restorePurchases(). Phase 1: re-read local.
+    if (window.rcIsAvailable?.()) {
+      try {
+        const parsed = await window.rcRestore();
+        if (parsed && parsed.status !== "free") {
+          applyEntitlement(parsed);
+          return;
+        }
+      } catch (err) {
+        console.warn("[FORGE/RC] restore failed:", err);
+      }
+      if (typeof showToast === "function") showToast(t("paywall.noPurchases") || "No active subscription found.");
+      else alert(t("paywall.noPurchases") || "No active subscription found.");
+      return;
+    }
+    // Mock fallback — just re-check local state.
     const s = session?.username ? getSubState(session.username) : null;
     if (s && (s.status === SUB_STATUS.PRO || (s.status === SUB_STATUS.TRIAL && s.expiresAt > Date.now()))) {
       closePaywall();
     } else {
-      // Nothing to restore; show a quiet toast (re-using existing pattern
-      // if it exists, otherwise alert).
       if (typeof showToast === "function") showToast(t("paywall.noPurchases") || "No active subscription found.");
       else alert(t("paywall.noPurchases") || "No active subscription found.");
     }
@@ -149,6 +195,24 @@ document.addEventListener("click", (e) => {
     document.querySelectorAll(".paywall-plan").forEach(p => p.classList.toggle("selected", p === plan));
   }
 });
+
+// Initialize RevenueCat once we have a session. Safe on web (rcInit
+// returns false). Re-runs on session change. Registers the entitlement
+// listener so server-side renewals / cancellations propagate to UI.
+async function initRevenueCatForSession() {
+  if (!session?.username) return;
+  if (!window.rcInit) return;
+  // Prefer Supabase user ID over username — stable across login, matches
+  // what the webhook on the backend will use as appUserID.
+  const userId = session.userId || session.username;
+  const ready = await window.rcInit(userId);
+  if (!ready) return;
+  // Hook entitlement changes once per session boot.
+  if (!window.__rcListenerWired) {
+    window.__rcListenerWired = true;
+    window.rcOnEntitlementChange?.((parsed) => applyEntitlement(parsed));
+  }
+}
 
 // ─── GOAL DATA MODEL ─────────────────────────────────────────────────────
 // Strength + skill goals drive the generator. A goal carries:
@@ -2329,6 +2393,12 @@ function showApp(view = "generator") {
   el.nav.classList.toggle("hidden", view === "guided");
   el.authView.classList.add("hidden");
   el.userLabel.textContent = session.username;
+  // Boot RevenueCat once per session — idempotent. On web it returns
+  // false silently and the mock keeps working. On native it pulls the
+  // current entitlement and wires the change listener.
+  if (typeof initRevenueCatForSession === "function") {
+    initRevenueCatForSession().catch(err => console.warn("[FORGE/RC] init:", err));
+  }
   applyUnitsButtons();
   // Initial sync state — assume OK on first paint; cloudPush calls will update.
   if (HAS_SUPABASE && session?.userId && syncState.status === "idle") {
