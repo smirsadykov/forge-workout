@@ -2779,8 +2779,14 @@ input {
   bottom: 0;
   margin-left: -20px;
   margin-right: -20px;
-  padding: 14px 20px 18px;
-  background: linear-gradient(180deg, rgba(13,15,21,0) 0%, var(--bg) 30%);
+  padding: 16px 20px 18px;
+  /* Solid backing so scrolling form content (equipment hints, last buttons)
+     can't bleed through behind the pill row — the old 30% gradient fade left
+     the pills sitting over a transparent band. The upward --bg-colored shadow
+     feathers content out as it passes under the bar, keeping a soft top edge
+     without a hard seam. */
+  background: var(--bg);
+  box-shadow: 0 -10px 14px -2px var(--bg);
   z-index: 20;
 }
 @media (min-width: 768px) {

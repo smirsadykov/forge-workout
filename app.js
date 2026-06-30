@@ -6332,9 +6332,10 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     : inputs.difficulty
       ? inputs.difficulty[0].toUpperCase() + inputs.difficulty.slice(1)
       : null;
+  // Goal + Target already lead the workout title below ("Full Body · Standard"),
+  // so keep the tag row to the details the title doesn't carry — duration and
+  // intensity — instead of repeating them.
   const tags = [
-    GOAL_LABELS[inputs.goal],
-    TARGET_LABELS[inputs.target],
     `${inputs.duration} min`,
     intensityTag,
   ].filter(Boolean).map(tg => `<span class="tag">${tg}</span>`).join("");
@@ -8857,8 +8858,16 @@ async function bootstrap() {
   if (HAS_SUPABASE) {
     const usernameLabel = el.username.closest("label");
     if (usernameLabel) {
-      const text = Array.from(usernameLabel.childNodes).find(n => n.nodeType === 3);
-      if (text) text.textContent = "\n            Email\n            ";
+      // The label text lives in a <span data-i18n="auth.username">, not a raw
+      // text node. Re-point its i18n key to "auth.email" so the label reads
+      // "Email" and stays correct across language switches (applyI18n rewrites
+      // textContent from data-i18n). Editing a stray whitespace text node here
+      // — the old approach — left the Username span in place, double-labelling.
+      const span = usernameLabel.querySelector('[data-i18n="auth.username"]');
+      if (span) {
+        span.setAttribute("data-i18n", "auth.email");
+        span.textContent = (window.i18n && window.i18n.t("auth.email")) || "Email";
+      }
       el.username.type = "email";
       el.username.autocomplete = "email";
       el.username.removeAttribute("minlength");
