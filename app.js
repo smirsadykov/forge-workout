@@ -4234,13 +4234,14 @@ function resetForm() {
   formState.floorOnly = true; // default baseline — floor-only on
   recomputeEquipment();
   formState.target = null;
-  formState.duration = null;
+  formState.duration = "45"; // default duration chip
   formState.intensity = "normal";
   formState.style = "standard";
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
   document.querySelectorAll('.chip-row[data-field="equipmentHave"] .chip').forEach(c => c.setAttribute("aria-pressed", "false"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
+  document.querySelector('.chip-row[data-field="duration"] .chip[data-value="45"]')?.classList.add("selected");
   const ft = document.getElementById("floorOnlyToggle");
   if (ft) ft.checked = true;
   syncFloorOnlyUI();
@@ -4255,30 +4256,12 @@ function resetForm() {
 // sanity-check before generating. If a required field is missing, shows
 // a placeholder pill prompting them to pick it. Long-form summary fits
 // fully in mobile width because each pill is short.
-// Duration slider — replaces the chip row from the Stitch redesign.
-// Wired once at boot; updates formState + the large data-point display
-// + triggers the same downstream refreshers that chip clicks fire.
-(function wireDurationSlider() {
-  if (typeof document === "undefined") return;
-  document.addEventListener("DOMContentLoaded", () => {
-    const slider = document.getElementById("durationSlider");
-    const display = document.getElementById("durationDisplay");
-    if (!slider) return;
-    const apply = () => {
-      const val = String(slider.value);
-      formState.duration = val;
-      if (display) {
-        const unitLabel = (typeof t === "function" ? (t("gen.min") || "MIN") : "MIN").toUpperCase();
-        display.innerHTML = `${val} <span class="duration-unit">${unitLabel}</span>`;
-      }
-      if (typeof refreshLoadWarning === "function") refreshLoadWarning();
-      if (typeof refreshFormSummary === "function") refreshFormSummary();
-      if (typeof refreshFormHints === "function") refreshFormHints();
-    };
-    slider.addEventListener("input", apply);
-    apply();  // initial render — sets formState.duration to 45
-  });
-})();
+// Duration is a single-select chip row (data-field="duration") — the generic
+// chip handler sets formState.duration on click. Seed the default to match the
+// pre-selected 45-min chip so the form is valid before any interaction. Chips
+// replaced the slider: only the five labeled stops are reachable (no phantom
+// 75-min value), and every option is a single tap.
+formState.duration = "45";
 
 function refreshFormSummary() {
   const el2 = document.getElementById("formSummary");

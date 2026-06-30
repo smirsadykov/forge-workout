@@ -195,18 +195,14 @@
             </div>
           </div>
 
-          <div class="form-group duration-slider-group">
-            <div class="duration-header">
-              <label class="group-label" for="durationSlider" data-i18n="gen.duration">Duration</label>
-              <span class="data-point duration-display" id="durationDisplay">45 <span class="duration-unit" data-i18n="gen.min">MIN</span></span>
-            </div>
-            <input type="range" id="durationSlider" min="15" max="90" step="15" value="45" class="duration-slider" aria-label="Session duration in minutes" />
-            <div class="duration-ticks" aria-hidden="true">
-              <span style="left:0%">15</span>
-              <span style="left:20%">30</span>
-              <span style="left:40%">45</span>
-              <span style="left:60%">60</span>
-              <span style="left:100%">90</span>
+          <div class="form-group">
+            <label class="group-label" data-i18n="gen.duration">Duration</label>
+            <div class="chip-row" data-field="duration" data-multi="false" role="group" aria-label="Session duration">
+              <button class="chip" type="button" data-value="15">15 <span data-i18n="gen.min">min</span></button>
+              <button class="chip" type="button" data-value="30">30 <span data-i18n="gen.min">min</span></button>
+              <button class="chip selected" type="button" data-value="45">45 <span data-i18n="gen.min">min</span></button>
+              <button class="chip" type="button" data-value="60">60 <span data-i18n="gen.min">min</span></button>
+              <button class="chip" type="button" data-value="90">90 <span data-i18n="gen.min">min</span></button>
             </div>
           </div>
 
