@@ -2194,6 +2194,9 @@ function showApp(view = "generator") {
   if (view === "settings") renderSettings();
   if (view === "library") renderLibrary();
   if (view === "generator") {
+    // Load the user's saved equipment setup (what they don't have / floor-only)
+    // and reflect it in the chips before anything reads the derived have-list.
+    restoreEquipment();
     refreshLoadWarning();
     refreshStreakBadge();
     refreshSleepPrompt();
@@ -4030,7 +4033,68 @@ el.logoutBtn.addEventListener("click", async () => {
 // goal defaults to "standard" — the chip is preselected in index.html
 // and maps to "hypertrophy" internally at generate time. This makes the
 // form valid on first interaction without forcing a goal click.
-const formState = { goal: "standard", equipment: [], target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
+// `equipment` is the list of gear the user HAS — the shape generateWorkout
+// consumes. The UI no longer collects it directly; instead it collects
+// `equipmentMissing` (gear the user does NOT have) plus a `floorOnly` flag,
+// and we DERIVE `equipment` from those. Bodyweight is always implied, so it's
+// never a chip. This keeps every downstream consumer (generator, load
+// warnings, summary) unchanged — they still read `equipment`.
+const formState = { goal: "standard", equipment: [], equipmentMissing: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
+
+// The physical add-on equipment a user can own, in display order. Bodyweight
+// is intentionally absent — it's the universal baseline, always available.
+const REAL_EQUIPMENT = ["dumbbells", "barbell", "kettlebell", "bands", "machine", "cardio_machine"];
+
+// Translate the UI's "missing" model into the "have" list the generator wants.
+// floorOnly is mutually exclusive with everything (bodyweight, no furniture),
+// matching generateWorkout's existing `equipment.includes("floor_only")` path.
+function recomputeEquipment() {
+  if (formState.floorOnly) {
+    formState.equipment = ["floor_only"];
+    return;
+  }
+  const missing = formState.equipmentMissing || [];
+  formState.equipment = ["bodyweight", ...REAL_EQUIPMENT.filter((e) => !missing.includes(e))];
+}
+
+// Persist the user's setup so equipment is a one-time choice, not a per-session
+// chore. Local-only (keyed by userId/username) — consistent with the app's
+// local-first per-user data; cloud sync of this can come later.
+const EQUIP_STORE_KEY = "forge:equip";
+function _equipStoreId() {
+  return session ? (session.userId || session.username) : null;
+}
+function persistEquipment() {
+  const id = _equipStoreId();
+  if (!id) return;
+  const all = load(EQUIP_STORE_KEY, {});
+  all[id] = { missing: (formState.equipmentMissing || []).slice(), floorOnly: !!formState.floorOnly };
+  save(EQUIP_STORE_KEY, all);
+}
+// Restore the saved setup and reflect it in the chips + toggle. Safe to call
+// before the DOM chips exist (it no-ops the UI sync in that case).
+function restoreEquipment() {
+  const id = _equipStoreId();
+  const saved = id ? load(EQUIP_STORE_KEY, {})[id] : null;
+  formState.equipmentMissing = saved && Array.isArray(saved.missing) ? saved.missing.slice() : [];
+  formState.floorOnly = !!(saved && saved.floorOnly);
+  recomputeEquipment();
+  document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach((c) => {
+    c.classList.toggle("selected", formState.equipmentMissing.includes(c.dataset.value));
+  });
+  const ft = document.getElementById("floorOnlyToggle");
+  if (ft) ft.checked = formState.floorOnly;
+  syncFloorOnlyUI();
+}
+// When floor-only is on, the missing chips are moot — dim + disable the row.
+function syncFloorOnlyUI() {
+  const row = document.querySelector('.chip-row[data-field="equipmentMissing"]');
+  if (row) row.classList.toggle("disabled", !!formState.floorOnly);
+}
+
+// Seed the derived have-list at boot so the form is valid before any
+// interaction (default: nothing missing → user has everything).
+recomputeEquipment();
 
 // ─── DELOAD DETECTION ────────────────────────────────────────────────────
 // Counts ISO weeks containing a saved workout, since the last marked deload.
@@ -4086,39 +4150,15 @@ document.querySelectorAll(".chip-row").forEach(row => {
       const value = chip.dataset.value;
       if (multi) {
         const arr = formState[field];
-        // Special rule for equipment: "floor_only" is mutually exclusive
-        // with everything else. Picking it clears all other equipment;
-        // picking any other equipment clears floor_only.
-        if (field === "equipment") {
-          if (value === "floor_only") {
-            if (arr.includes("floor_only")) {
-              // Toggle off
-              arr.length = 0;
-              row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
-            } else {
-              // Picking floor-only: clear everything else first
-              arr.length = 0;
-              arr.push("floor_only");
-              row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
-              chip.classList.add("selected");
-            }
-          } else {
-            // Picking a real equipment item: drop floor_only if present
-            const foIdx = arr.indexOf("floor_only");
-            if (foIdx !== -1) {
-              arr.splice(foIdx, 1);
-              row.querySelector('.chip[data-value="floor_only"]')?.classList.remove("selected");
-            }
-            const idx = arr.indexOf(value);
-            if (idx === -1) arr.push(value);
-            else arr.splice(idx, 1);
-            chip.classList.toggle("selected");
-          }
-        } else {
-          const idx = arr.indexOf(value);
-          if (idx === -1) arr.push(value);
-          else arr.splice(idx, 1);
-          chip.classList.toggle("selected");
+        const idx = arr.indexOf(value);
+        if (idx === -1) arr.push(value);
+        else arr.splice(idx, 1);
+        chip.classList.toggle("selected");
+        // Equipment uses the inverted "missing" model: selecting a chip marks
+        // that gear as unavailable. Re-derive the have-list and persist.
+        if (field === "equipmentMissing") {
+          recomputeEquipment();
+          persistEquipment();
         }
       } else {
         row.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
@@ -4152,9 +4192,25 @@ document.querySelectorAll(".chip-row").forEach(row => {
   });
 });
 
+// Floor-only toggle — "I only have floor space (no bar/bench/chair)". Drives
+// the same derived have-list; when on, the missing chips are moot so we dim
+// the row. Replaces the old mutually-exclusive "Floor only" chip.
+document.getElementById("floorOnlyToggle")?.addEventListener("change", (e) => {
+  formState.floorOnly = e.target.checked;
+  recomputeEquipment();
+  persistEquipment();
+  syncFloorOnlyUI();
+  el.formError.textContent = "";
+  refreshLoadWarning();
+  refreshFormSummary();
+  refreshFormHints();
+});
+
 function resetForm() {
   formState.goal = "standard";
-  formState.equipment = [];
+  formState.equipmentMissing = [];
+  formState.floorOnly = false;
+  recomputeEquipment();
   formState.target = null;
   formState.duration = null;
   formState.intensity = "normal";
@@ -4165,6 +4221,9 @@ function resetForm() {
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
+  const ft = document.getElementById("floorOnlyToggle");
+  if (ft) ft.checked = false;
+  syncFloorOnlyUI();
   refreshLoadWarning();
 }
 
@@ -4223,11 +4282,21 @@ function refreshFormSummary() {
   };
   const pills = [];
   if (goal) pills.push({ k: "goal", label: goalLabelMap[goal] || goal });
-  if (equipment?.length) {
-    const equipText = equipment.length === 1
-      ? (equipLabelMap[equipment[0]] || equipment[0])
-      : `${equipLabelMap[equipment[0]] || equipment[0]} +${equipment.length - 1}`;
-    pills.push({ k: "equip", label: equipText });
+  // Equipment pill describes the derived have-list in the inverted model:
+  // floor-only / bodyweight-only / full kit / or "<first> +N" of owned gear.
+  {
+    let equipText = null;
+    if (formState.floorOnly) {
+      equipText = equipLabelMap.floor_only;
+    } else {
+      const owned = REAL_EQUIPMENT.filter((e) => (equipment || []).includes(e));
+      if (owned.length === 0) equipText = t("equip.bwOnly") || "Bodyweight";
+      else if (owned.length === REAL_EQUIPMENT.length) equipText = t("equip.full") || "Full kit";
+      else equipText = owned.length === 1
+        ? (equipLabelMap[owned[0]] || owned[0])
+        : `${equipLabelMap[owned[0]] || owned[0]} +${owned.length - 1}`;
+    }
+    if (equipText) pills.push({ k: "equip", label: equipText });
   }
   if (target) pills.push({ k: "target", label: TARGET_LABELS[target] || target });
   if (duration) pills.push({ k: "dur", label: `${duration} ${t("gen.min") || "min"}` });
@@ -4370,23 +4439,18 @@ function refreshFormHints() {
 
   const equipHint = document.getElementById("equipmentHint");
   if (equipHint) {
-    const eq = formState.equipment || [];
+    // Inverted model: hint reflects the derived state. Floor-only and
+    // bodyweight-only get their specific caveats; otherwise reassure that
+    // bodyweight is always in the mix.
+    const owned = REAL_EQUIPMENT.filter((e) => (formState.equipment || []).includes(e));
     let key;
-    if (eq.length === 0) {
-      key = "eq.hint.empty";
-    } else if (eq.includes("floor_only")) {
-      key = "eq.floorOnlyHint";   // existing key — preserved
-    } else if (eq.length === 1 && eq[0] === "kettlebell") {
-      key = "eq.hint.kb_only";
-    } else if (eq.length === 1 && eq[0] === "bodyweight") {
-      key = "eq.hint.bw_only";
-    } else {
-      key = "eq.floorOnlyHint";   // generic fallback
-    }
+    if (formState.floorOnly) key = "eq.floorOnlyHint";
+    else if (owned.length === 0) key = "eq.hint.bw_only";
+    else key = "eq.bodyweightAlways";
     const txt = t(key);
     equipHint.innerHTML = txt && !txt.startsWith("eq.")
       ? txt
-      : t("eq.floorOnlyHint");
+      : t("eq.bodyweightAlways");
   }
 }
 

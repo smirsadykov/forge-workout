@@ -96,7 +96,15 @@
     "gen.title": { en: "Build your workout", ru: "Собери тренировку" },
     "gen.sub": { en: "Pick what you want, what you have, and how long you've got.", ru: "Выбери цель, инвентарь и длительность." },
     "gen.goal": { en: "Goal", ru: "Цель" },
-    "gen.equipment": { en: "Equipment (select all you have)", ru: "Инвентарь (выбери всё доступное)" },
+    "gen.equipment": { en: "What you don't have", ru: "Чего у тебя нет" },
+    "eq.optoutIntro": {
+      en: "Tap anything you don't have. Everything else — including bodyweight — is fair game.",
+      ru: "Отметь то, чего у тебя нет. Всё остальное — включая свой вес — пойдёт в дело.",
+    },
+    "eq.floorOnlyToggle": { en: "Floor only — no bar, bench or chair", ru: "Только пол — без турника, скамьи и стула" },
+    "eq.bodyweightAlways": { en: "Bodyweight is always included.", ru: "Свой вес всегда включён." },
+    "equip.full": { en: "Full kit", ru: "Всё есть" },
+    "equip.bwOnly": { en: "Bodyweight", ru: "Свой вес" },
     "gen.target": { en: "Target", ru: "Зона" },
     "gen.duration": { en: "Duration", ru: "Длительность" },
     "gen.intensity": { en: "Intensity", ru: "Интенсивность" },
@@ -325,7 +333,7 @@
     "eq.machineShort": { en: "Machine", ru: "Тренажёр" },
     "eq.cardio_machine": { en: "Cardio Machine", ru: "Кардиотренажёр" },
     "eq.floor_only": { en: "🏨 Floor only", ru: "🏨 Только пол" },
-    "eq.floorOnlyHint": { en: "Hotel room? Pick <strong>Floor only</strong> — pull-ups, dips, step-ups, and anything else needing a bar/bench/chair will be skipped.", ru: "Гостиничный номер? Выбери <strong>«Только пол»</strong> — подтягивания, отжимания на брусьях, зашагивания и всё, что требует турник/скамью/стул, будут пропущены." },
+    "eq.floorOnlyHint": { en: "Floor only: pull-ups, dips, step-ups, and anything else needing a bar, bench or chair will be skipped.", ru: "Только пол: подтягивания, отжимания на брусьях, зашагивания и всё, что требует турник, скамью или стул, будут пропущены." },
 
     // Difficulty
     "diff.beginner": { en: "Beginner", ru: "Новичок" },
