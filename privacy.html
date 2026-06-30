@@ -135,12 +135,13 @@
         <li><strong>Email and password.</strong> Used to create your account and log you in. Passwords are stored hashed by our auth provider — we never see them in plain text.</li>
         <li><strong>Workout data.</strong> The workouts you generate, save, and log: exercises, sets, reps, weights, dates, notes, soreness ratings, and saved templates.</li>
         <li><strong>Preferences.</strong> Units (kg/lb), language, theme, equipment you own, target rep ranges.</li>
+        <li><strong>Subscription status.</strong> Whether you have an active FORGE Pro subscription (free / trial / pro), the product you subscribed to, and the renewal date. Used to unlock paid features. The actual payment is handled by Apple App Store or Google Play — we never see your card details. Subscription state is synced to our backend via the App Store / Play Store and our payment processor (RevenueCat) so it works across your devices.</li>
         <li><strong>Crash and error reports.</strong> When something breaks in the app we send a small diagnostic message (which screen you were on, what action triggered it, an error code). No screen contents, no personal data.</li>
       </ul>
-      <p>We do <strong>not</strong> collect: location, contacts, camera or microphone, advertising IDs, device IDs, or any analytics for marketing or profiling.</p>
+      <p>We do <strong>not</strong> collect: location, contacts, camera or microphone, advertising IDs, device IDs, payment card numbers, or any analytics for marketing or profiling.</p>
 
       <h2>3. Where it's stored</h2>
-      <p>Data is stored in <strong>Supabase</strong> (PostgreSQL hosted in AWS data centers). All traffic is encrypted with HTTPS. The app code itself is hosted on GitHub Pages.</p>
+      <p>Data is stored in <strong>Supabase</strong> (PostgreSQL hosted in AWS data centers). All traffic is encrypted with HTTPS. The app code itself is hosted on GitHub Pages. Subscription state is also stored by Apple, Google, and our payment processor <strong>RevenueCat</strong> (a US company that handles cross-platform subscription syncing) — strictly to keep your subscription working across devices.</p>
 
       <h2>4. Who can access it</h2>
       <p>Only you, when you're logged in. We don't sell, rent, or share your data with anyone. We don't run analytics on it. We don't use it to train any model.</p>
@@ -185,12 +186,13 @@
         <li><strong>Email и пароль.</strong> Нужны для создания аккаунта и входа. Пароли хранятся в виде хеша у нашего auth-провайдера — мы никогда не видим их в открытом виде.</li>
         <li><strong>Данные тренировок.</strong> Сгенерированные, сохранённые и залогированные тренировки: упражнения, подходы, повторы, веса, даты, заметки, оценки крепатуры, шаблоны.</li>
         <li><strong>Настройки.</strong> Единицы измерения (кг/lb), язык, тема, доступный инвентарь, целевые диапазоны повторов.</li>
+        <li><strong>Статус подписки.</strong> Есть ли у вас активная подписка FORGE Pro (free / trial / pro), какой продукт куплен, дата следующего списания. Используется, чтобы открыть платные функции. Сам платёж проходит через Apple App Store или Google Play — мы никогда не видим данные вашей карты. Статус подписки синхронизируется с нашим бэкендом через сторы и платёжного провайдера (RevenueCat), чтобы подписка работала между устройствами.</li>
         <li><strong>Отчёты об ошибках.</strong> Когда что-то ломается, мы отправляем небольшое диагностическое сообщение (какой экран, какое действие, код ошибки). Содержимое экранов и личные данные не передаются.</li>
       </ul>
-      <p>Мы <strong>не</strong> собираем: геолокацию, контакты, доступ к камере или микрофону, рекламные идентификаторы, ID устройства, никакую аналитику для маркетинга или профилирования.</p>
+      <p>Мы <strong>не</strong> собираем: геолокацию, контакты, доступ к камере или микрофону, рекламные идентификаторы, ID устройства, номера карт, никакую аналитику для маркетинга или профилирования.</p>
 
       <h2>3. Где хранятся данные</h2>
-      <p>Данные хранятся в <strong>Supabase</strong> (PostgreSQL, размещён в дата-центрах AWS). Весь трафик шифруется по HTTPS. Сам код приложения хостится на GitHub Pages.</p>
+      <p>Данные хранятся в <strong>Supabase</strong> (PostgreSQL, размещён в дата-центрах AWS). Весь трафик шифруется по HTTPS. Сам код приложения хостится на GitHub Pages. Статус подписки также хранится у Apple, Google и нашего платёжного провайдера <strong>RevenueCat</strong> (компания США, обеспечивающая cross-platform синхронизацию подписок) — строго для того, чтобы подписка работала между устройствами.</p>
 
       <h2>4. Кто имеет доступ</h2>
       <p>Только вы, когда залогинены. Мы не продаём, не сдаём в аренду и не передаём ваши данные кому-либо. Не запускаем аналитику. Не используем для обучения каких-либо моделей.</p>

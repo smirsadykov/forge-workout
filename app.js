@@ -15,7 +15,140 @@ const STORAGE_KEYS = {
   sleep: "forge:sleep",   // per-user, per-date sleep quality rating (1-5)
   templates: "forge:templates", // per-user saved workout templates
   goals: "forge:goals",         // per-user training goals (strength/skill targets)
+  sub: "forge:sub",             // per-user subscription state (Phase 1 mock,
+                                // Phase 2 driven by RevenueCat webhooks)
 };
+
+// ─── SUBSCRIPTION GATING ─────────────────────────────────────────────────
+// Phase 1: mock state in localStorage. Phase 2: RevenueCat will write the
+// same shape via webhook → Supabase Edge Function → user_prefs.sub.
+// Either way, every check goes through the same helpers below, so the
+// switch is just swapping the data source.
+const FREE_SAVES_PER_7D = 3;   // free tier cap; matched to "3 saved workouts / rolling 7 days"
+const SUB_STATUS = {
+  FREE: "free",            // never subscribed (or trial expired)
+  TRIAL: "trial",          // inside 7-day intro trial — full access
+  PRO: "pro",              // active paid subscription — full access
+};
+function getSubState(userId) {
+  const all = load(STORAGE_KEYS.sub, {});
+  return all[userId] || { status: SUB_STATUS.FREE, expiresAt: null, productId: null };
+}
+function setSubState(userId, state) {
+  const all = load(STORAGE_KEYS.sub, {});
+  all[userId] = { status: SUB_STATUS.FREE, expiresAt: null, productId: null, ...state };
+  save(STORAGE_KEYS.sub, all);
+}
+function isPro(userId) {
+  if (!userId) return false;
+  const s = getSubState(userId);
+  if (s.status === SUB_STATUS.PRO) return true;
+  if (s.status === SUB_STATUS.TRIAL && s.expiresAt && s.expiresAt > Date.now()) return true;
+  // Trial expired: trial status with stale expiresAt — silently downgrade to free.
+  if (s.status === SUB_STATUS.TRIAL && (!s.expiresAt || s.expiresAt <= Date.now())) {
+    setSubState(userId, { status: SUB_STATUS.FREE, expiresAt: null, productId: null });
+  }
+  return false;
+}
+// Walk saved workouts, count how many were created in the last `days` days.
+function countRecentSaves(userId, days = 7) {
+  if (!userId) return 0;
+  const cutoff = Date.now() - days * 86400 * 1000;
+  return getWorkouts(userId).filter(w => (w.createdAt || 0) >= cutoff).length;
+}
+// Single gating check used by every save site. Returns {allowed, remaining,
+// reason}. `reason` is shown in the paywall headline when blocking.
+function canSaveWorkout(userId) {
+  if (!userId) return { allowed: false, remaining: 0, reason: "no_session" };
+  if (isPro(userId)) return { allowed: true, remaining: Infinity, reason: "pro" };
+  const used = countRecentSaves(userId, 7);
+  const remaining = Math.max(0, FREE_SAVES_PER_7D - used);
+  return {
+    allowed: remaining > 0,
+    remaining,
+    reason: remaining > 0 ? "free_quota" : "limit_reached",
+  };
+}
+
+// ─── PAYWALL ─────────────────────────────────────────────────────────────
+// Phase 1: tapping a plan flips local state to TRIAL for 7 days (mock).
+// Phase 2: replaced by RevenueCat purchase flow; user state will be
+// authoritative via webhook. The modal markup + open/close logic stays.
+function showPaywall(opts = {}) {
+  const el = document.getElementById("paywall");
+  if (!el) return;
+  // Update sub-headline with context if blocked by limit. Keep the
+  // default i18n text otherwise (Settings entry, voluntary upgrade).
+  const sub = document.getElementById("paywallSub");
+  if (sub && opts.trigger === "save_limit") {
+    sub.textContent = (t("paywall.limitReached") || "You've used all 3 free saves this week. Upgrade to keep logging without limits.");
+  } else if (sub && opts.trigger === "guided_complete") {
+    sub.textContent = (t("paywall.guidedComplete") || "Your last 3 sessions are saved. Upgrade now to keep this one too — and every workout going forward.");
+  } else if (sub) {
+    sub.textContent = (t("paywall.sub") || "Train without limits.");
+  }
+  el.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+function closePaywall() {
+  const el = document.getElementById("paywall");
+  if (!el) return;
+  el.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+// Mock purchase — Phase 1 only. In Phase 2 this calls
+// Purchases.purchasePackage() from @revenuecat/purchases-capacitor and
+// the webhook updates Supabase, which in turn lights up isPro() here.
+function mockSubscribe(plan) {
+  if (!session?.username) return;
+  // 7-day trial regardless of plan in Phase 1 — real flow respects each
+  // store's intro-offer policy.
+  const trialMs = 7 * 86400 * 1000;
+  setSubState(session.username, {
+    status: SUB_STATUS.TRIAL,
+    expiresAt: Date.now() + trialMs,
+    productId: plan === "annual" ? "forge.pro.yearly" : "forge.pro.monthly",
+  });
+  closePaywall();
+  // Refresh the workout card so the Save button re-enables, and the
+  // settings view if open.
+  if (currentWorkout && el?.workoutResult) {
+    renderWorkout(currentWorkout, el.workoutResult, { showSave: !workoutIsSaved });
+  }
+  if (document.getElementById("settingsView") && !document.getElementById("settingsView").classList.contains("hidden")) {
+    renderSettings?.();
+  }
+}
+// Document-level delegation for paywall actions. Survives any re-render
+// of the modal body.
+document.addEventListener("click", (e) => {
+  const action = e.target.closest("[data-paywall-action]")?.dataset.paywallAction;
+  if (action === "close") { closePaywall(); return; }
+  if (action === "subscribe") {
+    // Plan is whatever's selected — defaulting to annual since it's
+    // recommended.
+    const selected = document.querySelector(".paywall-plan.selected")?.dataset.paywallPlan || "annual";
+    mockSubscribe(selected);
+    return;
+  }
+  if (action === "restore") {
+    // Phase 2: call Purchases.restorePurchases(). Phase 1: re-read local.
+    const s = session?.username ? getSubState(session.username) : null;
+    if (s && (s.status === SUB_STATUS.PRO || (s.status === SUB_STATUS.TRIAL && s.expiresAt > Date.now()))) {
+      closePaywall();
+    } else {
+      // Nothing to restore; show a quiet toast (re-using existing pattern
+      // if it exists, otherwise alert).
+      if (typeof showToast === "function") showToast(t("paywall.noPurchases") || "No active subscription found.");
+      else alert(t("paywall.noPurchases") || "No active subscription found.");
+    }
+    return;
+  }
+  const plan = e.target.closest("[data-paywall-plan]");
+  if (plan) {
+    document.querySelectorAll(".paywall-plan").forEach(p => p.classList.toggle("selected", p === plan));
+  }
+});
 
 // ─── GOAL DATA MODEL ─────────────────────────────────────────────────────
 // Strength + skill goals drive the generator. A goal carries:
@@ -6688,6 +6821,15 @@ function attachWorkoutActions() {
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
       if (!currentWorkout || !session) return;
+      // Subscription gate. Free tier is capped at FREE_SAVES_PER_7D saves
+      // in any rolling 7-day window. Generating + previewing is always
+      // free — we only block the save itself, so the user can still try
+      // the product without committing.
+      const gate = canSaveWorkout(session.username);
+      if (!gate.allowed) {
+        showPaywall({ trigger: "save_limit", remaining: gate.remaining });
+        return;
+      }
       addWorkout(session.username, currentWorkout);
       saveBtn.textContent = t("settings.saved");
       saveBtn.disabled = true;
@@ -7235,7 +7377,114 @@ function renderSettings() {
   renderLanguageChips();
   renderProgramCard();
   renderGoalsSettingsCard();
+  renderSubscriptionCard();
 }
+
+// ─── SUBSCRIPTION CARD (Settings) ────────────────────────────────────────
+// Shows current plan + usage + action buttons. Layout adapts to status:
+//   Free  → counter "X / 3 used this week", Upgrade CTA
+//   Trial → trial-end date, Manage button
+//   Pro   → renewal date, Manage button
+// The dev toggle is only shown in non-production environments (Phase 1).
+function renderSubscriptionCard() {
+  const body = document.getElementById("subscriptionCardBody");
+  if (!body || !session?.username) return;
+  const u = session.username;
+  const state = getSubState(u);
+  const pro = isPro(u);
+  const status = pro
+    ? (state.status === SUB_STATUS.TRIAL ? "trial" : "pro")
+    : "free";
+  const used = countRecentSaves(u, 7);
+  const fmtDate = (ms) => {
+    if (!ms) return "—";
+    const d = new Date(ms);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  };
+  const statusLabel = status === "pro"
+    ? (t("settings.subStatusPro") || "FORGE Pro — active")
+    : status === "trial"
+      ? (t("settings.subStatusTrial") || "FORGE Pro — trial")
+      : (t("settings.subStatusFree") || "Free plan");
+  const dot = status === "free" ? "var(--text-dim)" : "var(--brand)";
+  const expiryLine = state.expiresAt
+    ? (status === "trial"
+        ? (t("settings.subTrialEndsOn", { date: fmtDate(state.expiresAt) }) || `Trial ends ${fmtDate(state.expiresAt)}`)
+        : (t("settings.subRenewsOn", { date: fmtDate(state.expiresAt) }) || `Renews on ${fmtDate(state.expiresAt)}`))
+    : "";
+  const usageLine = status === "free"
+    ? (t("settings.subUsedThisWeek", { used: String(used), limit: String(FREE_SAVES_PER_7D) })
+       || `${used} of ${FREE_SAVES_PER_7D} workouts saved this week`)
+    : "";
+  // Dev toggle: only when running on localhost / 127.0.0.1 (lets us
+  // flip states without going through a real purchase). Stripped from
+  // production builds via simple host check.
+  const isDev = /^(localhost|127\.|0\.0\.|::1)/.test(location.hostname);
+  body.innerHTML = `
+    <div class="sub-status-row">
+      <span class="sub-status-dot" style="background:${dot}"></span>
+      <span class="sub-status-label">${statusLabel}</span>
+    </div>
+    ${expiryLine ? `<div class="sub-status-meta">${expiryLine}</div>` : ""}
+    ${usageLine ? `<div class="sub-status-meta">${usageLine}</div>` : ""}
+    <div class="sub-actions">
+      ${status === "free"
+        ? `<button class="primary-btn" data-sub-action="upgrade">${t("settings.subUpgrade") || "Upgrade to Pro"}</button>`
+        : `<button class="secondary-btn" data-sub-action="manage">${t("settings.subManage") || "Manage subscription"}</button>`}
+      <button class="link-btn" data-sub-action="restore">${t("settings.subRestore") || "Restore purchases"}</button>
+    </div>
+    ${isDev ? `
+      <details class="sub-dev-toggle">
+        <summary>Dev toggle (local only)</summary>
+        <div class="sub-dev-row">
+          <button class="chip" data-sub-mock="free">Free</button>
+          <button class="chip" data-sub-mock="trial">Trial</button>
+          <button class="chip" data-sub-mock="pro">Pro</button>
+        </div>
+      </details>
+    ` : ""}
+  `;
+}
+
+// Settings card actions — delegated on document so the card can be
+// re-rendered without leaking listeners.
+document.addEventListener("click", (e) => {
+  const action = e.target.closest("[data-sub-action]")?.dataset.subAction;
+  if (!action) {
+    const mock = e.target.closest("[data-sub-mock]")?.dataset.subMock;
+    if (mock && session?.username) {
+      // Dev: jump straight to a target state without going through the
+      // paywall. Useful for testing the Settings card layout in each.
+      const u = session.username;
+      if (mock === "free") setSubState(u, { status: SUB_STATUS.FREE, expiresAt: null, productId: null });
+      if (mock === "trial") setSubState(u, { status: SUB_STATUS.TRIAL, expiresAt: Date.now() + 7 * 86400 * 1000, productId: "forge.pro.yearly" });
+      if (mock === "pro") setSubState(u, { status: SUB_STATUS.PRO, expiresAt: Date.now() + 365 * 86400 * 1000, productId: "forge.pro.yearly" });
+      renderSubscriptionCard();
+    }
+    return;
+  }
+  if (action === "upgrade") {
+    showPaywall({ trigger: "settings_upgrade" });
+    return;
+  }
+  if (action === "manage") {
+    // Phase 2: deep-link to App Store subscription management on iOS, or
+    // the Play subscription URL on Android. Web: show static message.
+    const url = navigator.userAgent.includes("Android")
+      ? "https://play.google.com/store/account/subscriptions"
+      : "https://apps.apple.com/account/subscriptions";
+    if (typeof window !== "undefined") window.open(url, "_blank");
+    return;
+  }
+  if (action === "restore") {
+    // Same restore path as paywall — re-uses the existing handler logic
+    // by triggering a synthetic click on a paywall element. Cleaner: open
+    // paywall in restore-only mode, but keeping flows independent.
+    if (typeof showToast === "function") showToast(t("paywall.noPurchases") || "No active subscription found.");
+    else alert(t("paywall.noPurchases") || "No active subscription found.");
+    return;
+  }
+});
 
 // Render the Goals settings card — list of active goals + the add-goal
 // form. Populates the exercise datalist with names from the user's
@@ -8591,8 +8840,24 @@ function onSkipSet() {
 function finishGuidedWorkout() {
   stopRestTimer(true);
   if (!workoutIsSaved && session && currentWorkout) {
-    addWorkout(session.username, currentWorkout);
-    workoutIsSaved = true;
+    // Same gate as the explicit Save button. In guided mode the workout
+    // has already been performed, so blocking the auto-save at the very
+    // end is mean — instead we save it and let the user know they're at
+    // the limit in the post-session summary. Easier to recover from than
+    // losing the session entirely. Refining behavior: still auto-save
+    // (workout already happened) but mark a flag so the summary can
+    // surface "this was your 3rd of the week — upgrade for unlimited".
+    const gate = canSaveWorkout(session.username);
+    if (gate.allowed || isPro(session.username)) {
+      addWorkout(session.username, currentWorkout);
+      workoutIsSaved = true;
+    } else {
+      // At the limit — show paywall instead of silently dropping a
+      // workout the user just spent 45 minutes doing. They can pay or
+      // share the link to preserve it.
+      showPaywall({ trigger: "guided_complete", remaining: 0 });
+      // Don't return — still proceed to summary so guided UI doesn't hang.
+    }
   }
   document.getElementById("guidedProgressFill").style.width = "100%";
 

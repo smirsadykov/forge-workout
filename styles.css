@@ -144,6 +144,259 @@
    Slides up from viewport bottom when user taps a muscle region. Modal
    pattern: full-viewport overlay with a dark backdrop + slide-up panel.
    Dismissed via backdrop click, X button, or ESC key. */
+/* ──────────────── SETTINGS → SUBSCRIPTION CARD ──────────────── */
+.sub-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sub-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sub-status-label {
+  font-family: var(--font-display, "Archivo Narrow"), system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.sub-status-meta {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  align-items: center;
+}
+.sub-actions .primary-btn,
+.sub-actions .secondary-btn {
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+.sub-dev-toggle {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.sub-dev-toggle summary {
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sub-dev-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ──────────────── PAYWALL ──────────────── */
+/* Centered modal — pricing tiles + CTA + small print + restore. Heavier
+   z-index than other overlays so it sits on top of muscle sheet / nav. */
+.paywall {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.paywall.hidden { display: none; }
+.paywall-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 21, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.paywall-panel {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--bg-card, var(--bg-elevated));
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--brand);
+  border-radius: var(--radius-lg, 12px);
+  padding: 28px 24px 24px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+}
+.paywall-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 6px;
+}
+.paywall-close:hover { color: var(--text); }
+.paywall-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.paywall-brand-name {
+  font-family: var(--font-display, "Archivo Narrow"), system-ui, sans-serif;
+  font-weight: 700;
+  font-style: italic;
+  font-size: 24px;
+  text-transform: uppercase;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.paywall-brand-pro {
+  font-family: var(--font-mono, "JetBrains Mono"), monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--brand);
+  padding: 2px 8px;
+  border: 1px solid var(--brand);
+  border-radius: 3px;
+}
+.paywall-title {
+  font-family: var(--font-display, "Archivo Narrow"), system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  margin: 0 0 8px;
+  color: var(--text);
+  line-height: 1.15;
+}
+.paywall-sub {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+.paywall-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+}
+.paywall-features li {
+  position: relative;
+  padding: 6px 0 6px 24px;
+  color: var(--text);
+  font-size: 14px;
+}
+.paywall-features li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--brand);
+  font-weight: 700;
+}
+.paywall-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.paywall-plan {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 6px);
+  padding: 14px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.paywall-plan:hover { border-color: var(--text-dim); }
+.paywall-plan.recommended {
+  border-color: var(--brand);
+  background: linear-gradient(135deg, rgba(249,115,22,0.08), transparent);
+}
+.paywall-plan.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.paywall-plan-badge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--brand);
+  color: var(--bg);
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.paywall-plan-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.paywall-plan-price {
+  font-family: var(--font-display, "Archivo Narrow"), system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.paywall-plan-per {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.paywall-cta {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 12px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.paywall-small {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+  text-align: center;
+}
+.paywall-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+}
+.paywall-links a, .paywall-links button {
+  color: var(--text-dim);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+.paywall-links a:hover, .paywall-links button:hover { color: var(--brand); }
+
 .muscle-sheet {
   position: fixed;
   inset: 0;

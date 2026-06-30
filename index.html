@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=140" />
+  <link rel="stylesheet" href="styles.css?v=142" />
 </head>
 <body>
   <header class="topbar">
@@ -317,6 +317,18 @@
       <div class="container">
         <h1 class="view-title" data-i18n="settings.title">Settings</h1>
         <p class="view-sub" data-i18n="settings.sub">Tell us what loads you have access to so we can pick goals that actually match your equipment.</p>
+
+        <!-- ─── SUBSCRIPTION ──────────────────────────────────────────
+             Status + actions for FORGE Pro. Populated by
+             renderSubscriptionCard() with live subscription state from
+             RevenueCat (Phase 2) or localStorage mock (Phase 1). -->
+        <div class="settings-card" id="subscriptionCard">
+          <h2 class="settings-section settings-section-with-icon">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span data-i18n="settings.subTitle">Subscription</span>
+          </h2>
+          <div id="subscriptionCardBody"></div>
+        </div>
 
         <div class="settings-card">
           <h2 class="settings-section" data-i18n="settings.language">Language</h2>
@@ -800,23 +812,23 @@
     </div>
   </div>
 
-  <script src="config.js?v=140"></script>
-  <script src="supabase.min.js?v=140"></script>
-  <script src="i18n.js?v=140"></script>
-  <script src="exercises.js?v=140"></script>
+  <script src="config.js?v=142"></script>
+  <script src="supabase.min.js?v=142"></script>
+  <script src="i18n.js?v=142"></script>
+  <script src="exercises.js?v=142"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=140"></script>
-  <script src="app.js?v=140"></script>
+  <script src="lib/utils.js?v=142"></script>
+  <script src="app.js?v=142"></script>
   <!-- Capacitor native integration (status bar, back button, external links).
        No-ops on the web build — window.Capacitor only exists in the app. -->
-  <script src="lib/native.js?v=140"></script>
+  <script src="lib/native.js?v=142"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>
     if (new URLSearchParams(location.search).has("test")) {
       const s = document.createElement("script");
-      s.src = "tests/run.js?v=140";
+      s.src = "tests/run.js?v=142";
       document.body.appendChild(s);
     }
   </script>
@@ -845,6 +857,51 @@
       <div class="muscle-sheet-section">
         <h3 class="label-caps muscle-sheet-section-title" data-i18n="muscleSheet.recent">Recent Exercises</h3>
         <div class="muscle-sheet-exercises" id="sheetExerciseList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paywall (Pro upgrade) modal — surfaces when a free user hits the
+       3-save / rolling 7-day cap, or taps the Pro upgrade CTA in
+       Settings. Pricing pulled from RevenueCat in Phase 2; for now the
+       static numbers match the Apple/Google product configuration. -->
+  <div id="paywall" class="paywall hidden" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+    <div class="paywall-backdrop" data-paywall-action="close"></div>
+    <div class="paywall-panel">
+      <button class="paywall-close" data-paywall-action="close" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+      <div class="paywall-brand">
+        <span class="paywall-brand-name">FORGE</span>
+        <span class="paywall-brand-pro">PRO</span>
+      </div>
+      <h2 class="paywall-title" id="paywallTitle" data-i18n="paywall.title">Unlock unlimited training</h2>
+      <p class="paywall-sub" id="paywallSub" data-i18n="paywall.sub">You've saved 3 of 3 workouts this week. Upgrade to keep logging without limits.</p>
+      <ul class="paywall-features">
+        <li data-i18n="paywall.feat1">Save unlimited workouts to history</li>
+        <li data-i18n="paywall.feat2">Smart intensity, body map, program mode</li>
+        <li data-i18n="paywall.feat3">Auto-progression when you've outgrown a lift</li>
+        <li data-i18n="paywall.feat4">Cross-device sync — iOS, Android, web</li>
+      </ul>
+      <div class="paywall-plans">
+        <button class="paywall-plan" data-paywall-plan="monthly">
+          <div class="paywall-plan-name" data-i18n="paywall.monthly">Monthly</div>
+          <div class="paywall-plan-price">$4.99</div>
+          <div class="paywall-plan-per" data-i18n="paywall.perMonth">per month</div>
+        </button>
+        <button class="paywall-plan recommended" data-paywall-plan="annual">
+          <div class="paywall-plan-badge" data-i18n="paywall.bestValue">BEST VALUE · SAVE 47%</div>
+          <div class="paywall-plan-name" data-i18n="paywall.annual">Annual</div>
+          <div class="paywall-plan-price">$29.99</div>
+          <div class="paywall-plan-per" data-i18n="paywall.perYear">per year · $2.50/mo</div>
+        </button>
+      </div>
+      <button class="paywall-cta primary-btn" data-paywall-action="subscribe" data-i18n="paywall.startTrial">Start 7-day free trial</button>
+      <p class="paywall-small" data-i18n="paywall.smallPrint">7-day free trial, then auto-renews. Cancel anytime in App Store / Google Play settings.</p>
+      <div class="paywall-links">
+        <button class="link-btn" data-paywall-action="restore" data-i18n="paywall.restore">Restore purchases</button>
+        <a href="terms.html" target="_blank" data-i18n="paywall.terms">Terms</a>
+        <a href="privacy.html" target="_blank" data-i18n="paywall.privacy">Privacy</a>
       </div>
     </div>
   </div>
