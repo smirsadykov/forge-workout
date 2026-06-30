@@ -4071,6 +4071,13 @@ function persistEquipment() {
   all[id] = { missing: (formState.equipmentMissing || []).slice(), floorOnly: !!formState.floorOnly };
   save(EQUIP_STORE_KEY, all);
 }
+// Announce equipment changes to screen readers via the visually-hidden live
+// region. The inverted "selected = not available" state isn't conveyed by the
+// chip label alone, so we speak each change explicitly.
+function announceEquip(msg) {
+  const live = document.getElementById("equipStatus");
+  if (live) live.textContent = msg;
+}
 // Restore the saved setup and reflect it in the chips + toggle. Safe to call
 // before the DOM chips exist (it no-ops the UI sync in that case).
 function restoreEquipment() {
@@ -4080,16 +4087,23 @@ function restoreEquipment() {
   formState.floorOnly = !!(saved && saved.floorOnly);
   recomputeEquipment();
   document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach((c) => {
-    c.classList.toggle("selected", formState.equipmentMissing.includes(c.dataset.value));
+    const missing = formState.equipmentMissing.includes(c.dataset.value);
+    c.classList.toggle("selected", missing);
+    c.setAttribute("aria-pressed", String(missing)); // toggle-button state for AT
   });
   const ft = document.getElementById("floorOnlyToggle");
   if (ft) ft.checked = formState.floorOnly;
   syncFloorOnlyUI();
 }
 // When floor-only is on, the missing chips are moot — dim + disable the row.
+// Real `disabled` (not just pointer-events) so AT drops them from tab order
+// and announces them as unavailable, matching the visual lock.
 function syncFloorOnlyUI() {
   const row = document.querySelector('.chip-row[data-field="equipmentMissing"]');
-  if (row) row.classList.toggle("disabled", !!formState.floorOnly);
+  if (!row) return;
+  const locked = !!formState.floorOnly;
+  row.classList.toggle("disabled", locked);
+  row.querySelectorAll(".chip").forEach((c) => { c.disabled = locked; });
 }
 
 // Seed the derived have-list at boot so the form is valid before any
@@ -4155,8 +4169,12 @@ document.querySelectorAll(".chip-row").forEach(row => {
         else arr.splice(idx, 1);
         chip.classList.toggle("selected");
         // Equipment uses the inverted "missing" model: selecting a chip marks
-        // that gear as unavailable. Re-derive the have-list and persist.
+        // that gear as unavailable. Re-derive the have-list, persist, and keep
+        // the toggle-button a11y state + live announcement in sync.
         if (field === "equipmentMissing") {
+          const nowMissing = formState.equipmentMissing.includes(value);
+          chip.setAttribute("aria-pressed", String(nowMissing));
+          announceEquip(t(nowMissing ? "eq.a11y.markedMissing" : "eq.a11y.markedAvailable", { item: chip.textContent.trim() }));
           recomputeEquipment();
           persistEquipment();
         }
@@ -4200,6 +4218,7 @@ document.getElementById("floorOnlyToggle")?.addEventListener("change", (e) => {
   recomputeEquipment();
   persistEquipment();
   syncFloorOnlyUI();
+  announceEquip(t(formState.floorOnly ? "eq.a11y.floorLocked" : "eq.a11y.floorUnlocked"));
   el.formError.textContent = "";
   refreshLoadWarning();
   refreshFormSummary();
@@ -4219,6 +4238,7 @@ function resetForm() {
   // Sport sub-selector goes back to hidden too
   document.getElementById("sportSubGroup")?.classList.add("hidden");
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
+  document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach(c => c.setAttribute("aria-pressed", "false"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
   const ft = document.getElementById("floorOnlyToggle");

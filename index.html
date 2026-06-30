@@ -183,21 +183,25 @@
           </div>
 
           <div class="form-group">
-            <label class="group-label" data-i18n="gen.equipment">What you don't have</label>
+            <label class="group-label" id="equipMissingLabel" data-i18n="gen.equipment">What you don't have</label>
             <p class="form-hint equip-intro" data-i18n="eq.optoutIntro">Tap anything you don't have. Everything else — including bodyweight — is fair game.</p>
-            <div class="chip-row equip-missing" data-field="equipmentMissing" data-multi="true">
-              <button class="chip" data-value="dumbbells" data-i18n="eq.dumbbells">Dumbbells</button>
-              <button class="chip" data-value="barbell" data-i18n="eq.barbell">Barbell</button>
-              <button class="chip" data-value="kettlebell" data-i18n="eq.kettlebell">Kettlebell</button>
-              <button class="chip" data-value="bands" data-i18n="eq.bands">Resistance Bands</button>
-              <button class="chip" data-value="machine" data-i18n="eq.machine">Machines / Cable</button>
-              <button class="chip" data-value="cardio_machine" data-i18n="eq.cardio_machine">Cardio Machine</button>
+            <div class="chip-row equip-missing" data-field="equipmentMissing" data-multi="true" role="group" aria-labelledby="equipMissingLabel">
+              <button class="chip" type="button" data-value="dumbbells" data-i18n="eq.dumbbells" aria-pressed="false">Dumbbells</button>
+              <button class="chip" type="button" data-value="barbell" data-i18n="eq.barbell" aria-pressed="false">Barbell</button>
+              <button class="chip" type="button" data-value="kettlebell" data-i18n="eq.kettlebell" aria-pressed="false">Kettlebell</button>
+              <button class="chip" type="button" data-value="bands" data-i18n="eq.bands" aria-pressed="false">Resistance Bands</button>
+              <button class="chip" type="button" data-value="machine" data-i18n="eq.machine" aria-pressed="false">Machines / Cable</button>
+              <button class="chip" type="button" data-value="cardio_machine" data-i18n="eq.cardio_machine" aria-pressed="false">Cardio Machine</button>
             </div>
             <label class="floor-only-toggle">
               <input type="checkbox" id="floorOnlyToggle" />
               <span data-i18n="eq.floorOnlyToggle">Floor only — no bar, bench or chair</span>
             </label>
             <p class="form-hint" id="equipmentHint" data-i18n="eq.bodyweightAlways">Bodyweight is always included.</p>
+            <!-- Visually-hidden live region: announces each toggle to screen
+                 readers since the inverted "selected = missing" state isn't
+                 self-evident from the chip label alone. -->
+            <p id="equipStatus" class="sr-only" role="status" aria-live="polite"></p>
           </div>
 
           <div class="form-group">
