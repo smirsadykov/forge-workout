@@ -6086,15 +6086,25 @@ function renderExerciseLog(ex, units) {
     const [glo, ghi] = parseRepRange(ex.reps);
     if (glo > 0) {
       const range = glo === ghi ? `${glo}` : `${glo}–${ghi}`;
-      const body = (suggestion.trend === "first" || !last)
-        ? t("wo.guideFirst", { range })
-        : t("wo.guideReturn", {
-            range,
-            dir: suggestion.trend === "up" ? t("wo.progress")
-               : suggestion.trend === "down" ? t("wo.deload")
-               : suggestion.trend === "recovery" ? t("wo.recoveryLight")
-               : t("wo.pushReps"),
-          });
+      // The personalized target can exceed the nominal range — when you're at
+      // your max load the engine extends reps instead of adding weight. Show
+      // that real target so the range, the line, and the boxes finally agree.
+      const targetReps = next?.reps;
+      const extended = targetReps != null && targetReps > ghi;
+      let body;
+      if (suggestion.trend === "first" || !last) {
+        body = t("wo.guideFirst", { range });
+      } else if (extended) {
+        body = t("wo.guideExtend", { target: targetReps, range });
+      } else {
+        body = t("wo.guideReturn", {
+          range,
+          dir: suggestion.trend === "up" ? t("wo.progress")
+             : suggestion.trend === "down" ? t("wo.deload")
+             : suggestion.trend === "recovery" ? t("wo.recoveryLight")
+             : t("wo.pushReps"),
+        });
+      }
       guidanceHtml = `<p class="log-guidance">${body}</p>`;
     }
   }
