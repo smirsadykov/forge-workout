@@ -163,9 +163,9 @@
           </div>
 
           <div class="form-group">
-            <label class="group-label" id="equipMissingLabel" data-i18n="gen.equipment">What you don't have</label>
-            <p class="form-hint equip-intro" data-i18n="eq.optoutIntro">Tap anything you don't have. Everything else — including bodyweight — is fair game.</p>
-            <div class="chip-row equip-missing" data-field="equipmentMissing" data-multi="true" role="group" aria-labelledby="equipMissingLabel">
+            <label class="group-label" id="equipHaveLabel" data-i18n="gen.equipment">Equipment you have</label>
+            <p class="form-hint equip-intro" data-i18n="eq.optinIntro">Tap everything you have. Bodyweight is always included.</p>
+            <div class="chip-row equip-have" data-field="equipmentHave" data-multi="true" role="group" aria-labelledby="equipHaveLabel">
               <button class="chip" type="button" data-value="dumbbells" data-i18n="eq.dumbbells" aria-pressed="false">Dumbbells</button>
               <button class="chip" type="button" data-value="barbell" data-i18n="eq.barbell" aria-pressed="false">Barbell</button>
               <button class="chip" type="button" data-value="kettlebell" data-i18n="eq.kettlebell" aria-pressed="false">Kettlebell</button>
@@ -178,9 +178,7 @@
               <span data-i18n="eq.floorOnlyToggle">Floor only — no bar, bench or chair</span>
             </label>
             <p class="form-hint" id="equipmentHint" data-i18n="eq.bodyweightAlways">Bodyweight is always included.</p>
-            <!-- Visually-hidden live region: announces each toggle to screen
-                 readers since the inverted "selected = missing" state isn't
-                 self-evident from the chip label alone. -->
+            <!-- Visually-hidden live region: announces each toggle to screen readers. -->
             <p id="equipStatus" class="sr-only" role="status" aria-live="polite"></p>
           </div>
 

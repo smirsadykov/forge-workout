@@ -4022,27 +4022,27 @@ el.logoutBtn.addEventListener("click", async () => {
 // and maps to "hypertrophy" internally at generate time. This makes the
 // form valid on first interaction without forcing a goal click.
 // `equipment` is the list of gear the user HAS — the shape generateWorkout
-// consumes. The UI no longer collects it directly; instead it collects
-// `equipmentMissing` (gear the user does NOT have) plus a `floorOnly` flag,
-// and we DERIVE `equipment` from those. Bodyweight is always implied, so it's
-// never a chip. This keeps every downstream consumer (generator, load
-// warnings, summary) unchanged — they still read `equipment`.
-const formState = { goal: "standard", equipment: [], equipmentMissing: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false };
+// consumes. The UI collects `equipmentHave` (gear the user owns, positive
+// selection) plus a `floorOnly` flag, and we DERIVE `equipment` from those.
+// Bodyweight is always implied, so it's never a chip. This keeps every
+// downstream consumer (generator, load warnings, summary) reading `equipment`.
+const formState = { goal: "standard", equipment: [], equipmentHave: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false };
 
 // The physical add-on equipment a user can own, in display order. Bodyweight
 // is intentionally absent — it's the universal baseline, always available.
 const REAL_EQUIPMENT = ["dumbbells", "barbell", "kettlebell", "bands", "machine", "cardio_machine"];
 
-// Translate the UI's "missing" model into the "have" list the generator wants.
+// Translate the UI's "have" selection into the list the generator wants.
 // floorOnly is mutually exclusive with everything (bodyweight, no furniture),
 // matching generateWorkout's existing `equipment.includes("floor_only")` path.
+// With nothing selected the user still gets a bodyweight-only session.
 function recomputeEquipment() {
   if (formState.floorOnly) {
     formState.equipment = ["floor_only"];
     return;
   }
-  const missing = formState.equipmentMissing || [];
-  formState.equipment = ["bodyweight", ...REAL_EQUIPMENT.filter((e) => !missing.includes(e))];
+  const have = formState.equipmentHave || [];
+  formState.equipment = ["bodyweight", ...REAL_EQUIPMENT.filter((e) => have.includes(e))];
 }
 
 // Persist the user's setup so equipment is a one-time choice, not a per-session
@@ -4056,38 +4056,44 @@ function persistEquipment() {
   const id = _equipStoreId();
   if (!id) return;
   const all = load(EQUIP_STORE_KEY, {});
-  all[id] = { missing: (formState.equipmentMissing || []).slice(), floorOnly: !!formState.floorOnly };
+  all[id] = { have: (formState.equipmentHave || []).slice(), floorOnly: !!formState.floorOnly };
   save(EQUIP_STORE_KEY, all);
 }
 // Announce equipment changes to screen readers via the visually-hidden live
-// region. The inverted "selected = not available" state isn't conveyed by the
-// chip label alone, so we speak each change explicitly.
+// region, since aria-pressed alone is terse.
 function announceEquip(msg) {
   const live = document.getElementById("equipStatus");
   if (live) live.textContent = msg;
 }
 // Restore the saved setup and reflect it in the chips + toggle. Safe to call
-// before the DOM chips exist (it no-ops the UI sync in that case).
+// before the DOM chips exist (it no-ops the UI sync in that case). Migrates the
+// older opt-out `{missing}` shape to the `{have}` shape on read.
 function restoreEquipment() {
   const id = _equipStoreId();
   const saved = id ? load(EQUIP_STORE_KEY, {})[id] : null;
-  formState.equipmentMissing = saved && Array.isArray(saved.missing) ? saved.missing.slice() : [];
+  if (saved && Array.isArray(saved.have)) {
+    formState.equipmentHave = saved.have.slice();
+  } else if (saved && Array.isArray(saved.missing)) {
+    formState.equipmentHave = REAL_EQUIPMENT.filter((e) => !saved.missing.includes(e)); // migrate opt-out → opt-in
+  } else {
+    formState.equipmentHave = [];
+  }
   formState.floorOnly = !!(saved && saved.floorOnly);
   recomputeEquipment();
-  document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach((c) => {
-    const missing = formState.equipmentMissing.includes(c.dataset.value);
-    c.classList.toggle("selected", missing);
-    c.setAttribute("aria-pressed", String(missing)); // toggle-button state for AT
+  document.querySelectorAll('.chip-row[data-field="equipmentHave"] .chip').forEach((c) => {
+    const has = formState.equipmentHave.includes(c.dataset.value);
+    c.classList.toggle("selected", has);
+    c.setAttribute("aria-pressed", String(has)); // toggle-button state for AT
   });
   const ft = document.getElementById("floorOnlyToggle");
   if (ft) ft.checked = formState.floorOnly;
   syncFloorOnlyUI();
 }
-// When floor-only is on, the missing chips are moot — dim + disable the row.
+// When floor-only is on, the gear chips are moot — dim + disable the row.
 // Real `disabled` (not just pointer-events) so AT drops them from tab order
 // and announces them as unavailable, matching the visual lock.
 function syncFloorOnlyUI() {
-  const row = document.querySelector('.chip-row[data-field="equipmentMissing"]');
+  const row = document.querySelector('.chip-row[data-field="equipmentHave"]');
   if (!row) return;
   const locked = !!formState.floorOnly;
   row.classList.toggle("disabled", locked);
@@ -4095,7 +4101,7 @@ function syncFloorOnlyUI() {
 }
 
 // Seed the derived have-list at boot so the form is valid before any
-// interaction (default: nothing missing → user has everything).
+// interaction (default: nothing selected → bodyweight-only session).
 recomputeEquipment();
 
 // ─── DELOAD DETECTION ────────────────────────────────────────────────────
@@ -4156,13 +4162,13 @@ document.querySelectorAll(".chip-row").forEach(row => {
         if (idx === -1) arr.push(value);
         else arr.splice(idx, 1);
         chip.classList.toggle("selected");
-        // Equipment uses the inverted "missing" model: selecting a chip marks
-        // that gear as unavailable. Re-derive the have-list, persist, and keep
-        // the toggle-button a11y state + live announcement in sync.
-        if (field === "equipmentMissing") {
-          const nowMissing = formState.equipmentMissing.includes(value);
-          chip.setAttribute("aria-pressed", String(nowMissing));
-          announceEquip(t(nowMissing ? "eq.a11y.markedMissing" : "eq.a11y.markedAvailable", { item: chip.textContent.trim() }));
+        // Equipment opt-in: selecting a chip means the user owns that gear.
+        // Re-derive the have-list, persist, and keep the toggle-button a11y
+        // state + live announcement in sync.
+        if (field === "equipmentHave") {
+          const has = formState.equipmentHave.includes(value);
+          chip.setAttribute("aria-pressed", String(has));
+          announceEquip(t(has ? "eq.a11y.added" : "eq.a11y.removed", { item: chip.textContent.trim() }));
           recomputeEquipment();
           persistEquipment();
         }
@@ -4181,7 +4187,7 @@ document.querySelectorAll(".chip-row").forEach(row => {
       // Smart intensity: a manual intensity pick locks the user's choice;
       // changing equipment re-derives the suggestion (load cap depends on it).
       if (field === "intensity") _intensityUserSet = true;
-      if (field === "equipmentMissing") applyIntensitySuggestion();
+      if (field === "equipmentHave") applyIntensitySuggestion();
     });
   });
 });
@@ -4203,7 +4209,7 @@ document.getElementById("floorOnlyToggle")?.addEventListener("change", (e) => {
 
 function resetForm() {
   formState.goal = "standard";
-  formState.equipmentMissing = [];
+  formState.equipmentHave = [];
   formState.floorOnly = false;
   recomputeEquipment();
   formState.target = null;
@@ -4211,7 +4217,7 @@ function resetForm() {
   formState.intensity = "normal";
   formState.style = "standard";
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
-  document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach(c => c.setAttribute("aria-pressed", "false"));
+  document.querySelectorAll('.chip-row[data-field="equipmentHave"] .chip').forEach(c => c.setAttribute("aria-pressed", "false"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
   const ft = document.getElementById("floorOnlyToggle");
