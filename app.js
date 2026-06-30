@@ -381,17 +381,6 @@ async function forceSyncAll() {
     if (!Array.isArray(ex.muscle) || !ex.muscle.length) flag("muscle missing");
     else ex.muscle.forEach(m => { if (!VALID_MUSCLES.has(m)) flag(`bad muscle "${m}"`); });
   }
-  // Validate SPORT_EXERCISES name references too
-  if (typeof SPORT_EXERCISES === "object" && SPORT_EXERCISES) {
-    for (const [sport, names] of Object.entries(SPORT_EXERCISES)) {
-      for (const n of names) {
-        if (!seen.has(n)) {
-          console.warn(`[forge] SPORT_EXERCISES["${sport}"] references missing exercise: "${n}"`);
-          issues++;
-        }
-      }
-    }
-  }
   if (issues) console.warn(`[forge] exercise-library validation: ${issues} issue(s)`);
 })();
 
@@ -3331,8 +3320,6 @@ function refreshProgramBanner() {
     document.querySelectorAll('.chip-row[data-field="target"] .chip').forEach(c => {
       c.classList.toggle("selected", c.dataset.value === next.target);
     });
-    const sportGroup = document.getElementById("sportSubGroup");
-    if (sportGroup) sportGroup.classList.add("hidden");
 
     refreshLoadWarning();
     refreshRecommendationBanner();
@@ -4039,7 +4026,7 @@ el.logoutBtn.addEventListener("click", async () => {
 // and we DERIVE `equipment` from those. Bodyweight is always implied, so it's
 // never a chip. This keeps every downstream consumer (generator, load
 // warnings, summary) unchanged — they still read `equipment`.
-const formState = { goal: "standard", equipment: [], equipmentMissing: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false, sport: null };
+const formState = { goal: "standard", equipment: [], equipmentMissing: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false };
 
 // The physical add-on equipment a user can own, in display order. Bodyweight
 // is intentionally absent — it's the universal baseline, always available.
@@ -4190,22 +4177,6 @@ document.querySelectorAll(".chip-row").forEach(row => {
       refreshLevelBanner();
       refreshFormSummary();
       refreshFormHints();
-      // Sport sub-selector visibility: shown only when goal=sport_prep.
-      // When switching away from sport_prep, also clear the sport selection
-      // so the next sport_prep pick doesn't silently inherit an old value.
-      if (field === "goal") {
-        const sportGroup = document.getElementById("sportSubGroup");
-        if (sportGroup) {
-          if (formState.goal === "sport_prep") {
-            sportGroup.classList.remove("hidden");
-          } else {
-            sportGroup.classList.add("hidden");
-            formState.sport = null;
-            document.querySelectorAll('.chip-row[data-field="sport"] .chip.selected')
-              .forEach(c => c.classList.remove("selected"));
-          }
-        }
-      }
     });
   });
 });
@@ -4234,9 +4205,6 @@ function resetForm() {
   formState.duration = null;
   formState.intensity = "normal";
   formState.style = "standard";
-  formState.sport = null;
-  // Sport sub-selector goes back to hidden too
-  document.getElementById("sportSubGroup")?.classList.add("hidden");
   document.querySelectorAll(".chip.selected").forEach(c => c.classList.remove("selected"));
   document.querySelectorAll('.chip-row[data-field="equipmentMissing"] .chip').forEach(c => c.setAttribute("aria-pressed", "false"));
   const standardChip = document.querySelector('.chip[data-value="standard"]');
@@ -4281,14 +4249,11 @@ function resetForm() {
 function refreshFormSummary() {
   const el2 = document.getElementById("formSummary");
   if (!el2) return;
-  const { goal, equipment, target, duration, intensity, style, sport } = formState;
+  const { goal, equipment, target, duration, intensity, style } = formState;
   const goalLabelMap = {
     standard: t("goal.standard") || "Standard",
-    mobility: t("goal.mobility") || "Mobility",
+    mobility: t("goal.mobility") || "Mobility & Stretch",
     recovery: t("goal.recovery") || "Recovery",
-    animal_flow: t("goal.animal_flow") || "Animal Flow",
-    kb_sport: t("goal.kb_sport") || "KB Sport",
-    sport_prep: t("goal.sport_prep") || "Sport Prep",
   };
   const equipLabelMap = {
     bodyweight: t("equip.bodyweight") || "Bodyweight",
@@ -4322,7 +4287,6 @@ function refreshFormSummary() {
   if (duration) pills.push({ k: "dur", label: `${duration} ${t("gen.min") || "min"}` });
   if (intensity && intensity !== "normal") pills.push({ k: "int", label: (t(`intensity.${intensity}`) || intensity) });
   if (style && style !== "standard") pills.push({ k: "style", label: (t(`style.${style}`) || style).replace(/[⚡]/g, "").trim() });
-  if (sport) pills.push({ k: "sport", label: t(`sport.${sport}`) || sport });
 
   if (pills.length === 0) {
     el2.innerHTML = `<span class="form-summary-placeholder">${t("gen.summaryPlaceholder") || "Pick your session type, equipment, target & duration"}</span>`;
@@ -4954,341 +4918,6 @@ function generateCardioWorkout({ goal, equipment, duration, intensity = "normal"
   };
 }
 
-// KB Sport (Girevoy) generator. Different shape from a standard workout:
-// warmup → 1-3 time-based main lifts (continuous, no setting the bell down)
-// → optional accessory → cool-down. Each main lift is an 8-10 min block at
-// a target pace (reps/min), scaled by difficulty.
-function generateKbSportWorkout({ equipment, duration, intensity = "normal" }) {
-  // Number of main blocks fits the requested duration.
-  let numBlocks;
-  let perBlockMin;
-  if (duration <= 15)      { numBlocks = 1; perBlockMin = 8; }
-  else if (duration <= 30) { numBlocks = 1; perBlockMin = 10; }
-  else if (duration <= 45) { numBlocks = 2; perBlockMin = 10; }
-  else if (duration <= 60) { numBlocks = 2; perBlockMin = 12; }
-  else                     { numBlocks = 3; perBlockMin = 10; }
-
-  const warmups = pickWarmupExercises("full_body", duration <= 15 ? 1 : 2)
-    .map(ex => ({
-      name: ex.name,
-      muscle: ex.muscle,
-      pattern: ex.pattern,
-      unilateral: isUnilateralExercise(ex.name),
-      ...pickPrescription("mobility", intensity, ex, "standard", false, duration),
-    }));
-
-  // Target pace per minute, scaled by session intensity. KB Sport competition
-  // paces run ~16-20/min at high effort; easier days pace lower to maintain
-  // form for the full set.
-  const paceByIntensity = {
-    easy:   [10, 12],
-    normal: [14, 16],
-    hard:   [17, 20],
-  };
-  const [paceLo, paceHi] = paceByIntensity[intensity] || paceByIntensity.normal;
-
-  // Pick from kbSport-tagged lifts. No difficulty filter — all KB Sport
-  // lifts are competition movements (Jerk, Long Cycle, Snatch) and any
-  // user opting into KB Sport already chose a technical discipline.
-  const kbCandidates = EXERCISES.filter(e =>
-    e.kbSport === true &&
-    e.equipment.includes("kettlebell")
-  );
-  const shuffled = shuffle(kbCandidates);
-  if (shuffled.length === 0) return null;
-
-  const mainExercises = [];
-  for (let i = 0; i < numBlocks && i < shuffled.length; i++) {
-    const ex = shuffled[i];
-    const isUni = isUnilateralExercise(ex.name);
-    // KB Sport convention: one-arm lifts use a SINGLE set for the full
-    // block, switching hands once at the halfway mark. Total time stays as
-    // advertised; each side gets exactly half. Including "per side" in the
-    // reps string also stops displayReps() from tacking on a generic
-    // "per side" suffix that would imply 2× the time.
-    const halfMin = perBlockMin % 2 === 0 ? perBlockMin / 2 : (perBlockMin / 2).toFixed(1);
-    const repsStr = isUni
-      ? `${perBlockMin} min · switch hands at ${halfMin}:00 · pace ${paceLo}-${paceHi}/min per side`
-      : `${perBlockMin} min · pace ${paceLo}-${paceHi}/min`;
-    mainExercises.push({
-      name: ex.name,
-      muscle: ex.muscle,
-      pattern: ex.pattern,
-      unilateral: isUni,
-      sets: 1,
-      reps: repsStr,
-      rest: i < numBlocks - 1 ? 180 : 0,  // 3 min between blocks; standard KB Sport rest
-      isTimeBlock: true,
-    });
-  }
-
-  // Cool-down: one mobility move (KB Around-the-World preferred for grip release)
-  const cooldownPool = EXERCISES.filter(e =>
-    e.pattern === "mobility" &&
-    (e.equipment.includes("kettlebell") || e.equipment.includes("bodyweight"))
-  );
-  const cooldownPick = shuffle(cooldownPool)[0];
-  const cooldown = cooldownPick ? [{
-    name: cooldownPick.name,
-    muscle: cooldownPick.muscle,
-    pattern: "mobility",
-    unilateral: isUnilateralExercise(cooldownPick.name),
-    sets: 2,
-    reps: "30–45 sec",
-    rest: 0,
-  }] : [];
-
-  return {
-    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    createdAt: Date.now(),
-    inputs: { goal: "kb_sport", equipment, target: "full_body", duration, intensity, style: "standard", deload: false },
-    exercises: [...warmups, ...mainExercises, ...cooldown],
-  };
-}
-
-// Sport Prep generator. Builds a prep + prehab session keyed to the chosen
-// sport. Pulls from SPORT_EXERCISES which combines sport-specific drills
-// with the prehab moves for that sport's typical injuries (e.g., running's
-// pool includes Nordic curls + tibialis raises + glute med work).
-//
-// Shape: 1-2 mobility warmups → 3-5 prep/prehab moves → 1 cooldown stretch.
-function generateSportPrepWorkout({ equipment, duration, intensity = "normal", sport }) {
-  const pool = SPORT_EXERCISES[sport];
-  if (!pool || pool.length === 0) return null;
-
-  const floorOnly = equipment.includes("floor_only");
-  const effEquip = floorOnly ? ["bodyweight"] : equipment;
-
-  // Filter the sport's pool by equipment only. Sport-prep work is
-  // low-load activation by design — the difficulty filter that used to
-  // gate this is no longer meaningful (all the prehab moves are
-  // intentionally accessible).
-  const candidates = pool
-    .map(name => EXERCISES.find(e => e.name === name))
-    .filter(e =>
-      e &&
-      e.equipment.some(eq => effEquip.includes(eq)) &&
-      (!floorOnly || !requiresFurniture(e.name))
-    );
-
-  if (candidates.length === 0) return null;
-
-  // Count by duration. Prep work is short-rest, low-load, fast-moving so
-  // more exercises fit per minute than a heavy strength session.
-  const totalCount = duration <= 15 ? 5
-    : duration <= 30 ? 7
-    : duration <= 45 ? 9
-    : duration <= 60 ? 11 : 13;
-
-  const warmupCount = duration <= 15 ? 1 : 2;
-  const cooldownCount = 1;
-  const mainCount = Math.max(3, totalCount - warmupCount - cooldownCount);
-
-  // Split candidates by pattern so the structure is sensible:
-  //   warmup = mobility moves (loose tissue prep)
-  //   main   = isolation moves (activation + prehab strength)
-  //   cooldown = mobility (final stretch)
-  const mobility = candidates.filter(e => e.pattern === "mobility");
-  const main = candidates.filter(e => e.pattern !== "mobility");
-
-  const warmups = shuffle(mobility).slice(0, warmupCount);
-  const warmupNames = new Set(warmups.map(w => w.name));
-
-  const mainPicks = shuffle(main).slice(0, mainCount);
-  const mainNames = new Set(mainPicks.map(m => m.name));
-
-  // Prefer a mobility move for cooldown that wasn't already used as warmup.
-  const cooldownCandidates = mobility.filter(m => !warmupNames.has(m.name));
-  const cooldown = cooldownCandidates.length
-    ? [shuffle(cooldownCandidates)[0]]
-    : shuffle(mobility).slice(0, 1);
-
-  // Convert each pick into a prescription. Prep work uses 2-3 sets, mid
-  // rep range, short rest. Mobility uses the standard mobility template.
-  const toExercise = (ex) => ({
-    name: ex.name,
-    muscle: ex.muscle,
-    pattern: ex.pattern,
-    unilateral: isUnilateralExercise(ex.name),
-    ...pickPrescription("sport_prep", intensity, ex, "standard", false, duration),
-  });
-
-  return {
-    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    createdAt: Date.now(),
-    inputs: { goal: "sport_prep", equipment, target: "full_body", duration, intensity, style: "standard", deload: false, sport },
-    exercises: [
-      ...warmups.map(toExercise),
-      ...mainPicks.map(toExercise),
-      ...cooldown.map(toExercise),
-    ],
-  };
-}
-
-// Animal Flow generator. The Mike Fitch curriculum structures every flow
-// session around 5 buckets:
-//   (1) Wrist mobilizations + joint prep      → warmup
-//   (2) Activations — Beast/Crab/Ape holds    → static engagement
-//   (3) Form-Specific Stretches — Reaches     → range + control
-//   (4) Traveling Forms — Beast Travel etc.   → locomotion under load
-//   (5) Flow — chain 3 moves continuously     → integration / finisher
-//
-// We pull from the 14 AF exercises already in the library (mobility-pattern
-// holds & reaches, conditioning-pattern travels & switches), pick 1-3 per
-// bucket scaled by duration, and tag the "flow finisher" with a special
-// reps string that tells the user to chain 3 moves continuously for N
-// rounds. Intensity scales hold time, rep count, and round count.
-function generateAnimalFlowWorkout({ duration, intensity = "normal" }) {
-  // Bucket the AF library by curriculum role. These regex tags match the
-  // exact names we shipped in exercises.js.
-  const allAF = EXERCISES.filter(e =>
-    /beast|crab|ape|scorpion|loaded beast|underswitch|kick through|step through/i.test(e.name)
-    && e.equipment.includes("bodyweight")
-  );
-  const activations = allAF.filter(e => /\bhold\b|rock/i.test(e.name));
-  const reaches     = allAF.filter(e => /reach/i.test(e.name));
-  const travels     = allAF.filter(e => /travel|hop/i.test(e.name));
-  const switches    = allAF.filter(e => /underswitch|kick through|step through|switch/i.test(e.name));
-
-  if (activations.length === 0 || reaches.length === 0) return null;
-
-  // Count by duration. AF sessions are dense — lots of distinct positions
-  // per minute compared to a strength workout.
-  let nActivations, nReaches, nTravels, nFlow;
-  if (duration <= 15)      { nActivations = 1; nReaches = 1; nTravels = 1; nFlow = 0; }
-  else if (duration <= 30) { nActivations = 2; nReaches = 2; nTravels = 1; nFlow = 1; }
-  else if (duration <= 45) { nActivations = 2; nReaches = 3; nTravels = 2; nFlow = 1; }
-  else                     { nActivations = 3; nReaches = 3; nTravels = 2; nFlow = 1; }
-
-  // Hold duration / rep counts scale by intensity. Easy: shorter holds,
-  // fewer reps. Hard: longer holds, more reps + more flow rounds.
-  const holdSecs = intensity === "easy" ? "20–30 sec" : intensity === "hard" ? "45–60 sec" : "30–45 sec";
-  const reachReps = intensity === "easy" ? "4–6 per side" : intensity === "hard" ? "8–10 per side" : "6–8 per side";
-  const travelTime = intensity === "easy" ? "20–30 sec" : intensity === "hard" ? "45–60 sec" : "30–45 sec";
-  const flowRounds = intensity === "easy" ? 3 : intensity === "hard" ? 6 : 5;
-
-  // Warmup: joint prep. Pull from existing mobility pool — wrist circles,
-  // cat-cow, hip openers. 1-2 moves depending on duration.
-  const warmupCount = duration <= 15 ? 1 : 2;
-  const warmupCandidates = EXERCISES.filter(e =>
-    e.pattern === "mobility"
-    && e.equipment.includes("bodyweight")
-    && /wrist|cat-?cow|spinal|hip|shoulder dis|wall slid|world|downward dog/i.test(e.name)
-  );
-  const warmups = shuffle(warmupCandidates).slice(0, warmupCount).map(ex => ({
-    name: ex.name,
-    muscle: ex.muscle,
-    pattern: "mobility",
-    unilateral: false,
-    sets: 1,
-    reps: "30–45 sec",
-    rest: 0,
-  }));
-
-  // Activations (holds)
-  const pickedActivations = shuffle(activations).slice(0, nActivations).map(ex => ({
-    name: ex.name,
-    muscle: ex.muscle,
-    pattern: ex.pattern,
-    unilateral: false,
-    sets: intensity === "hard" ? 3 : 2,
-    reps: holdSecs,
-    rest: 30,
-    afSection: "activation",
-  }));
-
-  // Reaches
-  const pickedReaches = shuffle(reaches).slice(0, nReaches).map(ex => ({
-    name: ex.name,
-    muscle: ex.muscle,
-    pattern: ex.pattern,
-    unilateral: true,
-    sets: intensity === "hard" ? 3 : 2,
-    reps: reachReps,
-    rest: 30,
-    afSection: "reach",
-  }));
-
-  // Traveling Forms
-  const pickedTravels = travels.length > 0
-    ? shuffle(travels).slice(0, nTravels).map(ex => ({
-        name: ex.name,
-        muscle: ex.muscle,
-        pattern: ex.pattern,
-        unilateral: false,
-        sets: 2,
-        reps: travelTime,
-        rest: 45,
-        afSection: "travel",
-      }))
-    : [];
-
-  // Flow finisher — pick 3 distinct moves and chain them. The reps string
-  // is the actual instruction since the prescription isn't sets×reps but
-  // "chain these moves continuously for N rounds".
-  let flowExercise = null;
-  if (nFlow > 0 && switches.length > 0) {
-    const flowCandidates = [...switches, ...travels].filter(e => e);
-    const flowChain = shuffle(flowCandidates).slice(0, 3);
-    if (flowChain.length === 3) {
-      flowExercise = {
-        name: `Flow: ${flowChain.map(c => c.name).join(" → ")}`,
-        muscle: ["full_body", "core"],
-        pattern: "conditioning",
-        unilateral: false,
-        sets: flowRounds,
-        reps: "1 round (30–45 sec)",
-        rest: 60,
-        afSection: "flow",
-        isFlowSequence: true,
-        // Component names preserved so renderExerciseExtras can render one
-        // video link PER component instead of a single useless search for
-        // the whole chained-string name.
-        flowComponents: flowChain.map(c => c.name),
-      };
-    }
-  }
-
-  // Cooldown — one stretch
-  const cooldownCandidates = EXERCISES.filter(e =>
-    e.pattern === "mobility"
-    && e.equipment.includes("bodyweight")
-    && /pose|stretch|cobra|child/i.test(e.name)
-  );
-  const cooldownPick = shuffle(cooldownCandidates)[0];
-  const cooldown = cooldownPick ? [{
-    name: cooldownPick.name,
-    muscle: cooldownPick.muscle,
-    pattern: "mobility",
-    unilateral: false,
-    sets: 2,
-    reps: "30–45 sec",
-    rest: 0,
-  }] : [];
-
-  return {
-    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    createdAt: Date.now(),
-    inputs: {
-      goal: "animal_flow",
-      equipment: ["bodyweight"],
-      target: "full_body",
-      duration,
-      intensity,
-      style: "standard",
-      deload: false,
-    },
-    exercises: [
-      ...warmups,
-      ...pickedActivations,
-      ...pickedReaches,
-      ...pickedTravels,
-      ...(flowExercise ? [flowExercise] : []),
-      ...cooldown,
-    ],
-  };
-}
-
 // Anti-repeat memory: exercises picked in the immediately previous workout
 // get penalized so Regenerate produces visibly different sessions.
 let lastPickedNames = new Set();
@@ -5408,28 +5037,123 @@ function pickWarmupExercises(target, count) {
   return picked;
 }
 
+// ─── CROSSFIT / METCON ─────────────────────────────────────────────────────
+// CrossFit-style WODs: mixed-modal, time-based formats (AMRAP / RFT / EMOM /
+// For Time) instead of straight sets×reps. Movements are drawn as a classic
+// triplet — one weightlifting (loaded), one+ gymnastics (bodyweight), and an
+// optional monostructural cardio piece — filtered by the user's equipment
+// (bodyweight is always assumed). Reps scale with intensity (scaled → Rx).
+// v1 is score-logged: the renderer shows a WOD card + one result field; no
+// per-rep set machinery and no integrated clock (the athlete runs their own).
+const CROSSFIT_MOVES = [
+  // weightlifting — loaded power movements
+  { name: "Barbell Thruster",           modality: "weightlifting", equipment: ["barbell"],    lo: 8,  hi: 15, unit: "reps" },
+  { name: "Dumbbell Thruster",          modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 15, unit: "reps" },
+  { name: "Barbell Power Clean",        modality: "weightlifting", equipment: ["barbell"],    lo: 6,  hi: 12, unit: "reps" },
+  { name: "Dumbbell Clean",             modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 14, unit: "reps" },
+  { name: "Dumbbell Snatch",            modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 14, unit: "reps" },
+  { name: "Kettlebell Swing",           modality: "weightlifting", equipment: ["kettlebell"], lo: 12, hi: 21, unit: "reps" },
+  { name: "Kettlebell American Swing",  modality: "weightlifting", equipment: ["kettlebell"], lo: 12, hi: 20, unit: "reps" },
+  { name: "Kettlebell Clean and Press", modality: "weightlifting", equipment: ["kettlebell"], lo: 8,  hi: 14, unit: "reps" },
+  // gymnastics — bodyweight skill / power
+  { name: "Burpees",          modality: "gymnastics", equipment: ["bodyweight"], lo: 8,  hi: 15, unit: "reps" },
+  { name: "Burpee Pull-Ups",  modality: "gymnastics", equipment: ["bodyweight"], lo: 5,  hi: 12, unit: "reps", furniture: true },
+  { name: "Pull-Ups",         modality: "gymnastics", equipment: ["bodyweight"], lo: 5,  hi: 12, unit: "reps", furniture: true },
+  { name: "Push-Ups",         modality: "gymnastics", equipment: ["bodyweight"], lo: 10, hi: 20, unit: "reps" },
+  { name: "Box Jumps",        modality: "gymnastics", equipment: ["bodyweight"], lo: 10, hi: 18, unit: "reps", furniture: true },
+  { name: "Jump Squat",       modality: "gymnastics", equipment: ["bodyweight"], lo: 12, hi: 22, unit: "reps" },
+  { name: "Jumping Lunge",    modality: "gymnastics", equipment: ["bodyweight"], lo: 12, hi: 24, unit: "reps" },
+  { name: "Mountain Climbers",modality: "gymnastics", equipment: ["bodyweight"], lo: 20, hi: 40, unit: "reps" },
+  // cardio — monostructural
+  { name: "Rowing Machine", modality: "cardio", equipment: ["cardio_machine"], lo: 10, hi: 20, unit: "cal" },
+  { name: "Assault Bike",   modality: "cardio", equipment: ["cardio_machine"], lo: 8,  hi: 16, unit: "cal" },
+  { name: "SkiErg",         modality: "cardio", equipment: ["cardio_machine"], lo: 10, hi: 18, unit: "cal" },
+  { name: "Jump Rope",      modality: "cardio", equipment: ["bodyweight"],     lo: 30, hi: 60, unit: "reps" },
+  { name: "High Knees",     modality: "cardio", equipment: ["bodyweight"],     lo: 20, hi: 40, unit: "reps" },
+];
+
+const CROSSFIT_FORMATS = ["amrap", "rft", "emom", "for_time"];
+
+function _cfPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function _cfReps(move, intensity) {
+  const f = intensity === "easy" ? 0.2 : intensity === "hard" ? 1 : 0.6;
+  let n = Math.round(move.lo + (move.hi - move.lo) * f);
+  if (move.name === "Jump Rope") n = Math.round(n / 10) * 10; // tidy skips
+  return Math.max(move.unit === "cal" ? 6 : 5, n);
+}
+
+function generateCrossfitWorkout({ equipment, duration, intensity = "normal" }) {
+  const floorOnly = equipment.includes("floor_only");
+  // Bodyweight is always assumed for CrossFit — you always have your body.
+  const effEquip = floorOnly ? ["bodyweight"] : [...new Set([...equipment, "bodyweight"])];
+  const avail = CROSSFIT_MOVES.filter(m => {
+    if (floorOnly && m.furniture) return false;
+    return m.equipment.some(e => effEquip.includes(e));
+  });
+  const byMod = (mod) => avail.filter(m => m.modality === mod);
+  const weights = byMod("weightlifting"), gymn = byMod("gymnastics"), cardio = byMod("cardio");
+
+  // Triplet: 1 loaded (if available) + 1-2 gymnastics + optional cardio.
+  const chosen = [];
+  if (weights.length) chosen.push(_cfPick(weights));
+  if (gymn.length) {
+    const g = _cfPick(gymn);
+    chosen.push(g);
+    if (!weights.length && gymn.length > 1) {
+      let g2, guard = 0;
+      do { g2 = _cfPick(gymn); } while (g2.name === g.name && ++guard < 8);
+      if (g2.name !== g.name) chosen.push(g2);
+    }
+  }
+  if (cardio.length && chosen.length < 3 && Math.random() < 0.6) chosen.push(_cfPick(cardio));
+
+  const seen = new Set();
+  let movements = chosen.filter(m => !seen.has(m.name) && seen.add(m.name))
+    .map(m => ({ name: m.name, qty: _cfReps(m, intensity), unit: m.unit }));
+  if (movements.length < 2) return null; // not enough for a real metcon
+
+  const format = _cfPick(CROSSFIT_FORMATS);
+  const cap = Math.max(8, Math.min(35, Math.round(duration * 0.55))); // leave room for warm-up
+  const wod = { format, timeCapMin: cap, rounds: null, repScheme: null, movements, label: "" };
+
+  if (format === "amrap") {
+    wod.label = `AMRAP ${cap} MIN`;
+  } else if (format === "rft") {
+    wod.rounds = Math.max(3, Math.min(7, Math.round(cap / 3)));
+    wod.label = `${wod.rounds} ROUNDS FOR TIME`;
+  } else if (format === "emom") {
+    wod.timeCapMin = Math.max(8, Math.min(24, cap));
+    // EMOM alternates ≤2 movements minute-to-minute; trim reps to fit a minute.
+    wod.movements = movements.slice(0, 2).map(m => ({ ...m, qty: Math.max(5, Math.round(m.qty * 0.6)) }));
+    wod.label = `EMOM ${wod.timeCapMin} MIN`;
+  } else { // for_time — descending rep ladder applied across all movements
+    const ladder = intensity === "easy" ? [15, 12, 9] : intensity === "hard" ? [27, 21, 15] : [21, 15, 9];
+    wod.repScheme = ladder;
+    wod.movements = movements.slice(0, 3).map(m => ({ ...m, qty: null }));
+    wod.label = `FOR TIME · ${ladder.join("-")}`;
+  }
+
+  const warmups = pickWarmupExercises("full_body", 2).filter(w => !floorOnly || !requiresFurniture(w.name));
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: { goal: "crossfit", equipment, target: "full_body", duration, intensity, style: "standard", deload: false, format },
+    wod,
+    exercises: warmups,
+  };
+}
+
 function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, phaseSetMod = 0, phase = null, sport = null }) {
   // Legacy alias: old workouts saved style="intensity" before the rename
   // to style="tempo" — treat them as the same for any read paths that
   // re-enter here. New writes always use "tempo".
   if (style === "intensity") style = "tempo";
 
-  // KB Sport goal: completely different shape (time-based continuous lifts).
-  // Routed before cardio because cardio still treats it as sets×reps.
-  if (goal === "kb_sport") {
-    return generateKbSportWorkout({ equipment, duration, intensity });
+  // CrossFit goal: time-based metcon, completely different shape from sets×reps.
+  if (goal === "crossfit") {
+    return generateCrossfitWorkout({ equipment, duration, intensity });
   }
-  // Sport Prep goal: tailored prep + prehab pool keyed to the chosen sport.
-  if (goal === "sport_prep") {
-    return generateSportPrepWorkout({ equipment, duration, intensity, sport });
-  }
-  // Animal Flow: bodyweight ground-based locomotion + holds + reaches + flow
-  // sequences. The 14 AF exercises are tagged in EXERCISES (Beast/Crab/Ape
-  // holds, Reaches, Travels, Switches). Standard programming groups them
-  // into the Mike Fitch curriculum buckets.
-  if (goal === "animal_flow") {
-    return generateAnimalFlowWorkout({ duration, intensity });
-  }
+
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
   if (target === "cardio") {
@@ -6407,6 +6131,7 @@ function renderExerciseList(list, units) {
 function renderWorkout(workout, container, { showSave = true } = {}) {
   _groupCounter = 0; // reset per render so labels run A, B, C from scratch
   const { inputs, exercises } = workout;
+  const isWod = !!workout.wod; // CrossFit metcon — rendered as a WOD card, not sets×reps
   const dateStr = new Date(workout.createdAt).toLocaleString();
   const units = session ? getPrefs(session.username).units : "kg";
 
@@ -6429,7 +6154,9 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   // We pass the full exercise list — the renderer's annotateSections walks
   // the whole array to correctly identify which mobility moves are warmup
   // vs cooldown by their position relative to the last main work block.
-  const exercisesHtml = `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
+  const exercisesHtml = isWod
+    ? renderWodCard(workout)
+    : `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
 
   const intensityFlag = (inputs.style === "tempo" || inputs.style === "intensity")
     ? `<span class="intensity-flag">Tempo Mode</span>` : "";
@@ -6442,7 +6169,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   // requested duration. Show the actual estimate alongside the requested
   // duration AND a banner with specific advice if we're >25% short.
   let durationNotice = "";
-  if (inputs.duration && workout.exercises?.length) {
+  if (!isWod && inputs.duration && workout.exercises?.length) {
     const estMin = Math.round(estimateWorkoutSeconds(workout.exercises) / 60);
     const reqMin = inputs.duration;
     const shortPct = (reqMin - estMin) / reqMin;
@@ -6467,12 +6194,14 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     ${durationNotice}
     <div class="workout-header">
       <div>
-        <div class="workout-title">${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}</div>
+        <div class="workout-title">${isWod
+          ? `CrossFit · ${wodFormatShort(workout.wod.format)}`
+          : `${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}`}</div>
         <div class="workout-meta">${tags} ${intensityFlag} ${deloadFlag}</div>
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
-        <button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>
+        ${isWod ? "" : `<button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>`}
         ${showSave ? `<button class="secondary-btn" id="saveBtn">${t("settings.save")}</button>` : ""}
         <button class="secondary-btn" id="saveTemplateBtn" title="${t("templates.saveTooltip")}">⭐ ${t("templates.save")}</button>
         <button class="secondary-btn" id="shareBtn">🔗 ${t("wo.share")}</button>
@@ -6490,6 +6219,62 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   `;
 }
 
+// Short, display-friendly format name for the WOD card title.
+function wodFormatShort(format) {
+  return { amrap: "AMRAP", rft: "Rounds For Time", emom: "EMOM", for_time: "For Time" }[format] || "WOD";
+}
+
+// Render a CrossFit WOD as a single card: format banner + movement list +
+// a brief warm-up + one score field. No per-set logging (lean v1).
+function renderWodCard(workout) {
+  const wod = workout.wod;
+  const fmtMove = (m) => {
+    if (m.qty == null) return escapeAttr(m.name);                 // reps come from a ladder
+    if (m.unit === "cal") return `${m.qty} cal ${escapeAttr(m.name)}`;
+    return `${m.qty} ${escapeAttr(m.name)}`;
+  };
+
+  let body;
+  if (wod.format === "for_time") {
+    body = `<div class="wod-ladder">${wod.repScheme.join("–")} reps, for time:</div>
+      <ul class="wod-moves">${wod.movements.map(m => `<li>${escapeAttr(m.name)}${m.unit === "cal" ? " (cal)" : ""}</li>`).join("")}</ul>`;
+  } else if (wod.format === "emom") {
+    const slot = (i) => wod.movements.length > 1 ? (i === 0 ? t("wod.oddMin") : t("wod.evenMin")) : t("wod.eachMin");
+    body = `<ul class="wod-moves wod-emom">${wod.movements.map((m, i) => `<li><span class="wod-slot">${slot(i)}</span> ${fmtMove(m)}</li>`).join("")}</ul>`;
+  } else {
+    body = `<ul class="wod-moves">${wod.movements.map(m => `<li>${fmtMove(m)}</li>`).join("")}</ul>`;
+  }
+
+  const sub = wod.format === "amrap" ? t("wod.amrapSub")
+    : wod.format === "rft" ? t("wod.rftSub", { cap: wod.timeCapMin })
+    : wod.format === "emom" ? t("wod.emomSub")
+    : t("wod.forTimeSub", { cap: wod.timeCapMin });
+
+  const isTimeScore = wod.format === "rft" || wod.format === "for_time";
+  const scoreLabel = isTimeScore ? t("wod.scoreTime") : t("wod.scoreRounds");
+  const scorePh = isTimeScore ? "mm:ss" : (t("wod.scoreRoundsPlaceholder") || "e.g. 5 + 12");
+
+  const warm = (workout.exercises || []).length
+    ? `<div class="wod-warmup">
+         <h3 class="label-caps wod-section-title">${t("wod.warmup")}</h3>
+         <ul class="wod-warmup-list">${workout.exercises.map(w => `<li>${escapeAttr(w.name)}</li>`).join("")}</ul>
+       </div>`
+    : "";
+
+  return `
+    ${warm}
+    <div class="wod-card">
+      <div class="wod-banner">${escapeAttr(wod.label)}</div>
+      <div class="wod-sub">${sub}</div>
+      ${body}
+    </div>
+    <div class="wod-score">
+      <label class="wod-score-label" for="wodScore">${scoreLabel}</label>
+      <input type="text" id="wodScore" class="wod-score-input" placeholder="${escapeAttr(scorePh)}" value="${escapeAttr(wod.score || "")}" />
+    </div>
+  `;
+}
+
 // ─── GENERATE BUTTON ─────────────────────────────────────────────────────
 let currentWorkout = null;
 
@@ -6500,34 +6285,20 @@ el.generateBtn.addEventListener("click", () => {
   // We unset it in a microtask after generation (sync) returns.
   el.generateBtn.classList.add("generating");
   setTimeout(() => el.generateBtn.classList.remove("generating"), 600);
-  let { goal, equipment, target, duration, intensity, sport } = formState;
+  let { goal, equipment, target, duration, intensity } = formState;
   // 2026-06 collapse: "standard" is the user-facing chip that maps to
   // hypertrophy internally. All downstream logic still keys on the
-  // canonical goal names. The session-type chips that survived this
-  // collapse (recovery/mobility/kb_sport/sport_prep) pass through
-  // unchanged.
+  // canonical goal names. The surviving session-type chips
+  // (recovery/mobility) pass through unchanged.
   if (goal === "standard") goal = "hypertrophy";
   if (!goal) return el.formError.textContent = "Pick a goal.";
-  // Animal Flow is bodyweight-only by definition — skip the equipment
-  // requirement and quietly inject bodyweight if missing. Same shape as
-  // the other special session types that prescribe their own equipment.
-  if (goal === "animal_flow") {
-    equipment = ["bodyweight"];
-    target = target || "full_body";
-  }
+  // CrossFit WODs are full-body by nature — force the target so the picker
+  // ignores it and the target requirement below is satisfied automatically.
+  if (goal === "crossfit") target = "full_body";
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";
   if (!duration) return el.formError.textContent = "Pick a duration.";
   // Intensity defaults to "normal" — no need to error if user skipped it.
-  if (goal === "sport_prep" && !sport) return el.formError.textContent = t("sport.pickFirst") || "Pick a sport first.";
-  // KB Sport requires a kettlebell + intermediate skill — the lifts are
-  // technical (Jerk, Long Cycle, Snatch) and don't have beginner variants
-  // in the pool. Tell the user before we silently fail.
-  if (goal === "kb_sport") {
-    if (!equipment.includes("kettlebell")) {
-      return el.formError.textContent = t("kbsport.needKb") || "KB Sport needs a kettlebell. Add kettlebell to Equipment.";
-    }
-  }
 
   currentWorkout = generateWorkout({
     goal, equipment, target,
@@ -6537,7 +6308,6 @@ el.generateBtn.addEventListener("click", () => {
     deload: !!formState.deload,
     phaseSetMod: formState.phaseSetMod || 0,
     phase: formState.phase || null,
-    sport,
   });
   // Defensive: if a goal-specific generator returns null (pool empty after
   // filters), show a clear error instead of leaving the user staring at
@@ -6647,6 +6417,13 @@ function attachWorkoutActions() {
   const exitEditLogsBtn = document.getElementById("exitEditLogsBtn");
   if (startBtn) {
     startBtn.addEventListener("click", () => startGuidedMode());
+  }
+  // CrossFit WOD score field — persist into the workout so Save/History keep it.
+  const wodScoreInput = document.getElementById("wodScore");
+  if (wodScoreInput && currentWorkout?.wod) {
+    wodScoreInput.addEventListener("input", () => {
+      currentWorkout.wod.score = wodScoreInput.value.slice(0, 40);
+    });
   }
   if (editLogsBtn) {
     editLogsBtn.addEventListener("click", () => {

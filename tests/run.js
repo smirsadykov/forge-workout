@@ -360,14 +360,6 @@
       }
       assert(dups.length === 0, `dups: ${dups.join(", ")}`);
     });
-    test("SPORT_EXERCISES references all resolve", () => {
-      const names = new Set(EXERCISES.map(e => e.name));
-      const orphans = [];
-      for (const [sport, list] of Object.entries(SPORT_EXERCISES || {})) {
-        for (const n of list) if (!names.has(n)) orphans.push(`${sport}:${n}`);
-      }
-      assert(orphans.length === 0, `orphans: ${orphans.join(", ")}`);
-    });
   });
 
   // ─── GENERATOR SWEEP ─────────────────────────────────────────────────
@@ -405,6 +397,40 @@
     test("No null workouts", () => eq(nullCount, 0));
     test("No time overruns (>120% of requested)", () => eq(overrunCount, 0));
     test("No untrackable exercises", () => eq(untrackable, 0));
+  });
+
+  // ─── CROSSFIT / METCON ───────────────────────────────────────────────
+  suite("CrossFit WOD generator", () => {
+    const exNames = new Set(EXERCISES.map(e => e.name));
+    const equips = [
+      ["bodyweight"], ["bodyweight","kettlebell"], ["barbell","bodyweight"],
+      ["dumbbells"], ["cardio_machine","bodyweight"], ["floor_only"],
+      ["dumbbells","barbell","kettlebell","bands","machine","cardio_machine"],
+    ];
+    const formatsSeen = new Set();
+    let runs = 0, bad = 0, orphan = 0, capViol = 0, tooFew = 0, noFurnitureLeak = 0;
+    for (const equipment of equips)
+    for (const duration of [15, 30, 45, 60])
+    for (const intensity of ["easy", "normal", "hard"])
+    for (let rep = 0; rep < 12; rep++) { // repeat — format + movements are random
+      runs++;
+      const w = generateWorkout({ goal: "crossfit", equipment, target: "full_body", duration, intensity, style: "standard" });
+      if (!w || !w.wod) { bad++; continue; }
+      formatsSeen.add(w.wod.format);
+      if (!Array.isArray(w.wod.movements) || w.wod.movements.length < 2) tooFew++;
+      if (w.wod.timeCapMin > duration) capViol++;
+      const floorOnly = equipment.includes("floor_only");
+      for (const m of w.wod.movements) {
+        if (!exNames.has(m.name)) orphan++;
+        // furniture moves (pull-ups/box jumps) must never appear in floor-only
+        if (floorOnly && /Pull-Ups|Box Jumps/.test(m.name)) noFurnitureLeak++;
+      }
+    }
+    test("All WODs have a valid wod block (≥2 movements)", () => { eq(bad, 0, "missing wod"); eq(tooFew, 0, "under 2 movements"); });
+    test("All movements resolve to library names", () => eq(orphan, 0));
+    test("No time cap exceeds requested duration", () => eq(capViol, 0));
+    test("Floor-only never leaks furniture movements", () => eq(noFurnitureLeak, 0));
+    test("All four formats are reachable", () => eq(formatsSeen.size, 4, `saw: ${[...formatsSeen].join(",")}`));
   });
 
   // ─── RENDER + REPORT ─────────────────────────────────────────────────

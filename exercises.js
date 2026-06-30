@@ -380,11 +380,10 @@ const EXERCISES = [
   { name: "Front Step Through", muscle: ["full_body","core","shoulders","hamstrings"], equipment: ["bodyweight"], group: ["full_body","core","mobility"], pattern: "conditioning", difficulty: "intermediate" },
   { name: "Beast to Crab Switch", muscle: ["full_body","core","shoulders"], equipment: ["bodyweight"], group: ["full_body","core"], pattern: "conditioning", difficulty: "intermediate" },
 
-  // ─── SPORT PREP / PREHAB ────────────────────────────────────────────────
-  // Targeted prep + injury prevention work referenced by SPORT_EXERCISES.
-  // Most are isolation/mobility-pattern so they don't compete with main
-  // compound work in regular goals; they're picked specifically when goal
-  // is "sport_prep".
+  // ─── PREHAB / ACTIVATION ────────────────────────────────────────────────
+  // Targeted activation + injury-prevention work. Most are isolation/mobility
+  // pattern, so they support mobility/recovery sessions and fill accessory
+  // slots without competing with main compound work in standard sessions.
   { name: "Lateral Band Walk", muscle: ["glutes"], equipment: ["bands","bodyweight"], group: ["legs","lower"], pattern: "isolation", difficulty: "beginner" },
   { name: "Copenhagen Plank", muscle: ["core","glutes"], equipment: ["bodyweight"], group: ["core","lower"], pattern: "isolation", difficulty: "intermediate" },
   { name: "Tibialis Raise", muscle: ["calves"], equipment: ["bodyweight"], group: ["legs","lower"], pattern: "isolation", difficulty: "beginner" },
@@ -410,80 +409,6 @@ const PRESCRIPTIONS = {
   // Light loaded session for when you're under-recovered. Easy to start,
   // promotes blood flow without adding stress. Keep momentum, don't dig in.
   recovery:    { sets: [2, 3], reps: [10, 15], rest: 60,  isoReps: [12, 18] },
-  // KB Sport (Girevoy) — time-based main lifts. The numbers here are
-  // placeholders; generateKbSportWorkout builds the real shape.
-  kb_sport:    { sets: [1, 2], reps: [8, 10],  rest: 180, isoReps: [8, 10] },
-  // Sport Prep — moderate-volume isolation/mobility work. generateSportPrepWorkout
-  // builds the real shape; this is the fallback prescription.
-  sport_prep:  { sets: [2, 3], reps: [10, 15], rest: 45,  isoReps: [12, 20] },
-};
-
-// ─── SPORT PREP EXERCISE POOLS ─────────────────────────────────────────────
-// Sport → list of exercise names. Each pool combines sport-specific prep
-// (drills + activation) with the prehab moves for that sport's typical
-// injuries. Names must match `name` fields in the EXERCISES list above.
-const SPORTS = ["running", "cycling", "swimming", "racket", "climbing"];
-const SPORT_EXERCISES = {
-  running: [
-    // Hamstring eccentric (anti-strain) + posterior chain
-    "Nordic Hamstring Curl", "Single-Leg Romanian Deadlift",
-    // Glute med (IT band / knee tracking)
-    "Banded Clamshell", "Banded Monster Walk", "Lateral Band Walk",
-    "Single-Leg Glute Bridge", "Glute Bridge",
-    // Anti-shin-splint + Achilles
-    "Tibialis Raise", "Single-Leg Calf Raise",
-    // Adductor (groin) durability
-    "Copenhagen Plank",
-    // Hip mobility
-    "Hip Flexor Stretch", "Couch Stretch", "Pigeon Pose", "90/90 Hip Stretch",
-    "World's Greatest Stretch", "Ankle Circles",
-  ],
-  cycling: [
-    // Counter the closed-hip / kyphotic position from time on the bike
-    "Hip Flexor Stretch", "Couch Stretch", "Pigeon Pose", "Bretzel Stretch",
-    "Cat-Cow", "Thoracic Rotations", "Wall Angels",
-    // Glute reactivation
-    "Glute Bridge", "Single-Leg Glute Bridge", "Banded Clamshell",
-    "Banded Monster Walk",
-    // Low-back stability
-    "Bird Dog", "Dead Bug",
-    "90/90 Hip Stretch", "World's Greatest Stretch",
-  ],
-  swimming: [
-    // Rotator cuff + scapular stability (anti-impingement)
-    "Y-T-W Raises", "Wall Slides", "Band Pull-Apart", "External Rotation",
-    "Dumbbell Cuban Press", "Sleeper Stretch", "Scapular Pull-Ups",
-    "Wall Angels",
-    // T-spine extension/rotation
-    "Thoracic Rotations", "Bretzel Stretch", "Cat-Cow",
-    // Ankle for streamlined kick
-    "Ankle Circles",
-  ],
-  racket: [
-    // Shoulder durability for overhead/serving
-    "Y-T-W Raises", "Band Pull-Apart", "External Rotation",
-    "Dumbbell Cuban Press", "Sleeper Stretch", "Wall Slides",
-    // Anti-rotation + rotational power transfer
-    "Pallof Press",
-    // Forearm balance (tennis-elbow prevention)
-    "Wrist Curl", "Reverse Wrist Curl",
-    // Hip + lateral movement
-    "Lateral Band Walk", "Cossack Squat", "World's Greatest Stretch",
-    "90/90 Hip Stretch", "Bretzel Stretch",
-  ],
-  climbing: [
-    // Antagonist push (shoulder health under heavy pull volume)
-    "Push-Ups", "Pike Push-Ups", "Band Pull-Apart",
-    // Rotator cuff
-    "External Rotation", "Y-T-W Raises", "Wall Slides", "Dumbbell Cuban Press",
-    // Scapular control
-    "Scapular Pull-Ups",
-    // Forearm balance (anti-tennis-elbow / A2 pulley health)
-    "Wrist Curl", "Reverse Wrist Curl",
-    // Hip + T-spine for high-foot positions
-    "Bretzel Stretch", "Thoracic Rotations", "Hip Flexor Stretch",
-    "World's Greatest Stretch", "90/90 Hip Stretch",
-  ],
 };
 
 // How many exercises to pick by duration (minutes)
