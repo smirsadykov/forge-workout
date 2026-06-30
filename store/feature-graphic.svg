@@ -1,0 +1,26 @@
+<!-- Play Store feature graphic — 1024×500. Renders as the hero image at
+     the top of the listing on Play Store. No text overlay required;
+     Play renders the app title separately. Just brand bolt + wordmark
+     on the obsidian backdrop with a subtle radial glow. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.18"/>
+      <stop offset="60%" stop-color="#f97316" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="500" fill="#0d0f15"/>
+  <rect width="1024" height="500" fill="url(#glow)"/>
+  <!-- Bolt left of center, scaled to ~50% height -->
+  <g transform="translate(320, 250) scale(0.7) translate(-256, -256)">
+    <path d="M 296 60 L 152 296 L 232 296 L 200 452 L 360 216 L 280 216 L 320 60 Z"
+          fill="#f97316" stroke="#f97316" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+  <!-- Wordmark right of bolt -->
+  <text x="500" y="260" font-family="Archivo Narrow, Arial Narrow, Impact, sans-serif"
+        font-weight="700" font-style="italic" font-size="128" fill="#dae2fd"
+        letter-spacing="-2">FORGE</text>
+  <text x="500" y="310" font-family="JetBrains Mono, monospace"
+        font-weight="600" font-size="20" fill="#f97316" letter-spacing="6">SMART WORKOUT BUILDER</text>
+</svg>

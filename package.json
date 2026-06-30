@@ -6,7 +6,8 @@
   "scripts": {
     "build:web": "node scripts/build-web.js",
     "sync": "npm run build:web && npx cap sync android",
-    "open:android": "npm run sync && npx cap open android"
+    "open:android": "npm run sync && npx cap open android",
+    "screenshots": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.0",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.4",
-    "@capacitor/cli": "^6.1.0"
+    "@capacitor/cli": "^6.1.0",
+    "puppeteer": "^23.0.0"
   }
 }
