@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORGE — Privacy Policy</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <style>
+    :root {
+      --bg: #0d0f15;
+      --bg-elevated: #171c2a;
+      --text: #dae2fd;
+      --text-dim: #8d99b3;
+      --brand: #f97316;
+      --border: #2a3247;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 80px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      line-height: 1.6;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    header { margin-bottom: 32px; }
+    .brand {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-weight: 700;
+      font-style: italic;
+      font-size: 32px;
+      letter-spacing: 0.02em;
+      color: var(--brand);
+      text-transform: uppercase;
+    }
+    .divider {
+      height: 2px;
+      width: 48px;
+      background: var(--brand);
+      margin: 8px 0 18px;
+    }
+    h1 {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 0 0 4px;
+    }
+    .effective {
+      color: var(--text-dim);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+      margin: 24px 0;
+    }
+    .lang-switch button {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .lang-switch button.active {
+      background: var(--brand);
+      color: var(--bg);
+      border-color: var(--brand);
+    }
+    section { display: none; }
+    section.active { display: block; }
+    h2 {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      margin: 32px 0 12px;
+      color: var(--text);
+    }
+    h2:first-of-type { margin-top: 0; }
+    p, ul { margin: 0 0 12px; color: var(--text-dim); }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); }
+    a { color: var(--brand); }
+    code {
+      background: var(--bg-elevated);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">FORGE</div>
+      <div class="divider"></div>
+      <h1>Privacy Policy</h1>
+      <div class="effective">Effective date: 2026-06-30</div>
+    </header>
+
+    <div class="lang-switch">
+      <button class="active" data-lang="en">EN</button>
+      <button data-lang="ru">RU</button>
+    </div>
+
+    <!-- ───────────── ENGLISH ───────────── -->
+    <section id="en" class="active">
+      <h2>1. Who runs this app</h2>
+      <p>FORGE (the "app") is an independent project run by Sergey Mirsadykov ("we", "us"). Contact: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+
+      <h2>2. What data we collect</h2>
+      <p>We collect only what the app needs to work for you:</p>
+      <ul>
+        <li><strong>Email and password.</strong> Used to create your account and log you in. Passwords are stored hashed by our auth provider — we never see them in plain text.</li>
+        <li><strong>Workout data.</strong> The workouts you generate, save, and log: exercises, sets, reps, weights, dates, notes, soreness ratings, and saved templates.</li>
+        <li><strong>Preferences.</strong> Units (kg/lb), language, theme, equipment you own, target rep ranges.</li>
+        <li><strong>Crash and error reports.</strong> When something breaks in the app we send a small diagnostic message (which screen you were on, what action triggered it, an error code). No screen contents, no personal data.</li>
+      </ul>
+      <p>We do <strong>not</strong> collect: location, contacts, camera or microphone, advertising IDs, device IDs, or any analytics for marketing or profiling.</p>
+
+      <h2>3. Where it's stored</h2>
+      <p>Data is stored in <strong>Supabase</strong> (PostgreSQL hosted in AWS data centers). All traffic is encrypted with HTTPS. The app code itself is hosted on GitHub Pages.</p>
+
+      <h2>4. Who can access it</h2>
+      <p>Only you, when you're logged in. We don't sell, rent, or share your data with anyone. We don't run analytics on it. We don't use it to train any model.</p>
+      <p>The only third parties involved are technical service providers (Supabase for storage and auth, GitHub for hosting) — they handle the data only to keep the service running.</p>
+
+      <h2>5. How long we keep it</h2>
+      <p>We keep your data as long as your account exists. When you delete your account (or email us a deletion request at <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>), we permanently remove all your records within 30 days.</p>
+      <p>Crash reports are kept for up to 90 days to debug recurring issues, then deleted.</p>
+
+      <h2>6. Your rights</h2>
+      <p>You can at any time:</p>
+      <ul>
+        <li>See everything we store about you (the app shows it — your workouts, history, prefs).</li>
+        <li>Export your data — email us and we'll send a JSON export.</li>
+        <li>Correct your data — edit it in the app, or email us.</li>
+        <li>Delete your account and data — Settings → Delete account, or email us.</li>
+        <li>Withdraw consent — by deleting your account.</li>
+      </ul>
+      <p>If you're in the EU, UK, or California, you also have specific rights under GDPR, UK-GDPR, and CCPA. Reach out to the contact email above to exercise any of them — we respond within 30 days.</p>
+
+      <h2>7. Children</h2>
+      <p>The app is not intended for children under 13. We don't knowingly collect data from them. If you believe a child has registered, email us and we'll remove the account.</p>
+
+      <h2>8. Health data disclaimer</h2>
+      <p>The app stores workout and basic self-reported soreness/sleep ratings. This information is not classified as medical data and is not shared with anyone. Always consult a medical professional before starting any new exercise program.</p>
+
+      <h2>9. Changes</h2>
+      <p>We'll update this page when we change practices. The "Effective date" at the top reflects the latest version. Continued use after a material change means you accept it.</p>
+
+      <h2>10. Contact</h2>
+      <p>Questions, deletion requests, or anything else: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+    </section>
+
+    <!-- ───────────── РУССКИЙ ───────────── -->
+    <section id="ru">
+      <h2>1. Кто разрабатывает приложение</h2>
+      <p>FORGE («приложение») — независимый проект, который ведёт Сергей Мирсадыков («мы»). Контакт: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+
+      <h2>2. Какие данные мы собираем</h2>
+      <p>Только то, что нужно приложению для работы:</p>
+      <ul>
+        <li><strong>Email и пароль.</strong> Нужны для создания аккаунта и входа. Пароли хранятся в виде хеша у нашего auth-провайдера — мы никогда не видим их в открытом виде.</li>
+        <li><strong>Данные тренировок.</strong> Сгенерированные, сохранённые и залогированные тренировки: упражнения, подходы, повторы, веса, даты, заметки, оценки крепатуры, шаблоны.</li>
+        <li><strong>Настройки.</strong> Единицы измерения (кг/lb), язык, тема, доступный инвентарь, целевые диапазоны повторов.</li>
+        <li><strong>Отчёты об ошибках.</strong> Когда что-то ломается, мы отправляем небольшое диагностическое сообщение (какой экран, какое действие, код ошибки). Содержимое экранов и личные данные не передаются.</li>
+      </ul>
+      <p>Мы <strong>не</strong> собираем: геолокацию, контакты, доступ к камере или микрофону, рекламные идентификаторы, ID устройства, никакую аналитику для маркетинга или профилирования.</p>
+
+      <h2>3. Где хранятся данные</h2>
+      <p>Данные хранятся в <strong>Supabase</strong> (PostgreSQL, размещён в дата-центрах AWS). Весь трафик шифруется по HTTPS. Сам код приложения хостится на GitHub Pages.</p>
+
+      <h2>4. Кто имеет доступ</h2>
+      <p>Только вы, когда залогинены. Мы не продаём, не сдаём в аренду и не передаём ваши данные кому-либо. Не запускаем аналитику. Не используем для обучения каких-либо моделей.</p>
+      <p>Единственные третьи стороны — технические провайдеры (Supabase для хранения и авторизации, GitHub для хостинга) — они работают с данными исключительно для поддержки сервиса.</p>
+
+      <h2>5. Сколько мы храним</h2>
+      <p>Пока существует ваш аккаунт. После удаления аккаунта (или письма на <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a> с запросом на удаление) все ваши записи безвозвратно удаляются в течение 30 дней.</p>
+      <p>Отчёты об ошибках хранятся до 90 дней для отладки повторяющихся проблем, затем удаляются.</p>
+
+      <h2>6. Ваши права</h2>
+      <p>В любой момент вы можете:</p>
+      <ul>
+        <li>Посмотреть всё, что мы храним о вас (приложение показывает это — тренировки, история, настройки).</li>
+        <li>Экспортировать данные — напишите нам, и мы вышлем JSON-выгрузку.</li>
+        <li>Исправить данные — отредактируйте в приложении или напишите нам.</li>
+        <li>Удалить аккаунт и данные — Настройки → Удалить аккаунт, или напишите нам.</li>
+        <li>Отозвать согласие — путём удаления аккаунта.</li>
+      </ul>
+      <p>Если вы находитесь в ЕС, Великобритании или Калифорнии, у вас также есть права по GDPR, UK-GDPR и CCPA. Чтобы воспользоваться — напишите на контактный адрес выше, мы отвечаем в течение 30 дней.</p>
+
+      <h2>7. Дети</h2>
+      <p>Приложение не предназначено для детей до 13 лет. Мы намеренно не собираем их данные. Если вы знаете, что ребёнок зарегистрировался, напишите нам — удалим аккаунт.</p>
+
+      <h2>8. Дисклеймер о здоровье</h2>
+      <p>Приложение хранит тренировки и базовые самооценки крепатуры/сна. Эта информация не классифицируется как медицинские данные и никому не передаётся. Всегда консультируйтесь с врачом перед началом любой программы тренировок.</p>
+
+      <h2>9. Изменения</h2>
+      <p>Мы обновим эту страницу при изменении политики. Дата вверху отражает текущую версию. Продолжая пользоваться после существенных изменений, вы соглашаетесь с ними.</p>
+
+      <h2>10. Контакты</h2>
+      <p>Вопросы, запросы на удаление и всё остальное: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+    </section>
+
+    <footer>
+      <a href="index.html">← Back to app</a>
+      <a href="terms.html">Terms of Service</a>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll(".lang-switch button").forEach(b => {
+      b.addEventListener("click", () => {
+        const lang = b.dataset.lang;
+        document.querySelectorAll(".lang-switch button").forEach(x => x.classList.toggle("active", x === b));
+        document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === lang));
+        document.documentElement.lang = lang;
+      });
+    });
+  </script>
+</body>
+</html>

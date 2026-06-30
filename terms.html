@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORGE — Terms of Service</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <style>
+    :root {
+      --bg: #0d0f15;
+      --bg-elevated: #171c2a;
+      --text: #dae2fd;
+      --text-dim: #8d99b3;
+      --brand: #f97316;
+      --border: #2a3247;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 80px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    header { margin-bottom: 32px; }
+    .brand {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-weight: 700;
+      font-style: italic;
+      font-size: 32px;
+      letter-spacing: 0.02em;
+      color: var(--brand);
+      text-transform: uppercase;
+    }
+    .divider {
+      height: 2px;
+      width: 48px;
+      background: var(--brand);
+      margin: 8px 0 18px;
+    }
+    h1 {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 0 0 4px;
+    }
+    .effective {
+      color: var(--text-dim);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+      margin: 24px 0;
+    }
+    .lang-switch button {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .lang-switch button.active {
+      background: var(--brand);
+      color: var(--bg);
+      border-color: var(--brand);
+    }
+    section { display: none; }
+    section.active { display: block; }
+    h2 {
+      font-family: "Archivo Narrow", system-ui, sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      margin: 32px 0 12px;
+      color: var(--text);
+    }
+    h2:first-of-type { margin-top: 0; }
+    p, ul { margin: 0 0 12px; color: var(--text-dim); }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); }
+    a { color: var(--brand); }
+    .warn {
+      background: rgba(249,115,22,0.08);
+      border-left: 3px solid var(--brand);
+      padding: 12px 16px;
+      margin: 16px 0;
+      border-radius: 0 4px 4px 0;
+    }
+    footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">FORGE</div>
+      <div class="divider"></div>
+      <h1>Terms of Service</h1>
+      <div class="effective">Effective date: 2026-06-30</div>
+    </header>
+
+    <div class="lang-switch">
+      <button class="active" data-lang="en">EN</button>
+      <button data-lang="ru">RU</button>
+    </div>
+
+    <!-- ───────────── ENGLISH ───────────── -->
+    <section id="en" class="active">
+      <h2>1. Acceptance</h2>
+      <p>By creating an account or using FORGE (the "app"), you agree to these Terms. If you don't agree, don't use the app.</p>
+
+      <h2>2. What FORGE is</h2>
+      <p>FORGE is a free workout-generator and training-log app. It picks exercises and prescriptions (sets, reps, rest, intensity guidance) based on your inputs and history. It is provided "as is" and may change or stop being available at any time.</p>
+
+      <div class="warn">
+        <h2 style="margin: 0 0 8px">3. ⚠️ Health and safety — read this</h2>
+        <p style="color: var(--text)"><strong>FORGE is not medical advice and is not a substitute for a coach, physician, or physical therapist.</strong></p>
+        <p>Exercise carries inherent risk of injury, including serious injury. Generated workouts are algorithmic suggestions based on simple inputs — they cannot assess your medical history, injuries, technique, or current physical condition.</p>
+        <p>You agree to:</p>
+        <ul>
+          <li>Consult a qualified medical professional before starting any new exercise program — especially if you have any health condition, injury, are pregnant, or are over 50.</li>
+          <li>Use proper form and exercise within your own ability. Stop immediately if you feel pain, dizziness, or anything wrong.</li>
+          <li>Take full responsibility for your training and any consequences.</li>
+        </ul>
+      </div>
+
+      <h2>4. Your account</h2>
+      <p>You're responsible for keeping your password safe and for everything that happens under your account. One person per account. Don't share credentials.</p>
+      <p>You can delete your account at any time from Settings, or by emailing <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+
+      <h2>5. Acceptable use</h2>
+      <p>Don't:</p>
+      <ul>
+        <li>Try to break, scrape, overload, or reverse-engineer the app or its backend.</li>
+        <li>Use the app to harm others or violate any law.</li>
+        <li>Resell, redistribute, or wrap the app as your own product.</li>
+        <li>Submit content that is illegal, harassing, or infringes someone else's rights.</li>
+      </ul>
+      <p>We can suspend or terminate accounts that abuse the service.</p>
+
+      <h2>6. Your content</h2>
+      <p>Workouts you save, templates you create, and notes you write remain yours. You give us only the technical license needed to store and display them back to you. We don't claim ownership and we don't share your content with anyone.</p>
+
+      <h2>7. App ownership</h2>
+      <p>The FORGE app code, design, exercise library, and brand are the work of Sergey Mirsadykov. You get a personal, non-transferable, revocable license to use the app for your own training. No other rights are granted.</p>
+
+      <h2>8. Pricing</h2>
+      <p>FORGE is currently free. We may introduce paid features later. We won't surprise-charge for what's already free — any paid feature will be clearly labelled and optional.</p>
+
+      <h2>9. Disclaimers</h2>
+      <p>The app is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We don't guarantee that workout suggestions are correct, safe, or suited to your situation. We don't guarantee the app will be available, accurate, or bug-free.</p>
+
+      <h2>10. Limitation of liability</h2>
+      <p>To the maximum extent permitted by law, we are not liable for injuries, indirect losses, lost data, lost progress, or any consequential damages arising from using the app. Where law requires a minimum liability cap, our total liability to you is limited to the amount you paid for the app in the last 12 months (which is currently $0).</p>
+
+      <h2>11. Changes</h2>
+      <p>We may update these Terms. The effective date at the top reflects the latest version. Material changes will be announced in the app. Continued use after a change means you accept it.</p>
+
+      <h2>12. Termination</h2>
+      <p>You can stop using the app and delete your account at any time. We can suspend or close accounts that violate these Terms. On termination, your data is removed per the <a href="privacy.html">Privacy Policy</a>.</p>
+
+      <h2>13. Governing law and disputes</h2>
+      <p>These Terms are governed by the laws of the country where you primarily reside, to the extent local consumer protection requires it. Where local law doesn't impose a forum, disputes will be resolved through good-faith correspondence with the contact below before any formal action.</p>
+
+      <h2>14. Contact</h2>
+      <p>Anything about the Terms: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+    </section>
+
+    <!-- ───────────── РУССКИЙ ───────────── -->
+    <section id="ru">
+      <h2>1. Принятие</h2>
+      <p>Создавая аккаунт или используя FORGE («приложение»), вы соглашаетесь с настоящими Условиями. Не согласны — не пользуйтесь.</p>
+
+      <h2>2. Что такое FORGE</h2>
+      <p>FORGE — бесплатное приложение-генератор тренировок и журнал тренировок. Оно подбирает упражнения и режим (подходы, повторы, отдых, рекомендации по интенсивности) на основе ваших вводных и истории. Предоставляется «как есть» и может меняться или прекращать работу в любой момент.</p>
+
+      <div class="warn">
+        <h2 style="margin: 0 0 8px">3. ⚠️ Здоровье и безопасность — прочитайте</h2>
+        <p style="color: var(--text)"><strong>FORGE — не медицинская рекомендация и не замена тренеру, врачу или физиотерапевту.</strong></p>
+        <p>Физические упражнения несут риск травмы, включая серьёзные. Сгенерированные тренировки — алгоритмические предложения на основе простых вводных. Алгоритм не может оценить вашу медицинскую историю, травмы, технику или текущее состояние.</p>
+        <p>Вы соглашаетесь:</p>
+        <ul>
+          <li>Проконсультироваться с квалифицированным медицинским специалистом перед началом новой программы — особенно при наличии заболеваний, травм, беременности или возрасте 50+.</li>
+          <li>Использовать правильную технику и заниматься в пределах своих возможностей. Сразу прекращайте при боли, головокружении или любых тревожных ощущениях.</li>
+          <li>Брать на себя полную ответственность за свои тренировки и их последствия.</li>
+        </ul>
+      </div>
+
+      <h2>4. Ваш аккаунт</h2>
+      <p>Вы отвечаете за сохранность пароля и за всё, что происходит под вашим аккаунтом. Один человек — один аккаунт. Не передавайте данные входа третьим лицам.</p>
+      <p>Аккаунт можно удалить в любой момент из Настроек или письмом на <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+
+      <h2>5. Допустимое использование</h2>
+      <p>Запрещено:</p>
+      <ul>
+        <li>Ломать, скрейпить, перегружать или реверсить приложение и его бэкенд.</li>
+        <li>Использовать приложение во вред другим или для нарушения закона.</li>
+        <li>Перепродавать, перераспространять или оборачивать приложение в собственный продукт.</li>
+        <li>Размещать незаконный, оскорбительный или нарушающий чьи-либо права контент.</li>
+      </ul>
+      <p>Аккаунты, злоупотребляющие сервисом, могут быть приостановлены или удалены.</p>
+
+      <h2>6. Ваш контент</h2>
+      <p>Сохранённые тренировки, шаблоны и заметки остаются вашими. Вы даёте нам только техническую лицензию, необходимую для хранения и показа их вам обратно. Мы не претендуем на собственность и не делимся вашим контентом ни с кем.</p>
+
+      <h2>7. Права на приложение</h2>
+      <p>Код, дизайн, библиотека упражнений и бренд FORGE — работа Сергея Мирсадыкова. Вы получаете персональную, непередаваемую, отзываемую лицензию использовать приложение для собственных тренировок. Иные права не передаются.</p>
+
+      <h2>8. Цена</h2>
+      <p>FORGE сейчас бесплатен. В будущем могут появиться платные функции. Мы не будем неожиданно списывать деньги за то, что было бесплатным — любая платная функция будет чётко обозначена и опциональна.</p>
+
+      <h2>9. Отказ от гарантий</h2>
+      <p>Приложение предоставляется «КАК ЕСТЬ» и «ПО ДОСТУПНОСТИ» без каких-либо гарантий. Мы не гарантируем корректность, безопасность или применимость предложенных тренировок к вашей ситуации. Мы не гарантируем доступность, точность или отсутствие багов в приложении.</p>
+
+      <h2>10. Ограничение ответственности</h2>
+      <p>В максимальной степени, разрешённой законом, мы не несём ответственности за травмы, косвенные убытки, потерю данных, потерю прогресса или любые последующие убытки, возникающие в связи с использованием приложения. Там, где закон требует минимального лимита, наша совокупная ответственность ограничена суммой, которую вы заплатили за приложение за последние 12 месяцев (сейчас это $0).</p>
+
+      <h2>11. Изменения</h2>
+      <p>Мы можем обновлять Условия. Дата вверху отражает текущую версию. Существенные изменения будут анонсированы в приложении. Продолжая пользоваться после изменения, вы соглашаетесь с ним.</p>
+
+      <h2>12. Прекращение</h2>
+      <p>Вы можете прекратить пользоваться и удалить аккаунт в любой момент. Мы можем приостановить или закрыть аккаунты, нарушающие Условия. При прекращении данные удаляются согласно <a href="privacy.html">Privacy Policy</a>.</p>
+
+      <h2>13. Применимое право и споры</h2>
+      <p>Условия регулируются законами страны, где вы преимущественно проживаете, в той мере, в которой это требует местное законодательство о защите прав потребителей. Там, где закон не предписывает форум, споры решаются добросовестной перепиской с контактом ниже до любых формальных действий.</p>
+
+      <h2>14. Контакты</h2>
+      <p>По вопросам об Условиях: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>.</p>
+    </section>
+
+    <footer>
+      <a href="index.html">← Back to app</a>
+      <a href="privacy.html">Privacy Policy</a>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll(".lang-switch button").forEach(b => {
+      b.addEventListener("click", () => {
+        const lang = b.dataset.lang;
+        document.querySelectorAll(".lang-switch button").forEach(x => x.classList.toggle("active", x === b));
+        document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === lang));
+        document.documentElement.lang = lang;
+      });
+    });
+  </script>
+</body>
+</html>
