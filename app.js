@@ -6003,31 +6003,19 @@ function renderExerciseLog(ex, units) {
   for (let setN = 1; setN <= totalSets; setN++) {
     for (const side of sidesPerSet) {
       const restored = justLogged?.sets?.[entryIdx];
-      const w = restored ? toDisplay(restored.weightKg, units)
-              : (entryIdx === 0 ? defaultWeight : "");
-      const r = restored ? restored.reps
-              : (entryIdx === 0 ? defaultRep : "");
+      // Pre-fill every set with the prescription (or last session's load), so
+      // logging is confirm-and-tweak rather than type-everything.
+      const w = restored ? toDisplay(restored.weightKg, units) : defaultWeight;
+      const r = restored ? restored.reps : defaultRep;
       // For time-based: restored reps may carry the duration in seconds; we
-      // display it in the friendlier unit. If no restore, pre-fill duration.
+      // display it in the friendlier unit. Otherwise pre-fill the duration.
       const tRestored = restored ? restored.reps : null;
       const tDisplay = tRestored != null
         ? (useMinutes ? Math.round(tRestored / 60) : tRestored)
-        : (entryIdx === 0 ? defaultTime : "");
-      const restoredRir = restored?.rir;
+        : defaultTime;
       const label = side ? `Set ${setN} <span class="side-tag side-${side.toLowerCase()}">${side}</span>` : `Set ${setN}`;
-      // RIR — only meaningful for rep-counted work. Sustained holds /
-      // carries / cardio don't have rep-scale failure proximity, so hide.
-      const rirHtml = isTimeBased ? "" : `
-        <div class="rir-wrap">
-          <span class="rir-label" title="Reps In Reserve">RIR</span>
-          <div class="rir-picker" data-log-set="rir-group" title="Reps In Reserve — how many reps did you have left? (0 = to failure, 3+ = easy)">
-            ${[0, 1, 2, 3, 4].map(n =>
-              `<button type="button" class="rir-btn ${restoredRir === n ? "active" : ""}" data-rir="${n}">${n}</button>`
-            ).join("")}
-          </div>
-        </div>`;
 
-      // Reps vs Time input
+      // Reps vs Time input. RIR is captured once per exercise below, not here.
       const repsOrTimeInput = isTimeBased
         ? `<label class="log-field compact">
             <input type="number" inputmode="numeric" step="1" min="0"
@@ -6051,7 +6039,6 @@ function renderExerciseLog(ex, units) {
               <span class="log-field-suffix">${units}</span>
             </label>` : ""}
           ${repsOrTimeInput}
-          ${rirHtml}
         </div>
       `);
       entryIdx++;
@@ -6059,12 +6046,29 @@ function renderExerciseLog(ex, units) {
   }
   const setRows = rows.join("");
 
+  // RIR once per exercise (top set) — lighter than a picker on every set, and
+  // it's how RIR is actually used. On save it's applied to all rep-based sets
+  // so the progression algorithm still sees per-set values. Hidden for
+  // time-based work (no rep-scale proximity to failure).
+  const loggedRirs = (justLogged?.sets || []).map(s => s.rir).filter(v => v != null);
+  const restoredExRir = loggedRirs.length ? loggedRirs[loggedRirs.length - 1] : null;
+  const rirOnce = isTimeBased ? "" : `
+    <div class="rir-once" title="Reps In Reserve on your hardest set — how many reps left in the tank? (0 = to failure, 3+ = easy)">
+      <span class="rir-label">RIR <span class="rir-sub">top set</span></span>
+      <div class="rir-picker" data-log-set="rir-group">
+        ${[0, 1, 2, 3, 4].map(n =>
+          `<button type="button" class="rir-btn ${restoredExRir === n ? "active" : ""}" data-rir="${n}">${n}</button>`
+        ).join("")}
+      </div>
+    </div>`;
+
   return `
     <div class="exercise-log" data-exercise="${escapeAttr(ex.name)}">
       <div class="exercise-log-head">
         ${pill || `<span class="last-pill empty">No log yet</span>`}
       </div>
       <div class="set-list">${setRows}</div>
+      ${rirOnce}
       <div class="log-form">
         <button class="log-btn" data-action="log-set">✓ Save sets</button>
       </div>
@@ -6788,13 +6792,17 @@ function attachWorkoutActions() {
         const entry = { weightKg, reps };
         if (timeInput) entry.timeBased = true;
         if (side) entry.side = side;
-        if (!timeInput) {
-          const rirBtn = row.querySelector(".rir-picker .rir-btn.active");
-          const rir = rirBtn ? Number(rirBtn.dataset.rir) : null;
-          if (rir != null && !Number.isNaN(rir)) entry.rir = rir;
-        }
         sets.push(entry);
       });
+
+      // Single per-exercise RIR (top set) applied to every rep-based set, so
+      // the stored shape (sets[].rir) and the avg-RIR progression math are
+      // unchanged from the old per-set capture.
+      const exRirBtn = logEl.querySelector(".rir-once .rir-btn.active");
+      const exRir = exRirBtn ? Number(exRirBtn.dataset.rir) : null;
+      if (exRir != null && !Number.isNaN(exRir)) {
+        sets.forEach(s => { if (!s.timeBased) s.rir = exRir; });
+      }
 
       if (sets.length === 0) {
         // Focus the first empty input (reps OR time)
