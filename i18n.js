@@ -34,6 +34,7 @@
     "auth.tabLogin": { en: "Log in", ru: "Войти" },
     "auth.tabSignup": { en: "Sign up", ru: "Регистрация" },
     "auth.username": { en: "Username", ru: "Имя пользователя" },
+    "auth.email": { en: "Email", ru: "Email" },
     "auth.password": { en: "Password", ru: "Пароль" },
     "auth.submitLogin": { en: "Log in", ru: "Войти" },
     "auth.submitSignup": { en: "Create account", ru: "Создать аккаунт" },
