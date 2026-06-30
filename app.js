@@ -6095,7 +6095,13 @@ function renderExerciseLog(ex, units) {
       if (suggestion.trend === "first" || !last) {
         body = t("wo.guideFirst", { range });
       } else if (extended) {
-        body = t("wo.guideExtend", { target: targetReps, range });
+        // Two different reasons reps go past the range:
+        //   • high RIR last time → you left reps in the tank: the fix is EFFORT
+        //   • good effort, but at your max load → genuinely extend reps
+        const avgRir = suggestion.last?.avgRir;
+        body = (avgRir != null && avgRir >= 3)
+          ? t("wo.guideEffort", { target: targetReps })
+          : t("wo.guideExtend", { target: targetReps, range });
       } else {
         body = t("wo.guideReturn", {
           range,
