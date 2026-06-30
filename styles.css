@@ -5835,3 +5835,126 @@ input:focus, select:focus, textarea:focus {
 
 /* Note: previously hid .user-chip on very small screens, but with the
    hamburger menu it now lives inside the dropdown and should always show. */
+
+/* ─── CrossFit WOD card ──────────────────────────────────────────────────
+   A metcon doesn't fit the sets×reps cards, so it gets its own block: a
+   bold format banner, the movement list, a short warm-up, and one score
+   field. Styled to read like a whiteboard "Workout of the Day". */
+.wod-warmup {
+  margin-bottom: 16px;
+}
+.wod-section-title {
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+.wod-warmup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wod-warmup-list li {
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.wod-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.wod-card::before {
+  /* accent rail down the left edge — whiteboard marker feel */
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+}
+.wod-banner {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(1.4rem, 1rem + 3vw, 2rem);
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  line-height: 1.05;
+}
+.wod-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 6px 0 16px;
+}
+.wod-ladder {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.wod-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wod-moves li {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  padding-left: 18px;
+  position: relative;
+}
+.wod-moves li::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.wod-emom .wod-slot {
+  display: inline-block;
+  min-width: 78px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.wod-score {
+  margin-top: 18px;
+}
+.wod-score-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.wod-score-input {
+  width: 100%;
+  max-width: 220px;
+  padding: 11px 14px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.wod-score-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}

@@ -4953,11 +4953,122 @@ function pickWarmupExercises(target, count) {
   return picked;
 }
 
+// ─── CROSSFIT / METCON ─────────────────────────────────────────────────────
+// CrossFit-style WODs: mixed-modal, time-based formats (AMRAP / RFT / EMOM /
+// For Time) instead of straight sets×reps. Movements are drawn as a classic
+// triplet — one weightlifting (loaded), one+ gymnastics (bodyweight), and an
+// optional monostructural cardio piece — filtered by the user's equipment
+// (bodyweight is always assumed). Reps scale with intensity (scaled → Rx).
+// v1 is score-logged: the renderer shows a WOD card + one result field; no
+// per-rep set machinery and no integrated clock (the athlete runs their own).
+const CROSSFIT_MOVES = [
+  // weightlifting — loaded power movements
+  { name: "Barbell Thruster",           modality: "weightlifting", equipment: ["barbell"],    lo: 8,  hi: 15, unit: "reps" },
+  { name: "Dumbbell Thruster",          modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 15, unit: "reps" },
+  { name: "Barbell Power Clean",        modality: "weightlifting", equipment: ["barbell"],    lo: 6,  hi: 12, unit: "reps" },
+  { name: "Dumbbell Clean",             modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 14, unit: "reps" },
+  { name: "Dumbbell Snatch",            modality: "weightlifting", equipment: ["dumbbells"],  lo: 8,  hi: 14, unit: "reps" },
+  { name: "Kettlebell Swing",           modality: "weightlifting", equipment: ["kettlebell"], lo: 12, hi: 21, unit: "reps" },
+  { name: "Kettlebell American Swing",  modality: "weightlifting", equipment: ["kettlebell"], lo: 12, hi: 20, unit: "reps" },
+  { name: "Kettlebell Clean and Press", modality: "weightlifting", equipment: ["kettlebell"], lo: 8,  hi: 14, unit: "reps" },
+  // gymnastics — bodyweight skill / power
+  { name: "Burpees",          modality: "gymnastics", equipment: ["bodyweight"], lo: 8,  hi: 15, unit: "reps" },
+  { name: "Burpee Pull-Ups",  modality: "gymnastics", equipment: ["bodyweight"], lo: 5,  hi: 12, unit: "reps", furniture: true },
+  { name: "Pull-Ups",         modality: "gymnastics", equipment: ["bodyweight"], lo: 5,  hi: 12, unit: "reps", furniture: true },
+  { name: "Push-Ups",         modality: "gymnastics", equipment: ["bodyweight"], lo: 10, hi: 20, unit: "reps" },
+  { name: "Box Jumps",        modality: "gymnastics", equipment: ["bodyweight"], lo: 10, hi: 18, unit: "reps", furniture: true },
+  { name: "Jump Squat",       modality: "gymnastics", equipment: ["bodyweight"], lo: 12, hi: 22, unit: "reps" },
+  { name: "Jumping Lunge",    modality: "gymnastics", equipment: ["bodyweight"], lo: 12, hi: 24, unit: "reps" },
+  { name: "Mountain Climbers",modality: "gymnastics", equipment: ["bodyweight"], lo: 20, hi: 40, unit: "reps" },
+  // cardio — monostructural
+  { name: "Rowing Machine", modality: "cardio", equipment: ["cardio_machine"], lo: 10, hi: 20, unit: "cal" },
+  { name: "Assault Bike",   modality: "cardio", equipment: ["cardio_machine"], lo: 8,  hi: 16, unit: "cal" },
+  { name: "SkiErg",         modality: "cardio", equipment: ["cardio_machine"], lo: 10, hi: 18, unit: "cal" },
+  { name: "Jump Rope",      modality: "cardio", equipment: ["bodyweight"],     lo: 30, hi: 60, unit: "reps" },
+  { name: "High Knees",     modality: "cardio", equipment: ["bodyweight"],     lo: 20, hi: 40, unit: "reps" },
+];
+
+const CROSSFIT_FORMATS = ["amrap", "rft", "emom", "for_time"];
+
+function _cfPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function _cfReps(move, intensity) {
+  const f = intensity === "easy" ? 0.2 : intensity === "hard" ? 1 : 0.6;
+  let n = Math.round(move.lo + (move.hi - move.lo) * f);
+  if (move.name === "Jump Rope") n = Math.round(n / 10) * 10; // tidy skips
+  return Math.max(move.unit === "cal" ? 6 : 5, n);
+}
+
+function generateCrossfitWorkout({ equipment, duration, intensity = "normal" }) {
+  const floorOnly = equipment.includes("floor_only");
+  // Bodyweight is always assumed for CrossFit — you always have your body.
+  const effEquip = floorOnly ? ["bodyweight"] : [...new Set([...equipment, "bodyweight"])];
+  const avail = CROSSFIT_MOVES.filter(m => {
+    if (floorOnly && m.furniture) return false;
+    return m.equipment.some(e => effEquip.includes(e));
+  });
+  const byMod = (mod) => avail.filter(m => m.modality === mod);
+  const weights = byMod("weightlifting"), gymn = byMod("gymnastics"), cardio = byMod("cardio");
+
+  // Triplet: 1 loaded (if available) + 1-2 gymnastics + optional cardio.
+  const chosen = [];
+  if (weights.length) chosen.push(_cfPick(weights));
+  if (gymn.length) {
+    const g = _cfPick(gymn);
+    chosen.push(g);
+    if (!weights.length && gymn.length > 1) {
+      let g2, guard = 0;
+      do { g2 = _cfPick(gymn); } while (g2.name === g.name && ++guard < 8);
+      if (g2.name !== g.name) chosen.push(g2);
+    }
+  }
+  if (cardio.length && chosen.length < 3 && Math.random() < 0.6) chosen.push(_cfPick(cardio));
+
+  const seen = new Set();
+  let movements = chosen.filter(m => !seen.has(m.name) && seen.add(m.name))
+    .map(m => ({ name: m.name, qty: _cfReps(m, intensity), unit: m.unit }));
+  if (movements.length < 2) return null; // not enough for a real metcon
+
+  const format = _cfPick(CROSSFIT_FORMATS);
+  const cap = Math.max(8, Math.min(35, Math.round(duration * 0.55))); // leave room for warm-up
+  const wod = { format, timeCapMin: cap, rounds: null, repScheme: null, movements, label: "" };
+
+  if (format === "amrap") {
+    wod.label = `AMRAP ${cap} MIN`;
+  } else if (format === "rft") {
+    wod.rounds = Math.max(3, Math.min(7, Math.round(cap / 3)));
+    wod.label = `${wod.rounds} ROUNDS FOR TIME`;
+  } else if (format === "emom") {
+    wod.timeCapMin = Math.max(8, Math.min(24, cap));
+    // EMOM alternates ≤2 movements minute-to-minute; trim reps to fit a minute.
+    wod.movements = movements.slice(0, 2).map(m => ({ ...m, qty: Math.max(5, Math.round(m.qty * 0.6)) }));
+    wod.label = `EMOM ${wod.timeCapMin} MIN`;
+  } else { // for_time — descending rep ladder applied across all movements
+    const ladder = intensity === "easy" ? [15, 12, 9] : intensity === "hard" ? [27, 21, 15] : [21, 15, 9];
+    wod.repScheme = ladder;
+    wod.movements = movements.slice(0, 3).map(m => ({ ...m, qty: null }));
+    wod.label = `FOR TIME · ${ladder.join("-")}`;
+  }
+
+  const warmups = pickWarmupExercises("full_body", 2).filter(w => !floorOnly || !requiresFurniture(w.name));
+  return {
+    id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: Date.now(),
+    inputs: { goal: "crossfit", equipment, target: "full_body", duration, intensity, style: "standard", deload: false, format },
+    wod,
+    exercises: warmups,
+  };
+}
+
 function generateWorkout({ goal, equipment, target, duration, intensity = "normal", style = "standard", deload = false, phaseSetMod = 0, phase = null, sport = null }) {
   // Legacy alias: old workouts saved style="intensity" before the rename
   // to style="tempo" — treat them as the same for any read paths that
   // re-enter here. New writes always use "tempo".
   if (style === "intensity") style = "tempo";
+
+  // CrossFit goal: time-based metcon, completely different shape from sets×reps.
+  if (goal === "crossfit") {
+    return generateCrossfitWorkout({ equipment, duration, intensity });
+  }
 
   // Cardio target gets a special handler: warm-up + one steady-state block
   // (or two for long durations) instead of 6 separate cardio "exercises".
@@ -5936,6 +6047,7 @@ function renderExerciseList(list, units) {
 function renderWorkout(workout, container, { showSave = true } = {}) {
   _groupCounter = 0; // reset per render so labels run A, B, C from scratch
   const { inputs, exercises } = workout;
+  const isWod = !!workout.wod; // CrossFit metcon — rendered as a WOD card, not sets×reps
   const dateStr = new Date(workout.createdAt).toLocaleString();
   const units = session ? getPrefs(session.username).units : "kg";
 
@@ -5947,7 +6059,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
       : null;
   const tags = [
     GOAL_LABELS[inputs.goal],
-    TARGET_LABELS[inputs.target],
+    isWod ? null : TARGET_LABELS[inputs.target], // WODs are full-body; target is implied
     `${inputs.duration} min`,
     intensityTag,
   ].filter(Boolean).map(tg => `<span class="tag">${tg}</span>`).join("");
@@ -5957,7 +6069,9 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   // We pass the full exercise list — the renderer's annotateSections walks
   // the whole array to correctly identify which mobility moves are warmup
   // vs cooldown by their position relative to the last main work block.
-  const exercisesHtml = `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
+  const exercisesHtml = isWod
+    ? renderWodCard(workout)
+    : `<div class="exercise-list">${renderExerciseList(exercises, units)}</div>`;
 
   const intensityFlag = (inputs.style === "tempo" || inputs.style === "intensity")
     ? `<span class="intensity-flag">Tempo Mode</span>` : "";
@@ -5970,7 +6084,7 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
   // requested duration. Show the actual estimate alongside the requested
   // duration AND a banner with specific advice if we're >25% short.
   let durationNotice = "";
-  if (inputs.duration && workout.exercises?.length) {
+  if (!isWod && inputs.duration && workout.exercises?.length) {
     const estMin = Math.round(estimateWorkoutSeconds(workout.exercises) / 60);
     const reqMin = inputs.duration;
     const shortPct = (reqMin - estMin) / reqMin;
@@ -5995,12 +6109,14 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     ${durationNotice}
     <div class="workout-header">
       <div>
-        <div class="workout-title">${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}</div>
+        <div class="workout-title">${isWod
+          ? `CrossFit · ${wodFormatShort(workout.wod.format)}`
+          : `${TARGET_LABELS[inputs.target]} · ${GOAL_LABELS[inputs.goal]}`}</div>
         <div class="workout-meta">${tags} ${intensityFlag} ${deloadFlag}</div>
         <div class="workout-date">${dateStr}</div>
       </div>
       <div class="workout-actions">
-        <button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>
+        ${isWod ? "" : `<button class="primary-btn" id="startWorkoutBtn">▶ ${t("wo.startWorkout")}</button>`}
         ${showSave ? `<button class="secondary-btn" id="saveBtn">${t("settings.save")}</button>` : ""}
         <button class="secondary-btn" id="saveTemplateBtn" title="${t("templates.saveTooltip")}">⭐ ${t("templates.save")}</button>
         <button class="secondary-btn" id="shareBtn">🔗 ${t("wo.share")}</button>
@@ -6015,6 +6131,62 @@ function renderWorkout(workout, container, { showSave = true } = {}) {
     </div>
     ${notesHtml}
     ${exercisesHtml}
+  `;
+}
+
+// Short, display-friendly format name for the WOD card title.
+function wodFormatShort(format) {
+  return { amrap: "AMRAP", rft: "Rounds For Time", emom: "EMOM", for_time: "For Time" }[format] || "WOD";
+}
+
+// Render a CrossFit WOD as a single card: format banner + movement list +
+// a brief warm-up + one score field. No per-set logging (lean v1).
+function renderWodCard(workout) {
+  const wod = workout.wod;
+  const fmtMove = (m) => {
+    if (m.qty == null) return escapeAttr(m.name);                 // reps come from a ladder
+    if (m.unit === "cal") return `${m.qty} cal ${escapeAttr(m.name)}`;
+    return `${m.qty} ${escapeAttr(m.name)}`;
+  };
+
+  let body;
+  if (wod.format === "for_time") {
+    body = `<div class="wod-ladder">${wod.repScheme.join("–")} reps, for time:</div>
+      <ul class="wod-moves">${wod.movements.map(m => `<li>${escapeAttr(m.name)}${m.unit === "cal" ? " (cal)" : ""}</li>`).join("")}</ul>`;
+  } else if (wod.format === "emom") {
+    const slot = (i) => wod.movements.length > 1 ? (i === 0 ? t("wod.oddMin") : t("wod.evenMin")) : t("wod.eachMin");
+    body = `<ul class="wod-moves wod-emom">${wod.movements.map((m, i) => `<li><span class="wod-slot">${slot(i)}</span> ${fmtMove(m)}</li>`).join("")}</ul>`;
+  } else {
+    body = `<ul class="wod-moves">${wod.movements.map(m => `<li>${fmtMove(m)}</li>`).join("")}</ul>`;
+  }
+
+  const sub = wod.format === "amrap" ? t("wod.amrapSub")
+    : wod.format === "rft" ? t("wod.rftSub", { cap: wod.timeCapMin })
+    : wod.format === "emom" ? t("wod.emomSub")
+    : t("wod.forTimeSub", { cap: wod.timeCapMin });
+
+  const isTimeScore = wod.format === "rft" || wod.format === "for_time";
+  const scoreLabel = isTimeScore ? t("wod.scoreTime") : t("wod.scoreRounds");
+  const scorePh = isTimeScore ? "mm:ss" : (t("wod.scoreRoundsPlaceholder") || "e.g. 5 + 12");
+
+  const warm = (workout.exercises || []).length
+    ? `<div class="wod-warmup">
+         <h3 class="label-caps wod-section-title">${t("wod.warmup")}</h3>
+         <ul class="wod-warmup-list">${workout.exercises.map(w => `<li>${escapeAttr(w.name)}</li>`).join("")}</ul>
+       </div>`
+    : "";
+
+  return `
+    ${warm}
+    <div class="wod-card">
+      <div class="wod-banner">${escapeAttr(wod.label)}</div>
+      <div class="wod-sub">${sub}</div>
+      ${body}
+    </div>
+    <div class="wod-score">
+      <label class="wod-score-label" for="wodScore">${scoreLabel}</label>
+      <input type="text" id="wodScore" class="wod-score-input" placeholder="${escapeAttr(scorePh)}" value="${escapeAttr(wod.score || "")}" />
+    </div>
   `;
 }
 
@@ -6035,6 +6207,9 @@ el.generateBtn.addEventListener("click", () => {
   // (recovery/mobility) pass through unchanged.
   if (goal === "standard") goal = "hypertrophy";
   if (!goal) return el.formError.textContent = "Pick a goal.";
+  // CrossFit WODs are full-body by nature — force the target so the picker
+  // ignores it and the target requirement below is satisfied automatically.
+  if (goal === "crossfit") target = "full_body";
   if (!equipment.length) return el.formError.textContent = "Pick at least one equipment option.";
   if (!target) return el.formError.textContent = "Pick a target.";
   if (!duration) return el.formError.textContent = "Pick a duration.";
@@ -6157,6 +6332,13 @@ function attachWorkoutActions() {
   const exitEditLogsBtn = document.getElementById("exitEditLogsBtn");
   if (startBtn) {
     startBtn.addEventListener("click", () => startGuidedMode());
+  }
+  // CrossFit WOD score field — persist into the workout so Save/History keep it.
+  const wodScoreInput = document.getElementById("wodScore");
+  if (wodScoreInput && currentWorkout?.wod) {
+    wodScoreInput.addEventListener("input", () => {
+      currentWorkout.wod.score = wodScoreInput.value.slice(0, 40);
+    });
   }
   if (editLogsBtn) {
     editLogsBtn.addEventListener("click", () => {

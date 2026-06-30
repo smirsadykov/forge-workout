@@ -154,6 +154,22 @@
       en: "Active recovery day. Light compound + isolation work for blood flow, no ballistic or conditioning. Helps clear DOMS without adding fatigue.",
       ru: "Активное восстановление. Лёгкие базовые + изолированные упражнения для кровотока, без баллистики и кардио. Помогает снять крепатуру, не накапливая усталость.",
     },
+    "gen.hint.crossfit": {
+      en: "A mixed-modal WOD against the clock — AMRAP, EMOM, Rounds For Time, or a rep ladder. Picks a format for you. Target is full-body; intensity sets scaled vs Rx loads.",
+      ru: "Смешанный WOD на время — AMRAP, EMOM, раунды на время или лестница повторов. Формат подбирается автоматически. Цель — всё тело; интенсивность задаёт облегчённый или Rx-вес.",
+    },
+    // CrossFit WOD card strings
+    "wod.warmup": { en: "Warm-up", ru: "Разминка" },
+    "wod.amrapSub": { en: "As many rounds + reps as possible", ru: "Максимум раундов и повторов" },
+    "wod.rftSub": { en: "For time · {cap} min cap", ru: "На время · лимит {cap} мин" },
+    "wod.emomSub": { en: "Every minute, on the minute", ru: "Каждую минуту, в начале минуты" },
+    "wod.forTimeSub": { en: "For time · {cap} min cap", ru: "На время · лимит {cap} мин" },
+    "wod.oddMin": { en: "Odd min", ru: "Нечёт. мин" },
+    "wod.evenMin": { en: "Even min", ru: "Чёт. мин" },
+    "wod.eachMin": { en: "Each min", ru: "Кажд. мин" },
+    "wod.scoreRounds": { en: "Your score (rounds + reps)", ru: "Результат (раунды + повторы)" },
+    "wod.scoreTime": { en: "Your time", ru: "Твоё время" },
+    "wod.scoreRoundsPlaceholder": { en: "e.g. 5 + 12", ru: "напр. 5 + 12" },
     // Equipment hints — show context based on what's selected
     "eq.hint.empty": {
       en: "Pick everything you have access to. Multi-select — the generator can mix implements within a session.",
@@ -175,6 +191,7 @@
     "goal.endurance": { en: "Endurance", ru: "Выносливость" },
     "goal.mobility": { en: "Mobility & Stretch", ru: "Мобильность и растяжка" },
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
+    "goal.crossfit": { en: "CrossFit", ru: "Кроссфит" },
     "goal.kb_sport": { en: "KB Sport", ru: "Гиревой спорт" },
     "goal.sport_prep": { en: "Sport Prep", ru: "Подготовка к спорту" },
     "goal.animal_flow": { en: "Animal Flow", ru: "Animal Flow" },
