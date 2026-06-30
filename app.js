@@ -6111,7 +6111,16 @@ function renderExerciseLog(ex, units) {
              : t("wo.pushReps"),
         });
       }
-      guidanceHtml = `<p class="log-guidance">${body}</p>`;
+      // Stimulus-change tip: once you're capped on load AND pushing reps to the
+      // top of the double-progression scheme (≥ range + 5), endless rep-chasing
+      // drifts toward endurance. Nudge toward a fresh stimulus instead.
+      const atMaxLoad = usesWeight && (() => {
+        const w = next?.weightKg || 0;
+        return w > 0 && nextRealisticWeight(w, ex.name, session.username) <= w;
+      })();
+      const tip = (extended && atMaxLoad && targetReps >= ghi + 5)
+        ? `<p class="log-stimulus-tip">${t("wo.stimulusTip")}</p>` : "";
+      guidanceHtml = `<p class="log-guidance">${body}</p>${tip}`;
     }
   }
 

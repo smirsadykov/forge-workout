@@ -4905,6 +4905,18 @@ input:focus, select:focus, textarea:focus {
   color: var(--accent);
   font-weight: 700;
 }
+/* Stimulus-change coaching tip — shown only when capped on load + reps. */
+.log-stimulus-tip {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--info-bright, #60a5fa);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
 
 .set-list {
   display: flex;
