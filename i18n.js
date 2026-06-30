@@ -154,18 +154,6 @@
       en: "Active recovery day. Light compound + isolation work for blood flow, no ballistic or conditioning. Helps clear DOMS without adding fatigue.",
       ru: "Активное восстановление. Лёгкие базовые + изолированные упражнения для кровотока, без баллистики и кардио. Помогает снять крепатуру, не накапливая усталость.",
     },
-    "gen.hint.animal_flow": {
-      en: "Bodyweight ground-based locomotion. Activations (Beast/Crab/Ape holds) → Reaches → Travels → Flow sequences. Mike Fitch curriculum, scales by intensity.",
-      ru: "Наземные передвижения со своим весом. Активация (Beast/Crab/Ape) → растяжки → передвижения → потоки. Программа Майка Фитча, шкалируется интенсивностью.",
-    },
-    "gen.hint.kb_sport": {
-      en: "Girevoy sport (KB Sport) — 1-3 continuous time blocks of Jerk, Long Cycle, or Snatch at a target pace. Technical — start with a lighter bell than your max.",
-      ru: "Гиревой спорт — 1-3 непрерывных временных блока Толчка, Рывка или Длинного Цикла на заданном темпе. Технично — начинай с гири легче максимальной.",
-    },
-    "gen.hint.sport_prep": {
-      en: "Sport-specific prep + prehab. Pick a sport above — workout pulls drills + injury-prevention work tailored to that sport's load patterns.",
-      ru: "Подготовка под конкретный вид спорта + профилактика травм. Выбери вид спорта выше — тренировка возьмёт упражнения под него.",
-    },
     // Equipment hints — show context based on what's selected
     "eq.hint.empty": {
       en: "Pick everything you have access to. Multi-select — the generator can mix implements within a session.",
@@ -185,7 +173,7 @@
     "goal.hypertrophy": { en: "Standard", ru: "Стандарт" },
     "goal.fat_loss": { en: "Fat Loss", ru: "Сжигание жира" },
     "goal.endurance": { en: "Endurance", ru: "Выносливость" },
-    "goal.mobility": { en: "Mobility", ru: "Мобильность" },
+    "goal.mobility": { en: "Mobility & Stretch", ru: "Мобильность и растяжка" },
     "goal.recovery": { en: "Recovery", ru: "Восстановление" },
     "goal.kb_sport": { en: "KB Sport", ru: "Гиревой спорт" },
     "goal.sport_prep": { en: "Sport Prep", ru: "Подготовка к спорту" },
@@ -252,20 +240,6 @@
     "advice.strengthCue": { en: "push to RIR 0–1", ru: "до RIR 0–1" },
     "advice.enduranceCue": { en: "light load, no failure", ru: "лёгкий вес, без отказа" },
     "advice.fatLossCue": { en: "superset with cardio", ru: "суперсет с кардио" },
-    "gen.sport": { en: "Sport", ru: "Вид спорта" },
-    "sport.running": { en: "Running", ru: "Бег" },
-    "sport.cycling": { en: "Cycling", ru: "Велоспорт" },
-    "sport.swimming": { en: "Swimming", ru: "Плавание" },
-    "sport.racket": { en: "Tennis / Padel", ru: "Теннис / Падел" },
-    "sport.climbing": { en: "Climbing", ru: "Скалолазание" },
-    "sport.pickFirst": { en: "Pick a sport first", ru: "Сначала выбери вид спорта" },
-    "kbsport.pace": { en: "pace {lo}-{hi}/min", ru: "темп {lo}-{hi}/мин" },
-    "kbsport.warmup": { en: "Warm-up", ru: "Разминка" },
-    "kbsport.mainSet": { en: "Main set", ru: "Основной сет" },
-    "kbsport.cooldown": { en: "Cool-down", ru: "Заминка" },
-    "kbsport.continuous": { en: "continuous — don't set the bell down", ru: "непрерывно — не ставь гирю" },
-    "kbsport.needKb": { en: "KB Sport needs a kettlebell. Add kettlebell to Equipment.", ru: "Гиревому спорту нужна гиря. Добавь гирю в Инвентарь." },
-    "kbsport.needIntermediate": { en: "KB Sport lifts (Jerk, Long Cycle, Snatch) are technical. Pick Intermediate or Advanced; start with a lighter bell.", ru: "Толчок, длинный цикл и рывок — техничные движения. Выбери Средний или Продвинутый; начни с лёгкой гири." },
     "gen.nothingFits": { en: "Couldn't build a workout that fits these filters. Try a different goal or add more equipment.", ru: "Не получилось собрать тренировку под эти фильтры. Попробуй другую цель или добавь инвентарь." },
 
     // Program mode

@@ -360,14 +360,6 @@
       }
       assert(dups.length === 0, `dups: ${dups.join(", ")}`);
     });
-    test("SPORT_EXERCISES references all resolve", () => {
-      const names = new Set(EXERCISES.map(e => e.name));
-      const orphans = [];
-      for (const [sport, list] of Object.entries(SPORT_EXERCISES || {})) {
-        for (const n of list) if (!names.has(n)) orphans.push(`${sport}:${n}`);
-      }
-      assert(orphans.length === 0, `orphans: ${orphans.join(", ")}`);
-    });
   });
 
   // ─── GENERATOR SWEEP ─────────────────────────────────────────────────
