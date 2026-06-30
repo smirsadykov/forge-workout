@@ -420,6 +420,16 @@
       en: "List what you own. Progression uses these — if next size up is too big a jump, it'll suggest pushing reps further first.",
       ru: "Перечисли свои гири. Алгоритм учитывает реальные шаги — если до следующего веса слишком далеко, сначала добавит повторов.",
     },
+    "settings.availableDB": { en: "Available dumbbells (comma-separated, in {unit})", ru: "Какие гантели есть (через запятую, в {unit})" },
+    "settings.availableDBHelp": {
+      en: "List what you own. Progression jumps to the next pair you actually have — if it's a big jump, it suggests pushing reps further first.",
+      ru: "Перечисли свои гантели. Алгоритм прыгает к следующей паре, что у тебя есть — если шаг большой, сначала добавит повторов.",
+    },
+    "settings.maxBarbell": { en: "Heaviest barbell lift you can load", ru: "Самый тяжёлый вес штанги, который можешь собрать" },
+    "settings.maxBarbellHelp": {
+      en: "Optional — total bar weight. Sharpens starting-weight estimates and caps progression so it never suggests more than you can plate.",
+      ru: "Необязательно — полный вес штанги. Уточняет стартовый вес и ограничивает прогрессию весом, который реально собрать.",
+    },
     "settings.save": { en: "Save", ru: "Сохранить" },
     "settings.saved": { en: "Saved ✓", ru: "Сохранено ✓" },
     "settings.cloudSync": { en: "Cloud sync", ru: "Синхронизация" },

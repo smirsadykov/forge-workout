@@ -1741,7 +1741,12 @@ function getStartingWeight(exerciseName, userId, goal) {
   let maxKg = 0;
   if (ex.equipment.includes("kettlebell")) maxKg = Math.max(maxKg, loads.maxKettlebellKg || 0);
   if (ex.equipment.includes("dumbbells")) maxKg = Math.max(maxKg, loads.maxDumbbellKg || 0);
-  if (ex.equipment.includes("barbell") && loads.hasHeavyBarbell) maxKg = Math.max(maxKg, 60);
+  if (ex.equipment.includes("barbell")) {
+    // Use the user's real working barbell max if they set one; otherwise fall
+    // back to a conservative 60 kg when they've just ticked "heavy barbell".
+    const bbMax = loads.maxBarbellKg || (loads.hasHeavyBarbell ? 60 : 0);
+    if (bbMax > 0) maxKg = Math.max(maxKg, bbMax);
+  }
   if (maxKg <= 0) return 0;
 
   // Base percentage by goal — conservative on first session, user can adjust.
@@ -1793,6 +1798,17 @@ function snapToEquipmentStep(kg, ex, userId, roundDown) {
     return Math.max(4, Math.floor(kg / 4) * 4);
   }
   if (ex.equipment.includes("dumbbells")) {
+    const loads = getLoads(userId);
+    const inv = loads.availableDumbbellsKg;
+    if (Array.isArray(inv) && inv.length > 0) {
+      const sorted = [...inv].sort((a, b) => a - b);
+      let best = sorted[0];
+      for (const w of sorted) {
+        if (roundDown ? w <= kg : w >= kg) { best = w; if (!roundDown) break; }
+        else if (!roundDown) break;
+      }
+      return best;
+    }
     return Math.max(2, (roundDown ? Math.floor : Math.round)(kg / 2) * 2);
   }
   if (ex.equipment.includes("barbell")) {
@@ -1806,7 +1822,9 @@ function nextRealisticWeight(currentKg, exerciseName, userId) {
   const eqs = ex?.equipment || [];
   const loads = userId ? getLoads(userId) : {};
 
-  // Honor user's actual kettlebell inventory if set
+  // Honor the user's actual inventory if set — KB and DB both come in fixed
+  // sizes, so jump to the next bell/bell-pair they actually own, not an
+  // arbitrary +step that lands on a weight they can't load.
   if (eqs.includes("kettlebell") && userId) {
     const inventory = loads.availableKettlebellsKg;
     if (Array.isArray(inventory) && inventory.length > 0) {
@@ -1815,6 +1833,14 @@ function nextRealisticWeight(currentKg, exerciseName, userId) {
       if (next) return next;
       // Already at max — return the same so caller sees no jump available
       return currentKg;
+    }
+  }
+  if (eqs.includes("dumbbells") && userId) {
+    const inventory = loads.availableDumbbellsKg;
+    if (Array.isArray(inventory) && inventory.length > 0) {
+      const sorted = [...inventory].sort((a, b) => a - b);
+      const next = sorted.find(w => w > currentKg);
+      return next || currentKg; // next owned, or stay put at max owned
     }
   }
 
@@ -1836,6 +1862,9 @@ function nextRealisticWeight(currentKg, exerciseName, userId) {
   } else if (eqs.includes("dumbbells")) {
     const maxDb = loads.maxDumbbellKg || 0;
     if (maxDb > 0 && stepped > maxDb) return currentKg;
+  } else if (eqs.includes("barbell")) {
+    const maxBb = loads.maxBarbellKg || 0;
+    if (maxBb > 0 && stepped > maxBb) return currentKg;
   }
   return stepped;
 }
@@ -7126,24 +7155,26 @@ function renderSettings() {
   const loads = getLoads(session.username);
 
   document.querySelectorAll("[data-unit-label]").forEach(s => s.textContent = units);
-  // Available KB label has a nested unit span — re-render it with i18n + unit.
+  // Inventory labels have a nested unit span — re-render with i18n + unit.
   const kbLabel = document.getElementById("availableKBLabel");
   if (kbLabel) kbLabel.textContent = t("settings.availableKB", { unit: units });
+  const dbLabel = document.getElementById("availableDBLabel");
+  if (dbLabel) dbLabel.textContent = t("settings.availableDB", { unit: units });
 
   const dbInput = document.getElementById("maxDumbbell");
   const kbInput = document.getElementById("maxKettlebell");
   const bbCheck = document.getElementById("hasHeavyBarbell");
+  const bbInput = document.getElementById("maxBarbell");
 
   dbInput.value = loads.maxDumbbellKg ? toDisplay(loads.maxDumbbellKg, units) : "";
   kbInput.value = loads.maxKettlebellKg ? toDisplay(loads.maxKettlebellKg, units) : "";
   bbCheck.checked = !!loads.hasHeavyBarbell;
+  if (bbInput) bbInput.value = loads.maxBarbellKg ? toDisplay(loads.maxBarbellKg, units) : "";
+  const fmtInv = (arr) => Array.isArray(arr) ? arr.map(w => toDisplay(w, units)).join(", ") : "";
   const kbList = document.getElementById("availableKettlebells");
-  if (kbList) {
-    const arr = loads.availableKettlebellsKg;
-    kbList.value = Array.isArray(arr)
-      ? arr.map(w => toDisplay(w, units)).join(", ")
-      : "";
-  }
+  if (kbList) kbList.value = fmtInv(loads.availableKettlebellsKg);
+  const dbList = document.getElementById("availableDumbbells");
+  if (dbList) dbList.value = fmtInv(loads.availableDumbbellsKg);
 
   renderSettingsSoreness();
   renderVolumeTargets();
@@ -7681,18 +7712,25 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const units = getPrefs(session.username).units;
   const dbVal = Number(document.getElementById("maxDumbbell").value) || 0;
   const kbVal = Number(document.getElementById("maxKettlebell").value) || 0;
-  // Parse comma-separated KB list into kg numbers
-  const kbListRaw = document.getElementById("availableKettlebells").value;
-  const kbInventory = kbListRaw
+  const bbVal = Number(document.getElementById("maxBarbell")?.value) || 0;
+  // Parse a comma/space-separated weight list into kg numbers.
+  const parseInv = (id) => (document.getElementById(id)?.value || "")
     .split(/[,;\s]+/)
     .map(s => Number(s))
     .filter(n => n > 0)
     .map(n => fromDisplay(n, units));
+  const kbInventory = parseInv("availableKettlebells");
+  const dbInventory = parseInv("availableDumbbells");
+  // If an inventory is given, derive the max from it so the cap + adequacy
+  // checks (which read maxDumbbellKg) stay consistent with what's owned.
+  const maxDumbbellKg = dbInventory.length ? Math.max(...dbInventory) : (dbVal ? fromDisplay(dbVal, units) : 0);
   setLoads(session.username, {
-    maxDumbbellKg: dbVal ? fromDisplay(dbVal, units) : 0,
+    maxDumbbellKg,
     maxKettlebellKg: kbVal ? fromDisplay(kbVal, units) : 0,
     hasHeavyBarbell: document.getElementById("hasHeavyBarbell").checked,
+    maxBarbellKg: bbVal ? fromDisplay(bbVal, units) : 0,
     availableKettlebellsKg: kbInventory.length > 0 ? kbInventory : undefined,
+    availableDumbbellsKg: dbInventory.length > 0 ? dbInventory : undefined,
   });
   const saved = document.getElementById("settingsSaved");
   saved.classList.remove("hidden");

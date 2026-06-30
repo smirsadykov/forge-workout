@@ -464,6 +464,23 @@
             </label>
 
             <label class="settings-field">
+              <span data-i18n="settings.maxBarbell">Heaviest barbell lift you can load</span>
+              <div class="settings-input">
+                <input type="number" id="maxBarbell" min="0" step="2.5" placeholder="0" />
+                <span class="settings-unit" data-unit-label>kg</span>
+              </div>
+              <small style="color:var(--text-dim);font-size:12px;margin-top:4px;" data-i18n="settings.maxBarbellHelp">Optional — total bar weight. Sharpens starting-weight estimates and caps progression so it never suggests more than you can plate.</small>
+            </label>
+
+            <label class="settings-field">
+              <span id="availableDBLabel">Available dumbbells (comma-separated, in <span data-unit-label>kg</span>)</span>
+              <div class="settings-input">
+                <input type="text" id="availableDumbbells" placeholder="5, 10, 15, 20, 25" />
+              </div>
+              <small style="color:var(--text-dim);font-size:12px;margin-top:4px;" data-i18n="settings.availableDBHelp">List what you own. Progression jumps to the next pair you actually have — if it's a big jump, it suggests pushing reps further first.</small>
+            </label>
+
+            <label class="settings-field">
               <span id="availableKBLabel">Available kettlebells (comma-separated, in <span data-unit-label>kg</span>)</span>
               <div class="settings-input">
                 <input type="text" id="availableKettlebells" placeholder="10, 12, 16, 24, 32" />

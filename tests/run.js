@@ -183,6 +183,30 @@
       if (!ex) return;
       eq(nextRealisticWeight(18, ex.name, "__test__"), 18, "shouldn't suggest above maxDumbbellKg");
     });
+    const dbEx = () => EXERCISES.find(e => e.equipment.includes("dumbbells") && !e.equipment.includes("kettlebell"));
+    test("DB inventory: gappy set → jumps to next pair owned", () => {
+      const all = load(STORAGE_KEYS.loads, {});
+      all["__test__"] = { ...(all["__test__"] || {}), availableDumbbellsKg: [8, 12, 18, 22.5, 30], maxDumbbellKg: 30 };
+      save(STORAGE_KEYS.loads, all);
+      const ex = dbEx(); if (!ex) return;
+      eq(nextRealisticWeight(18, ex.name, "__test__"), 22.5, "skips 20 (not owned) → 22.5");
+    });
+    test("DB inventory: at top owned → stays put", () => {
+      const ex = dbEx(); if (!ex) return;
+      eq(nextRealisticWeight(30, ex.name, "__test__"), 30, "nothing above 30 owned");
+      const all = load(STORAGE_KEYS.loads, {});
+      all["__test__"] = { ...(all["__test__"] || {}), availableDumbbellsKg: null }; // reset for later tests
+      save(STORAGE_KEYS.loads, all);
+    });
+    test("Barbell max → cap respected", () => {
+      const all = load(STORAGE_KEYS.loads, {});
+      all["__test__"] = { ...(all["__test__"] || {}), maxBarbellKg: 100 };
+      save(STORAGE_KEYS.loads, all);
+      const ex = EXERCISES.find(e => e.equipment.includes("barbell") && !e.equipment.includes("dumbbells") && !e.equipment.includes("kettlebell"));
+      if (!ex) return;
+      eq(nextRealisticWeight(95, ex.name, "__test__"), 100, "steps up to 100 (within max)");
+      eq(nextRealisticWeight(100, ex.name, "__test__"), 100, "shouldn't suggest above maxBarbellKg");
+    });
   });
 
   suite("Pattern balance (cross-session load distribution)", () => {
