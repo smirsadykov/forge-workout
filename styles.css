@@ -4893,6 +4893,19 @@ input:focus, select:focus, textarea:focus {
   margin-top: 4px;
 }
 
+/* "What to do" line — reconciles the prescribed rep range with the pre-filled
+   numbers so they read as one instruction, not two competing targets. */
+.log-guidance {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  margin: 2px 0 12px;
+}
+.log-guidance strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .set-list {
   display: flex;
   flex-direction: column;

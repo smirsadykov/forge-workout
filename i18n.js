@@ -540,6 +540,10 @@
     "wo.recoveryLight": { en: "go light today", ru: "сегодня — легко" },
     "wo.firstTime": { en: "First time", ru: "Первый раз" },
     "wo.firstSessionNote": { en: "start here, adjust after set 1", ru: "начни отсюда, скорректируй после 1-го подхода" },
+    // One-line "what to do" that reconciles the prescribed rep range with the
+    // pre-filled personalized numbers, so they don't read as competing.
+    "wo.guideFirst": { en: "Aim for <strong>{range} reps</strong>. The boxes are your starting point — adjust after set 1.", ru: "Цель: <strong>{range} повт.</strong> В полях — стартовые цифры; скорректируй после 1-го подхода." },
+    "wo.guideReturn": { en: "Aim for <strong>{range} reps</strong>. The boxes are last session's numbers — {dir}.", ru: "Цель: <strong>{range} повт.</strong> В полях — цифры прошлой сессии; {dir}." },
     "wo.shortfall": { en: "Estimated ~{est} min — you asked for {req}. The pool of exercises matching these filters is small.", ru: "Примерно ~{est} мин — ты запросил {req}. Под эти фильтры подходит мало упражнений." },
     "wo.shortfallTips": { en: "To get the full duration: raise difficulty (more exercises available), pick a broader target (Upper / Full Body), or add Bodyweight to Equipment.", ru: "Чтобы получить полную длительность: подними уровень (откроются новые упражнения), выбери более широкую зону (Верх тела / Всё тело) или добавь «Свой вес» в Инвентарь." },
     "banner.more": { en: "more reasons", ru: "ещё причины" },

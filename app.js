@@ -5914,10 +5914,9 @@ function renderExerciseLog(ex, units) {
     } else {
       startSummary = usesWeight ? `${w} × ${next.reps}` : `${next.reps} reps`;
     }
-    const noteHtml = suggestion.note
-      ? `<span class="progress-note">${t("wo.firstSessionNote") || suggestion.note}</span>` : "";
-    pill = `<span class="last-pill first">${t("wo.firstTime")} · ${startSummary}</span>
-            ${noteHtml}`;
+    // "start here, adjust after set 1" used to live here; the guidance line
+    // below the sets now carries that instruction, so the pill stays factual.
+    pill = `<span class="last-pill first">${t("wo.firstTime")} · ${startSummary}</span>`;
   } else if (last) {
     let summary;
     const allSets = last.allSets || [];
@@ -6050,6 +6049,27 @@ function renderExerciseLog(ex, units) {
   // it's how RIR is actually used. On save it's applied to all rep-based sets
   // so the progression algorithm still sees per-set values. Hidden for
   // time-based work (no rep-scale proximity to failure).
+  // One clear "what to do" line: ties the prescribed rep range to the
+  // pre-filled personalized numbers so they don't look like competing targets.
+  // (The "3 × 8–12" on the card is the framework; the boxes are where to start.)
+  let guidanceHtml = "";
+  if (!isTimeBased) {
+    const [glo, ghi] = parseRepRange(ex.reps);
+    if (glo > 0) {
+      const range = glo === ghi ? `${glo}` : `${glo}–${ghi}`;
+      const body = (suggestion.trend === "first" || !last)
+        ? t("wo.guideFirst", { range })
+        : t("wo.guideReturn", {
+            range,
+            dir: suggestion.trend === "up" ? t("wo.progress")
+               : suggestion.trend === "down" ? t("wo.deload")
+               : suggestion.trend === "recovery" ? t("wo.recoveryLight")
+               : t("wo.pushReps"),
+          });
+      guidanceHtml = `<p class="log-guidance">${body}</p>`;
+    }
+  }
+
   const loggedRirs = (justLogged?.sets || []).map(s => s.rir).filter(v => v != null);
   const restoredExRir = loggedRirs.length ? loggedRirs[loggedRirs.length - 1] : null;
   const rirOnce = isTimeBased ? "" : `
@@ -6067,6 +6087,7 @@ function renderExerciseLog(ex, units) {
       <div class="exercise-log-head">
         ${pill || `<span class="last-pill empty">No log yet</span>`}
       </div>
+      ${guidanceHtml}
       <div class="set-list">${setRows}</div>
       ${rirOnce}
       <div class="log-form">
