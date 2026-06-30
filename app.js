@@ -4026,7 +4026,7 @@ el.logoutBtn.addEventListener("click", async () => {
 // selection) plus a `floorOnly` flag, and we DERIVE `equipment` from those.
 // Bodyweight is always implied, so it's never a chip. This keeps every
 // downstream consumer (generator, load warnings, summary) reading `equipment`.
-const formState = { goal: "standard", equipment: [], equipmentHave: [], floorOnly: false, target: null, duration: null, intensity: "normal", style: "standard", deload: false };
+const formState = { goal: "standard", equipment: [], equipmentHave: [], floorOnly: true, target: null, duration: null, intensity: "normal", style: "standard", deload: false };
 
 // The physical add-on equipment a user can own, in display order. Bodyweight
 // is intentionally absent — it's the universal baseline, always available.
@@ -4078,7 +4078,9 @@ function restoreEquipment() {
   } else {
     formState.equipmentHave = [];
   }
-  formState.floorOnly = !!(saved && saved.floorOnly);
+  // New users default to floor-only ON (the most universal baseline — works
+  // anywhere). Returning users keep whatever they saved.
+  formState.floorOnly = saved ? !!saved.floorOnly : true;
   recomputeEquipment();
   document.querySelectorAll('.chip-row[data-field="equipmentHave"] .chip').forEach((c) => {
     const has = formState.equipmentHave.includes(c.dataset.value);
@@ -4089,15 +4091,14 @@ function restoreEquipment() {
   if (ft) ft.checked = formState.floorOnly;
   syncFloorOnlyUI();
 }
-// When floor-only is on, the gear chips are moot — dim + disable the row.
-// Real `disabled` (not just pointer-events) so AT drops them from tab order
-// and announces them as unavailable, matching the visual lock.
+// Floor-only and gear are softly mutually exclusive: the chips stay tappable
+// even while floor-only is on, because tapping one is exactly how the user
+// exits floor-only mode. So we keep the row enabled (no hard lock).
 function syncFloorOnlyUI() {
   const row = document.querySelector('.chip-row[data-field="equipmentHave"]');
   if (!row) return;
-  const locked = !!formState.floorOnly;
-  row.classList.toggle("disabled", locked);
-  row.querySelectorAll(".chip").forEach((c) => { c.disabled = locked; });
+  row.classList.remove("disabled");
+  row.querySelectorAll(".chip").forEach((c) => { c.disabled = false; });
 }
 
 // Seed the derived have-list at boot so the form is valid before any
@@ -4168,6 +4169,14 @@ document.querySelectorAll(".chip-row").forEach(row => {
         if (field === "equipmentHave") {
           const has = formState.equipmentHave.includes(value);
           chip.setAttribute("aria-pressed", String(has));
+          // Selecting real gear means you're no longer floor-only — exit it so
+          // the chosen equipment actually gets used.
+          if (has && formState.floorOnly) {
+            formState.floorOnly = false;
+            const ft = document.getElementById("floorOnlyToggle");
+            if (ft) ft.checked = false;
+            syncFloorOnlyUI();
+          }
           announceEquip(t(has ? "eq.a11y.added" : "eq.a11y.removed", { item: chip.textContent.trim() }));
           recomputeEquipment();
           persistEquipment();
@@ -4199,6 +4208,15 @@ document.querySelectorAll(".chip-row").forEach(row => {
 // the row. Replaces the old mutually-exclusive "Floor only" chip.
 document.getElementById("floorOnlyToggle")?.addEventListener("change", (e) => {
   formState.floorOnly = e.target.checked;
+  // Floor-only is exclusive with gear — turning it on clears any selected
+  // equipment so the chips and the mode never disagree.
+  if (formState.floorOnly) {
+    formState.equipmentHave = [];
+    document.querySelectorAll('.chip-row[data-field="equipmentHave"] .chip').forEach((c) => {
+      c.classList.remove("selected");
+      c.setAttribute("aria-pressed", "false");
+    });
+  }
   recomputeEquipment();
   persistEquipment();
   syncFloorOnlyUI();
@@ -4207,12 +4225,13 @@ document.getElementById("floorOnlyToggle")?.addEventListener("change", (e) => {
   refreshLoadWarning();
   refreshFormSummary();
   refreshFormHints();
+  applyIntensitySuggestion();
 });
 
 function resetForm() {
   formState.goal = "standard";
   formState.equipmentHave = [];
-  formState.floorOnly = false;
+  formState.floorOnly = true; // default baseline — floor-only on
   recomputeEquipment();
   formState.target = null;
   formState.duration = null;
@@ -4223,7 +4242,7 @@ function resetForm() {
   const standardChip = document.querySelector('.chip[data-value="standard"]');
   if (standardChip) standardChip.classList.add("selected");
   const ft = document.getElementById("floorOnlyToggle");
-  if (ft) ft.checked = false;
+  if (ft) ft.checked = true;
   syncFloorOnlyUI();
   _intensityUserSet = false; // next user/session gets a fresh suggestion
   document.getElementById("intensitySuggestion")?.classList.add("hidden");
