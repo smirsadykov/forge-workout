@@ -4,9 +4,11 @@ Copy/paste straight into App Store Connect and Play Console.
 
 ## App name / Title (≤30 chars)
 
-- EN: `FORGE Workout`             (13) — used because "FORGE" alone
-                                       was already taken on App Store
-- RU: `FORGE Workout`             (13) — RU listing keeps same name;
+- EN: `FORGE Body`                (10) — "FORGE" and "FORGE Workout"
+                                       were both already taken on
+                                       App Store; "Body" ties to the
+                                       body-map feature and reads clean
+- RU: `FORGE Body`                (10) — RU listing keeps same name;
                                        localized subtitle carries the
                                        meaning ("Умный генератор тренировок")
 
