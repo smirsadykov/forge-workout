@@ -42,6 +42,14 @@ Legend: ✅ done · ⏳ in progress · ⬜ not started (needs user/account)
 - ⬜ RevenueCat: create project, entitlement + offering, paste **public API key** into `config.js` (`REVENUECAT_API_KEY`), add Play/App Store credentials, deploy `revenuecat-webhook`.
 - ⬜ Supabase: run `supabase/delete_account.sql` + the `user_subscriptions` migration.
 - ⬜ Play Console: subscription products, Data Safety, **Privacy URL** + **Account-deletion URL** (both ready), closed test (personal accts: 12 testers / 14 days).
+- ⬜ **Before submission (both stores)**: seed the review-only account as Pro so reviewers get full access without a sandbox purchase. Review acct email pattern: `smirsadykov+googleplay@gmail.com` / `smirsadykov+appstoreconnect@gmail.com`. SQL to run in Supabase once accounts exist:
+  ```sql
+  INSERT INTO user_subscriptions (user_id, status, product_id, expires_at)
+  SELECT id, 'pro', 'forge.pro.yearly', '2030-12-31'::timestamptz
+  FROM auth.users WHERE email LIKE 'smirsadykov+%@gmail.com'
+  ON CONFLICT (user_id) DO UPDATE
+    SET status='pro', expires_at='2030-12-31'::timestamptz;
+  ```
 - ⬜ App Store Connect: matching subscription products, privacy nutrition labels, review.
 
 ## Publishing URLs (live once GitHub Pages is enabled)
