@@ -578,6 +578,15 @@
             <span id="dataStatus" class="settings-saved hidden"></span>
           </div>
         </div>
+
+        <div class="settings-card">
+          <h2 class="settings-section" data-i18n="account.title">Account</h2>
+          <p class="settings-help" data-i18n="account.deleteHelp">Permanently delete your account and all associated data. This cannot be undone.</p>
+          <div class="settings-actions">
+            <button id="deleteAccountBtn" class="danger-btn" data-i18n="account.delete">Delete account</button>
+            <span id="deleteAccountStatus" class="settings-saved hidden"></span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -621,6 +630,50 @@
         </button>
       </div>
       <button class="link-btn sleep-modal-skip" id="sleepModalSkip" data-i18n="sleep.skipToday">Skip today</button>
+    </div>
+  </div>
+
+  <!-- Paywall — opened when a free user hits a gate (generation cap, locked
+       history, sync). Plans/prices are refreshed from RevenueCat on native. -->
+  <div id="paywallModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+    <div class="modal-card paywall-card">
+      <button class="modal-close" id="paywallClose" aria-label="Close">×</button>
+      <div class="paywall-mark">⚡</div>
+      <h2 id="paywallTitle" class="modal-title" data-i18n="paywall.title">Unlock FORGE Premium</h2>
+      <p id="paywallReason" class="modal-sub" data-i18n="paywall.reasonDefault">Your training system — synced, unlimited, and progressing.</p>
+
+      <ul class="paywall-benefits">
+        <li><span class="paywall-check">✓</span><span data-i18n="paywall.benefitGen">Unlimited workout generation</span></li>
+        <li><span class="paywall-check">✓</span><span data-i18n="paywall.benefitSync">Cloud sync across all your devices</span></li>
+        <li><span class="paywall-check">✓</span><span data-i18n="paywall.benefitHistory">Unlimited history &amp; full progression</span></li>
+        <li><span class="paywall-check">✓</span><span data-i18n="paywall.benefitPrograms">Structured multi-week programs</span></li>
+        <li><span class="paywall-check">✓</span><span data-i18n="paywall.benefitExport">Data export &amp; backup</span></li>
+      </ul>
+
+      <div class="paywall-plans">
+        <button class="paywall-plan paywall-plan-best" onclick="window.FORGE_purchase && window.FORGE_purchase('annual')">
+          <span class="paywall-plan-badge" data-i18n="paywall.bestValue">Best value</span>
+          <span class="paywall-plan-name" data-i18n="paywall.annual">Annual</span>
+          <span class="paywall-plan-price" id="priceAnnual">$29.99/yr</span>
+          <span class="paywall-plan-note" data-i18n="paywall.annualNote">Save 50%</span>
+        </button>
+        <button class="paywall-plan" onclick="window.FORGE_purchase && window.FORGE_purchase('monthly')">
+          <span class="paywall-plan-name" data-i18n="paywall.monthly">Monthly</span>
+          <span class="paywall-plan-price" id="priceMonthly">$4.99/mo</span>
+        </button>
+        <button class="paywall-plan" onclick="window.FORGE_purchase && window.FORGE_purchase('lifetime')">
+          <span class="paywall-plan-name" data-i18n="paywall.lifetime">Lifetime</span>
+          <span class="paywall-plan-price" id="priceLifetime">$79.99</span>
+          <span class="paywall-plan-note" data-i18n="paywall.lifetimeNote">One-time, yours forever</span>
+        </button>
+      </div>
+
+      <button class="link-btn paywall-restore" id="paywallRestore" onclick="window.FORGE_restore && window.FORGE_restore()" data-i18n="paywall.restore">Restore purchases</button>
+      <p class="paywall-legal">
+        <a href="https://smirsadykov.github.io/forge-workout/privacy.html" target="_blank" rel="noopener" data-i18n="paywall.privacy">Privacy</a>
+        ·
+        <span data-i18n="paywall.terms">Subscriptions auto-renew; cancel anytime in Google Play.</span>
+      </p>
     </div>
   </div>
 
@@ -800,17 +853,20 @@
     </div>
   </div>
 
-  <script src="config.js?v=139"></script>
-  <script src="supabase.min.js?v=139"></script>
-  <script src="i18n.js?v=139"></script>
-  <script src="exercises.js?v=139"></script>
+  <script src="config.js?v=140"></script>
+  <script src="supabase.min.js?v=140"></script>
+  <script src="i18n.js?v=140"></script>
+  <script src="exercises.js?v=140"></script>
   <!-- Pure-logic helpers extracted from app.js — loaded before so its
        functions are globally available when app.js parses. -->
-  <script src="lib/utils.js?v=139"></script>
-  <script src="app.js?v=139"></script>
+  <script src="lib/utils.js?v=140"></script>
+  <script src="app.js?v=140"></script>
+  <!-- Billing (RevenueCat). Loads after app.js so it can call the FORGE_*
+       bridges. No-ops on the web build. -->
+  <script src="lib/billing.js?v=140"></script>
   <!-- Capacitor native integration (status bar, back button, external links).
        No-ops on the web build — window.Capacitor only exists in the app. -->
-  <script src="lib/native.js?v=139"></script>
+  <script src="lib/native.js?v=140"></script>
   <!-- Test harness — only loaded when ?test=1 is in the URL.
        Runs invariant suite + 5040-combo generator sweep, dumps a panel. -->
   <script>

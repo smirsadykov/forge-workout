@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   sleep: "forge:sleep",   // per-user, per-date sleep quality rating (1-5)
   templates: "forge:templates", // per-user saved workout templates
   goals: "forge:goals",         // per-user training goals (strength/skill targets)
+  entitlements: "forge:entitlements", // per-user premium flag + daily generation counter
 };
 
 // ─── GOAL DATA MODEL ─────────────────────────────────────────────────────
@@ -169,6 +170,10 @@ function getCloudStatus() {
 // status indicator in the top nav.
 function cloudPush(fn) {
   if (!sb || !session?.userId) return;
+  // Cloud sync is a Premium feature — free accounts stay local-only. This is
+  // the single choke point for all cloud writes, so gating here covers
+  // workouts, prefs, stats, etc. in one place. (isPremiumUser is hoisted.)
+  if (typeof isPremiumUser === "function" && !isPremiumUser()) return;
   setSyncStatus("syncing");
   Promise.resolve(fn())
     .then(() => setSyncStatus("ok"))
@@ -615,6 +620,98 @@ function setPrefs(userId, prefs) {
     updated_at: new Date().toISOString(),
   }));
 }
+
+// ─── ENTITLEMENTS / FREEMIUM ─────────────────────────────────────────────
+// Free tier gates persistence + advanced features, not the core generator.
+// Premium is granted by RevenueCat on native (via window.FORGE_setPremium)
+// and cached locally per-user. Model lives in: Main vault / FORGE.
+const FREE_DAILY_GENERATIONS = 3;
+const FREE_HISTORY_LIMIT = 10;
+const PREMIUM_ENTITLEMENT = "premium";
+
+function _entToday() { return new Date().toISOString().slice(0, 10); }
+
+function getEntitlements(userId) {
+  const all = load(STORAGE_KEYS.entitlements, {});
+  return all[userId] || { premium: false, genDate: null, genCount: 0 };
+}
+function setEntitlements(userId, patch) {
+  const all = load(STORAGE_KEYS.entitlements, {});
+  all[userId] = { ...getEntitlements(userId), ...patch };
+  save(STORAGE_KEYS.entitlements, all);
+  return all[userId];
+}
+function isPremiumUser() {
+  if (window.__FORGE_FORCE_PREMIUM__) return true; // dev/test override
+  if (!session?.username) return false;
+  return !!getEntitlements(session.username).premium;
+}
+function generationsLeftToday() {
+  if (isPremiumUser()) return Infinity;
+  if (!session?.username) return FREE_DAILY_GENERATIONS;
+  const e = getEntitlements(session.username);
+  const used = e.genDate === _entToday() ? (e.genCount || 0) : 0;
+  return Math.max(0, FREE_DAILY_GENERATIONS - used);
+}
+function canGenerateToday() { return generationsLeftToday() > 0; }
+function recordGeneration() {
+  if (isPremiumUser() || !session?.username) return;
+  const e = getEntitlements(session.username);
+  const today = _entToday();
+  const count = e.genDate === today ? (e.genCount || 0) + 1 : 1;
+  setEntitlements(session.username, { genDate: today, genCount: count });
+}
+
+// Paywall modal (markup in index.html). reason tailors the subheading.
+function openPaywall(reason) {
+  const modal = document.getElementById("paywallModal");
+  if (!modal) return;
+  const sub = document.getElementById("paywallReason");
+  if (sub) {
+    sub.textContent =
+      reason === "generation" ? t("paywall.reasonGeneration") :
+      reason === "history" ? t("paywall.reasonHistory") :
+      reason === "sync" ? t("paywall.reasonSync") :
+      t("paywall.reasonDefault");
+  }
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  if (typeof trapFocus === "function") modal._release = trapFocus(modal, closePaywall);
+  modal.onclick = (e) => { if (e.target === modal) closePaywall(); };
+  const closeBtn = document.getElementById("paywallClose");
+  if (closeBtn) closeBtn.onclick = closePaywall;
+}
+function closePaywall() {
+  const modal = document.getElementById("paywallModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  document.body.style.overflow = "";
+  if (modal._release) { modal._release(); modal._release = null; }
+}
+
+// Called by the billing layer (RevenueCat) when the premium entitlement
+// becomes active/inactive. Flips the cached flag, pulls cloud data if newly
+// premium, and refreshes any affected UI.
+window.FORGE_setPremium = function (active) {
+  if (!session?.username) return;
+  setEntitlements(session.username, { premium: !!active });
+  if (active && typeof HAS_SUPABASE !== "undefined" && HAS_SUPABASE && session?.userId) {
+    try { syncFromCloud().catch(() => {}); } catch (e) {}
+  }
+  try { renderSyncIndicator(); } catch (e) {}
+  try {
+    const hist = document.getElementById("historyList");
+    if (hist && hist.offsetParent !== null && typeof renderHistory === "function") renderHistory();
+  } catch (e) {}
+};
+window.FORGE_isPremium = isPremiumUser;
+window.FORGE_openPaywall = openPaywall;
+window.FORGE_closePaywall = closePaywall;
+// Bridges for the billing layer (separate script scope): identify the user to
+// RevenueCat and surface toasts/paywall feedback.
+window.FORGE_getUserId = () => session?.userId || null;
+window.FORGE_getUsername = () => session?.username || null;
+window.FORGE_toast = (msg, opts) => { try { showToast(msg, opts); } catch (e) {} };
 
 // ─── VOLUME LANDMARKS (MEV / MAV / MRV) ──────────────────────────────────
 // Per-muscle WEEKLY set targets, from the evidence-based programming
@@ -3837,6 +3934,9 @@ el.authForm.addEventListener("submit", async (e) => {
         loggedInAt: Date.now(),
       };
       save(STORAGE_KEYS.session, session);
+      // Identify the user to the billing layer so their premium entitlement
+      // follows them across devices (no-op on web / before billing init).
+      try { window.FORGE_billingIdentify && window.FORGE_billingIdentify(); } catch (e) {}
       // Don't block the UI on cloud fetch — navigate immediately, let sync
       // populate in the background. The sync indicator shows progress.
       syncFromCloud().catch(() => {});
@@ -4053,6 +4153,47 @@ el.logoutBtn.addEventListener("click", async () => {
   _sleepModalShownThisSession = false; // re-fire for next user on this device
   resetForm();
   showAuth();
+});
+
+// ─── DELETE ACCOUNT ──────────────────────────────────────────────────────
+// Google Play requires an in-app account + data deletion path. Deletes cloud
+// rows (RLS lets a user delete their own) + a best-effort SECURITY DEFINER
+// RPC that also removes the auth user (deploy supabase/delete_account.sql),
+// then wipes all local data for this user. Irreversible.
+document.getElementById("deleteAccountBtn")?.addEventListener("click", async () => {
+  if (!session) return;
+  if (!confirm(t("account.deleteConfirm"))) return;
+  if (!confirm(t("account.deleteConfirm2"))) return;
+  const uid = session.userId;
+  const uname = session.username;
+  const status = document.getElementById("deleteAccountStatus");
+  if (status) { status.classList.remove("hidden"); status.textContent = t("account.deleting"); }
+
+  if (HAS_SUPABASE && sb && uid) {
+    // Full server-side deletion (incl. auth user) via the RPC; then defensive
+    // per-table deletes the authenticated user is allowed to run.
+    try { await sb.rpc("delete_account"); } catch (e) {}
+    for (const tbl of ["workouts", "user_prefs", "client_errors"]) {
+      try { await sb.from(tbl).delete().eq("user_id", uid); } catch (e) {}
+    }
+    try { await sb.auth.signOut(); } catch (e) {}
+  }
+
+  // Wipe this user's slice from every per-user local store.
+  const perUserKeys = [
+    STORAGE_KEYS.workouts, STORAGE_KEYS.stats, STORAGE_KEYS.prefs,
+    STORAGE_KEYS.loads, STORAGE_KEYS.soreness, STORAGE_KEYS.volumeTargets,
+    STORAGE_KEYS.sleep, STORAGE_KEYS.templates, STORAGE_KEYS.goals,
+    STORAGE_KEYS.entitlements,
+  ];
+  for (const key of perUserKeys) {
+    const all = load(key, {});
+    if (all && typeof all === "object") { delete all[uname]; if (uid) delete all[uid]; save(key, all); }
+  }
+  try { const users = getUsers(); delete users[uname]; setUsers(users); } catch (e) {}
+  localStorage.removeItem(STORAGE_KEYS.session);
+  session = null;
+  location.reload();
 });
 
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
@@ -6515,6 +6656,14 @@ el.generateBtn.addEventListener("click", () => {
   if (!duration) return el.formError.textContent = "Pick a duration.";
   // Intensity defaults to "normal" — no need to error if user skipped it.
 
+  // Freemium gate: free accounts get a soft daily generation cap. Over it,
+  // surface the paywall instead of generating.
+  if (!canGenerateToday()) {
+    el.generateBtn.classList.remove("generating");
+    openPaywall("generation");
+    return;
+  }
+
   currentWorkout = generateWorkout({
     goal, equipment, target,
     duration: parseInt(duration, 10),
@@ -6530,6 +6679,8 @@ el.generateBtn.addEventListener("click", () => {
   if (!currentWorkout) {
     return el.formError.textContent = t("gen.nothingFits") || "Couldn't build a workout that fits these filters. Try a different goal or add more equipment.";
   }
+  // Count this successful generation against the free daily allowance.
+  recordGeneration();
   workoutIsSaved = false;
   workoutReadOnly = false;
   recentlyLogged = {};
@@ -6971,7 +7122,18 @@ function attachWorkoutActions() {
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────
 function renderHistory() {
-  const items = getWorkouts(session.username);
+  const allItems = getWorkouts(session.username);
+  // Free accounts see only their most recent workouts; the rest is behind
+  // Premium. Premium sees everything.
+  const items = isPremiumUser() ? allItems : allItems.slice(0, FREE_HISTORY_LIMIT);
+  const hiddenCount = allItems.length - items.length;
+  const upgradeBanner = hiddenCount > 0
+    ? `<button class="history-upgrade-banner" id="historyUpgradeBanner" onclick="window.FORGE_openPaywall && window.FORGE_openPaywall('history')">
+         <span class="history-upgrade-lock">🔒</span>
+         <span>${t("paywall.historyLocked", { n: hiddenCount })}</span>
+         <span class="history-upgrade-cta">${t("paywall.unlock")}</span>
+       </button>`
+    : "";
   const goalsHtml = renderGoalsPanel(session.username);
   const thisWeekHtml = renderThisWeekPanel(session.username);
   const insightsHtml = renderInsightsPanel(session.username);
@@ -7004,7 +7166,7 @@ function renderHistory() {
     return;
   }
 
-  el.historyList.innerHTML = goalsHtml + thisWeekHtml + insightsHtml + heatmapHtml + volumeChartHtml + items.map(w => {
+  el.historyList.innerHTML = goalsHtml + thisWeekHtml + insightsHtml + heatmapHtml + volumeChartHtml + upgradeBanner + items.map(w => {
     const notes = (w.notes || "").trim();
     const notesPreview = notes
       ? `<div class="history-notes">📝 ${notes.length > 90 ? notes.slice(0, 90).replace(/</g, "&lt;") + "…" : notes.replace(/</g, "&lt;")}</div>`

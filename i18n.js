@@ -787,6 +787,41 @@
     "common.skip": { en: "Skip", ru: "Пропустить" },
     "common.loading": { en: "Loading…", ru: "Загрузка…" },
     "common.error": { en: "Error", ru: "Ошибка" },
+
+    // Paywall / Premium
+    "paywall.title": { en: "Unlock FORGE Premium", ru: "Откройте FORGE Premium" },
+    "paywall.reasonDefault": { en: "Your training system — synced, unlimited, and progressing.", ru: "Ваша система тренировок — синхронизация, без лимитов, прогресс." },
+    "paywall.reasonGeneration": { en: "You've used your free workouts for today. Go unlimited with Premium.", ru: "Вы использовали бесплатные тренировки на сегодня. Premium снимает лимит." },
+    "paywall.reasonHistory": { en: "Unlock your full training history and progression insights.", ru: "Откройте всю историю тренировок и аналитику прогресса." },
+    "paywall.reasonSync": { en: "Sync your workouts across all your devices with Premium.", ru: "Синхронизируйте тренировки на всех устройствах с Premium." },
+    "paywall.benefitGen": { en: "Unlimited workout generation", ru: "Безлимитная генерация тренировок" },
+    "paywall.benefitSync": { en: "Cloud sync across all your devices", ru: "Облачная синхронизация на всех устройствах" },
+    "paywall.benefitHistory": { en: "Unlimited history & full progression", ru: "Полная история и прогрессия" },
+    "paywall.benefitPrograms": { en: "Structured multi-week programs", ru: "Многонедельные программы" },
+    "paywall.benefitExport": { en: "Data export & backup", ru: "Экспорт и резервные копии" },
+    "paywall.bestValue": { en: "Best value", ru: "Выгоднее всего" },
+    "paywall.annual": { en: "Annual", ru: "Год" },
+    "paywall.annualNote": { en: "Save 50%", ru: "Экономия 50%" },
+    "paywall.monthly": { en: "Monthly", ru: "Месяц" },
+    "paywall.lifetime": { en: "Lifetime", ru: "Навсегда" },
+    "paywall.lifetimeNote": { en: "One-time, yours forever", ru: "Разовая оплата, навсегда" },
+    "paywall.restore": { en: "Restore purchases", ru: "Восстановить покупки" },
+    "paywall.privacy": { en: "Privacy", ru: "Конфиденциальность" },
+    "paywall.terms": { en: "Subscriptions auto-renew; cancel anytime in Google Play.", ru: "Подписка продлевается автоматически; отмена в Google Play." },
+    "paywall.historyLocked": { en: "{n} more workouts in Premium", ru: "Ещё {n} тренировок в Premium" },
+    "paywall.unlock": { en: "Unlock", ru: "Открыть" },
+    "paywall.notAvailableWeb": { en: "Purchases are available in the FORGE mobile app.", ru: "Покупки доступны в мобильном приложении FORGE." },
+    "paywall.purchaseError": { en: "Purchase could not be completed. Please try again.", ru: "Не удалось завершить покупку. Попробуйте снова." },
+    "paywall.purchaseSuccess": { en: "Premium unlocked. Enjoy!", ru: "Premium активирован. Приятных тренировок!" },
+    "paywall.restoreNone": { en: "No purchases found to restore.", ru: "Покупки для восстановления не найдены." },
+
+    // Account / deletion
+    "account.title": { en: "Account", ru: "Аккаунт" },
+    "account.deleteHelp": { en: "Permanently delete your account and all associated data. This cannot be undone.", ru: "Безвозвратно удалить аккаунт и все связанные данные. Это действие необратимо." },
+    "account.delete": { en: "Delete account", ru: "Удалить аккаунт" },
+    "account.deleteConfirm": { en: "Delete your account and all data? This cannot be undone.", ru: "Удалить аккаунт и все данные? Это необратимо." },
+    "account.deleteConfirm2": { en: "Are you absolutely sure? This permanently erases your history.", ru: "Вы абсолютно уверены? История будет удалена навсегда." },
+    "account.deleting": { en: "Deleting…", ru: "Удаление…" },
   };
 
   function detectInitial() {
