@@ -4258,6 +4258,47 @@ el.logoutBtn.addEventListener("click", async () => {
   showAuth();
 });
 
+// ─── DELETE ACCOUNT ──────────────────────────────────────────────────────
+// Google Play requires an in-app account + data deletion path (our privacy
+// policy already points here). Deletes cloud rows (RLS lets a user delete
+// their own) + a best-effort SECURITY DEFINER RPC that also removes the auth
+// user (deploy supabase/delete_account.sql), then wipes all local data for
+// this user. Irreversible.
+document.getElementById("deleteAccountBtn")?.addEventListener("click", async () => {
+  if (!session) return;
+  if (!confirm(t("account.deleteConfirm") || "Delete your account and all data? This cannot be undone.")) return;
+  if (!confirm(t("account.deleteConfirm2") || "Are you absolutely sure? This permanently erases your history.")) return;
+  const uid = session.userId;
+  const uname = session.username;
+  const status = document.getElementById("deleteAccountStatus");
+  if (status) { status.classList.remove("hidden"); status.textContent = t("account.deleting") || "Deleting…"; }
+
+  if (HAS_SUPABASE && sb && uid) {
+    // Full server-side deletion (incl. auth user) via the RPC; then defensive
+    // per-table deletes the authenticated user is allowed to run.
+    try { await sb.rpc("delete_account"); } catch (e) {}
+    for (const tbl of ["workouts", "user_prefs", "user_subscriptions", "client_errors"]) {
+      try { await sb.from(tbl).delete().eq("user_id", uid); } catch (e) {}
+    }
+    try { await sb.auth.signOut(); } catch (e) {}
+  }
+
+  // Wipe this user's slice from every per-user local store.
+  const perUserKeys = [
+    STORAGE_KEYS.workouts, STORAGE_KEYS.stats, STORAGE_KEYS.prefs,
+    STORAGE_KEYS.loads, STORAGE_KEYS.soreness, STORAGE_KEYS.volumeTargets,
+    STORAGE_KEYS.sleep, STORAGE_KEYS.templates, STORAGE_KEYS.goals, STORAGE_KEYS.sub,
+  ];
+  for (const key of perUserKeys) {
+    const all = load(key, {});
+    if (all && typeof all === "object") { delete all[uname]; if (uid) delete all[uid]; save(key, all); }
+  }
+  try { const users = getUsers(); delete users[uname]; setUsers(users); } catch (e) {}
+  localStorage.removeItem(STORAGE_KEYS.session);
+  session = null;
+  location.reload();
+});
+
 // ─── CHIP SELECTION ──────────────────────────────────────────────────────
 // `intensity` replaced the old `difficulty` chip (2026-06). Intensity
 // controls per-session prescription (sets, reps, rest, RIR target).

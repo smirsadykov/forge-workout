@@ -829,6 +829,14 @@
     "common.skip": { en: "Skip", ru: "Пропустить" },
     "common.loading": { en: "Loading…", ru: "Загрузка…" },
     "common.error": { en: "Error", ru: "Ошибка" },
+
+    // Account / deletion
+    "account.title": { en: "Account", ru: "Аккаунт" },
+    "account.deleteHelp": { en: "Permanently delete your account and all associated data. This cannot be undone.", ru: "Безвозвратно удалить аккаунт и все связанные данные. Это действие необратимо." },
+    "account.delete": { en: "Delete account", ru: "Удалить аккаунт" },
+    "account.deleteConfirm": { en: "Delete your account and all data? This cannot be undone.", ru: "Удалить аккаунт и все данные? Это необратимо." },
+    "account.deleteConfirm2": { en: "Are you absolutely sure? This permanently erases your history.", ru: "Вы абсолютно уверены? История будет удалена навсегда." },
+    "account.deleting": { en: "Deleting…", ru: "Удаление…" },
   };
 
   function detectInitial() {

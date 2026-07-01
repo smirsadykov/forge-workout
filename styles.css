@@ -6251,3 +6251,16 @@ input:focus, select:focus, textarea:focus {
 .intensity-suggestion strong {
   color: var(--accent);
 }
+
+/* Destructive action button (e.g. delete account) */
+.danger-btn {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.danger-btn:hover { background: var(--danger); color: #fff; }

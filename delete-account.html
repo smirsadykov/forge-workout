@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FORGE — Delete your account & data</title>
+  <meta name="robots" content="index,follow" />
+  <style>
+    :root { --bg:#0d0f15; --surface:#161a23; --text:#e8eaf0; --muted:#9aa3b4; --accent:#ffd633; --border:#252b38; --danger:#ef4444; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; padding:0 20px 80px; }
+    .wrap { max-width:680px; margin:0 auto; }
+    header { padding:48px 0 24px; border-bottom:1px solid var(--border); margin-bottom:32px; }
+    .mark { color:var(--accent); font-weight:800; letter-spacing:.18em; font-size:14px; }
+    h1 { font-size:clamp(1.7rem,1.2rem+2vw,2.4rem); margin:12px 0 6px; }
+    h2 { font-size:1.15rem; margin:32px 0 8px; }
+    p,li { color:#cdd3df; }
+    a { color:var(--accent); }
+    ol { padding-left:20px; }
+    li { margin:6px 0; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 22px; margin:18px 0; }
+    .danger { border-color:rgba(239,68,68,.4); }
+    .danger h2 { color:var(--danger); margin-top:6px; }
+    .btn { display:inline-block; background:var(--accent); color:#0d0f15; font-weight:700; text-decoration:none; padding:12px 20px; border-radius:10px; margin-top:8px; }
+    code { background:var(--surface); padding:1px 6px; border-radius:5px; }
+    footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="mark">⚡ FORGE</div>
+      <h1>Delete your account &amp; data</h1>
+      <p style="color:var(--muted);margin:6px 0 0">App: <code>app.forge.workout</code></p>
+    </header>
+
+    <p>You can permanently delete your FORGE account and all data associated with it. There are two ways to do this.</p>
+
+    <div class="card">
+      <h2>Option 1 — In the app (fastest)</h2>
+      <ol>
+        <li>Open FORGE and sign in.</li>
+        <li>Go to <strong>Settings → Account</strong>.</li>
+        <li>Tap <strong>Delete account</strong> and confirm.</li>
+      </ol>
+      <p>Your account, profile, and any synced workout data are deleted immediately and irreversibly.</p>
+    </div>
+
+    <div class="card">
+      <h2>Option 2 — Request by email</h2>
+      <p>If you can’t access the app, email us from the address tied to your account and we will delete it within 30 days. Put <strong>“Delete my account”</strong> in the subject.</p>
+      <a class="btn" href="mailto:smirsadykov@gmail.com?subject=Delete%20my%20account&body=Please%20delete%20my%20FORGE%20account%20and%20all%20associated%20data.%20My%20account%20email%20is%3A%20">Email a deletion request</a>
+    </div>
+
+    <div class="card danger">
+      <h2>What gets deleted</h2>
+      <ul>
+        <li>Your account and login (email + authentication record).</li>
+        <li>All workout data synced to the cloud (history, logs, settings, progression data).</li>
+        <li>Your subscription entitlement record.</li>
+      </ul>
+      <p style="margin-bottom:6px"><strong>What we may retain:</strong> limited purchase/transaction records required for tax and accounting. These contain no workout data.</p>
+      <p><strong>Note:</strong> data stored only on your phone is removed when you uninstall the app or clear its storage. Cancelling a subscription is separate — manage that in Google Play.</p>
+    </div>
+
+    <p>Questions: <a href="mailto:smirsadykov@gmail.com">smirsadykov@gmail.com</a>. See also our <a href="./privacy.html">Privacy Policy</a> and <a href="./terms.html">Terms</a>.</p>
+
+    <footer>© 2026 FORGE — Workout Generator.</footer>
+  </div>
+</body>
+</html>
