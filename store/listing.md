@@ -30,7 +30,7 @@ App Store listing name.
 
 ### EN
 
-FORGE picks your next workout in seconds — built from what you actually have on hand and what your body is ready for today.
+FORGE Body picks your next workout in seconds — built from what you actually have on hand and what your body is ready for today.
 
 WHAT IT DOES
 • Smart generation — pick a goal, target zone, available equipment, and time. We pick the exercises, sets, reps, rest, and intensity for you.
@@ -46,7 +46,7 @@ SESSION STYLES
 • Standard — strength + hypertrophy with progressive overload
 • Mobility & Stretch — joint mobility, dynamic flows, recovery work
 • Recovery — gentle, blood-flow focused
-• CrossFit — AMRAP, EMOM, Rounds For Time, ladder WODs
+• WOD workouts — AMRAP, EMOM, Rounds For Time, rep ladders
 
 FREE vs FORGE PRO
 Free: unlimited generation + 3 saved workouts per rolling 7 days.
@@ -59,7 +59,7 @@ Built by an independent developer. Feedback and bug reports: smirsadykov@gmail.c
 
 ### RU
 
-FORGE подбирает твою следующую тренировку за секунды — собирает её из того, что у тебя реально под рукой, и того, к чему готово тело сегодня.
+FORGE Body подбирает твою следующую тренировку за секунды — собирает её из того, что у тебя реально под рукой, и того, к чему готово тело сегодня.
 
 ЧТО УМЕЕТ
 • Умная генерация — выбираешь цель, зону, инвентарь и время. Упражнения, подходы, повторы, отдых и интенсивность подбирает алгоритм.
@@ -75,7 +75,7 @@ FORGE подбирает твою следующую тренировку за �
 • Standard — сила + гипертрофия с прогрессией нагрузки
 • Mobility & Stretch — мобильность суставов, динамические flows, восстановление
 • Recovery — мягко, на кровоток
-• CrossFit — AMRAP, EMOM, Rounds For Time, лестницы WOD
+• WOD workouts — AMRAP, EMOM, Rounds For Time, ре­повые лестницы
 
 FREE vs FORGE PRO
 Free: безлимитная генерация + сохранение 3 тренировок за 7 дней.
