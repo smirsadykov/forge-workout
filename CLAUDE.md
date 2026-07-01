@@ -29,15 +29,14 @@ Legend: ✅ done · ⏳ in progress · ⬜ not started (needs user/account)
 
 **Shipped on `main`:**
 - ✅ Web app + generator + logging + progression + history (mature)
-- ✅ Capacitor Android; **debug APK builds** (`Downloads/FORGE-debug.apk`)
+- ✅ Capacitor Android; **debug APK** + **signed release AAB build** (target API 35, Gradle 8.9/AGP 8.7.2). `android/` is committed with signing wired to `android/keystore.properties` (gitignored). Latest AAB: `Downloads/FORGE-release.aab`
 - ✅ Monetization: paywall + save-gating + RevenueCat code + Supabase webhook + `user_subscriptions`
 - ✅ **In-app account deletion** (Settings → Account) + `supabase/delete_account.sql` + `delete-account.html` — required by BOTH Play and App Store
 - ✅ Legal/store: `privacy.html`, `terms.html`, `delete-account.html`, `store/listing.md` (App Store + Play copy), generated `assets/icon-*`/`splash.*`, `store/feature-graphic.*`
 - ✅ iOS: `ios/App/App/PrivacyInfo.xcprivacy`; RevenueCat is cross-platform
 
 **Pending — engineering:**
-- ⏳ **Android release build**: signed **AAB** (not APK), Play App Signing, bump `targetSdk`/`compileSdk` to **35** (Play requirement; needs AGP 8.6+/Gradle 8.7+). See `SETUP-ANDROID.md`.
-- ⏳ **iOS release build**: `npx cap add ios` on macOS + Xcode; App Store Connect setup. See `SETUP-IAP.md`.
+- ⏳ **iOS release build**: `npx cap add ios` on macOS + Xcode; App Store Connect setup. See `SETUP-IAP.md`. (Android release build is DONE — see above.)
 
 **Pending — user/accounts:**
 - ⬜ RevenueCat: create project, entitlement + offering, paste **public API key** into `config.js` (`REVENUECAT_API_KEY`), add Play/App Store credentials, deploy `revenuecat-webhook`.

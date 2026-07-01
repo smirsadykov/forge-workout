@@ -60,5 +60,49 @@ npm run sync             # build:web + cap sync, then Run again in Android Studi
 - **Password reset** emails redirect to a web URL; in-app reset needs a deep link
   or a hosted reset page — deferred (login + signup are unaffected).
 - **External links** (exercise demos) open in the system browser via `lib/native.js`.
-- For a **release** build you'll add a signing key (`keytool` / Android Studio ▸
-  Generate Signed Bundle) before uploading to Play — not needed for debug/test.
+- **External links** already covered above.
+
+## Release build (signed AAB for Play) — DONE, here's how to reproduce
+
+The `android/` project is **committed** with release config: `targetSdk`/`compileSdk` **35**
+(Play's current requirement), **Gradle 8.9 / AGP 8.7.2** (needed for API 35 + JDK 21),
+and a `release` signingConfig that reads `android/keystore.properties`.
+
+**Signing (already set up on this machine):**
+- Upload keystore: `C:\Users\smirs\Downloads\forge-upload.keystore` (alias `forge`).
+  ⚠️ **Back this file up somewhere safe.** With Play App Signing you *can* reset a lost
+  upload key, but keep it anyway. Password is in `android/keystore.properties`
+  (gitignored — never committed).
+- `android/keystore.properties` (local, gitignored) points to the keystore + holds the
+  passwords. On a new machine, recreate it:
+  ```
+  storeFile=/abs/path/to/forge-upload.keystore
+  storePassword=...
+  keyAlias=forge
+  keyPassword=...
+  ```
+  Generate a keystore with:
+  ```
+  keytool -genkeypair -v -keystore forge-upload.keystore -alias forge \
+    -keyalg RSA -keysize 2048 -validity 10000
+  ```
+
+**Build the AAB:**
+```bash
+npm install            # populates node_modules the committed android/ references
+npm run sync           # build:web + cap sync (regenerates plugin bridge + web assets)
+cd android
+JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" ./gradlew bundleRelease
+#   → android/app/build/outputs/bundle/release/app-release.aab   (upload this to Play)
+```
+Latest signed AAB is also copied to `C:\Users\smirs\Downloads\FORGE-release.aab`.
+
+**Bump the version** for each Play release in `android/app/build.gradle`
+(`versionCode` +1, `versionName`).
+
+**Upload:** Play Console → Testing/Production → new release → upload the `.aab` → enroll
+in **Play App Signing** on first upload. Full store flow in `SETUP-IAP.md` / `store/listing.md`.
+
+## Notes / historical
+- **Service worker** is auto-skipped in the native app (handled in `app.js`).
+- **Password reset** emails redirect to a web URL; in-app reset needs a deep link — deferred.

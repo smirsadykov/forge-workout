@@ -7,6 +7,19 @@ node_modules/
 dist/
 # Generated app icons/splash (from `npx capacitor-assets generate`)
 resources/
-# Native project is generated on the build machine via `npx cap add android`.
-# Capacitor writes its own android/.gitignore for build artifacts; commit the
-# android/ folder itself only if you want the native project version-controlled.
+# The android/ project IS committed (release config: signing, target API 35,
+# Gradle/AGP versions). Its own android/.gitignore excludes build artifacts,
+# local.properties, and the copied web assets. On a fresh machine, run
+# `npm install && npm run sync` before building to regenerate node_modules +
+# the cordova plugin bridge + copied web assets.
+
+# ─── SECRETS — NEVER COMMIT ───────────────────────────────────────────────
+# Signing credentials + keystores. The upload keystore lives OUTSIDE the repo
+# (e.g. in Downloads); keystore.properties points to it and holds passwords.
+android/keystore.properties
+android/local.properties
+*.keystore
+*.jks
+# Firebase / Google service accounts, RevenueCat secret keys, etc.
+google-services.json
+**/GoogleService-Info.plist
