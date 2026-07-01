@@ -4,8 +4,15 @@ Copy/paste straight into App Store Connect and Play Console.
 
 ## App name / Title (≤30 chars)
 
-- EN: `FORGE — Smart Workout Builder`  (30)
-- RU: `FORGE — генератор тренировок`     (28)
+- EN: `FORGE Workout`             (13) — used because "FORGE" alone
+                                       was already taken on App Store
+- RU: `FORGE Workout`             (13) — RU listing keeps same name;
+                                       localized subtitle carries the
+                                       meaning ("Умный генератор тренировок")
+
+Home-screen display name (Xcode Info.plist → CFBundleDisplayName):
+`FORGE` — short brand name shown under the icon, distinct from the
+App Store listing name.
 
 ## Subtitle (App Store, ≤30 chars)
 
