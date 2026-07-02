@@ -29,7 +29,7 @@ Legend: ✅ done · ⏳ in progress · ⬜ not started (needs user/account)
 
 **Shipped on `main`:**
 - ✅ Web app + generator + logging + progression + history (mature)
-- ✅ Capacitor Android; **debug APK** + **signed release AAB build** (target API 35, Gradle 8.9/AGP 8.7.2). `android/` is committed with signing wired to `android/keystore.properties` (gitignored). Latest AAB: `Downloads/FORGE-release.aab`
+- ✅ Capacitor Android; **signed release AAB build** (target API 35, Gradle 8.9/AGP 8.7.2). `android/` is committed with signing wired to `android/keystore.properties` (gitignored). **Desktop-machine build toolchain (2026-07-02):** JDK 21 at `~/.local-jdk/jdk-21.0.11+10` (Gradle 8.9 rejects the system JDK 25), Android SDK 35 + build-tools 35.0.0 installed, `ANDROID_HOME=~/Library/Android/sdk`. Build cmd: `export JAVA_HOME=~/.local-jdk/jdk-21.0.11+10/Contents/Home ANDROID_HOME=~/Library/Android/sdk; cd android && ./gradlew bundleRelease`. **Upload keystore** `android/forge-upload.keystore` (gitignored, backed up to `~/.forge-signing/`), alias `forge`, SHA256 `DC:89:CE:93:2A:9B:37:BB:...` — Play App Signing manages the real key, so this upload key is resettable if lost. Latest AAB: `~/Downloads/FORGE-Body-release.aab`.
 - ✅ Monetization: paywall + save-gating + RevenueCat code + Supabase webhook + `user_subscriptions`
 - ✅ **In-app account deletion** (Settings → Account) + `supabase/delete_account.sql` + `delete-account.html` — required by BOTH Play and App Store
 - ✅ Legal/store: `privacy.html`, `terms.html`, `delete-account.html`, `store/listing.md` (App Store + Play copy), generated `assets/icon-*`/`splash.*`, `store/feature-graphic.*`

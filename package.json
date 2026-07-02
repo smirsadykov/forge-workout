@@ -22,6 +22,6 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.4",
     "@capacitor/cli": "^6.1.0",
-    "puppeteer": "^23.0.0"
+    "puppeteer": "^23.11.1"
   }
 }
